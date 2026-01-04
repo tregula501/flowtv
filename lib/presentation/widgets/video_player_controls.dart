@@ -309,6 +309,38 @@ class _QualitySettingsButton extends ConsumerWidget {
           const PopupMenuDivider(),
         ],
 
+        // Aspect ratio section
+        const PopupMenuItem(
+          enabled: false,
+          height: 32,
+          child: Text(
+            'ASPECT RATIO',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+        ...AspectRatioMode.values.map((mode) => PopupMenuItem(
+              value: 'aspect:${mode.index}',
+              child: Row(
+                children: [
+                  Icon(
+                    playerState.aspectRatioMode == mode
+                        ? Icons.check
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                    color:
+                        playerState.aspectRatioMode == mode ? Colors.blue : Colors.grey,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(mode.displayName),
+                ],
+              ),
+            ),),
+        const PopupMenuDivider(),
+
         // Playback speed section
         const PopupMenuItem(
           enabled: false,
@@ -355,6 +387,9 @@ class _QualitySettingsButton extends ConsumerWidget {
             break;
           case 'subtitle':
             controller.setSubtitleTrack(id == 'off' ? null : id);
+            break;
+          case 'aspect':
+            controller.setAspectRatioMode(AspectRatioMode.values[int.parse(id)]);
             break;
           case 'speed':
             controller.setPlaybackSpeed(double.parse(id));

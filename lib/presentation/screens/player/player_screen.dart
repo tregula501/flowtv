@@ -9,6 +9,27 @@ import '../../widgets/video_player_controls.dart';
 class PlayerScreen extends ConsumerWidget {
   const PlayerScreen({super.key});
 
+  Widget _buildVideoWithAspectRatio(
+    VideoController controller,
+    AspectRatioMode mode,
+  ) {
+    final video = Video(
+      controller: controller,
+      controls: NoVideoControls,
+      fit: mode == AspectRatioMode.fill ? BoxFit.cover : BoxFit.contain,
+    );
+
+    final aspectRatio = mode.aspectRatio;
+    if (aspectRatio != null) {
+      return AspectRatio(
+        aspectRatio: aspectRatio,
+        child: video,
+      );
+    }
+
+    return video;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerControllerProvider);
@@ -77,10 +98,12 @@ class PlayerScreen extends ConsumerWidget {
           Expanded(
             child: Stack(
               children: [
-                // Video
-                Video(
-                  controller: playerController.videoController,
-                  controls: NoVideoControls,
+                // Video with aspect ratio control
+                Center(
+                  child: _buildVideoWithAspectRatio(
+                    playerController.videoController,
+                    playerState.aspectRatioMode,
+                  ),
                 ),
 
                 // Buffering indicator

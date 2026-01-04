@@ -37,6 +37,52 @@ class TrackInfo {
   }
 }
 
+/// Aspect ratio options
+enum AspectRatioMode {
+  auto,
+  fit,
+  fill,
+  ratio16x9,
+  ratio4x3,
+  ratio21x9,
+}
+
+extension AspectRatioModeExtension on AspectRatioMode {
+  String get displayName {
+    switch (this) {
+      case AspectRatioMode.auto:
+        return 'Auto';
+      case AspectRatioMode.fit:
+        return 'Fit';
+      case AspectRatioMode.fill:
+        return 'Fill';
+      case AspectRatioMode.ratio16x9:
+        return '16:9';
+      case AspectRatioMode.ratio4x3:
+        return '4:3';
+      case AspectRatioMode.ratio21x9:
+        return '21:9';
+    }
+  }
+
+  double? get aspectRatio {
+    switch (this) {
+      case AspectRatioMode.auto:
+        return null;
+      case AspectRatioMode.fit:
+        return null;
+      case AspectRatioMode.fill:
+        return null;
+      case AspectRatioMode.ratio16x9:
+        return 16 / 9;
+      case AspectRatioMode.ratio4x3:
+        return 4 / 3;
+      case AspectRatioMode.ratio21x9:
+        return 21 / 9;
+    }
+  }
+}
+
 /// Player state
 class PlayerState {
   final bool isPlaying;
@@ -54,6 +100,7 @@ class PlayerState {
   final String? currentAudioTrack;
   final String? currentSubtitleTrack;
   final double playbackSpeed;
+  final AspectRatioMode aspectRatioMode;
 
   const PlayerState({
     this.isPlaying = false,
@@ -71,6 +118,7 @@ class PlayerState {
     this.currentAudioTrack,
     this.currentSubtitleTrack,
     this.playbackSpeed = 1.0,
+    this.aspectRatioMode = AspectRatioMode.auto,
   });
 
   PlayerState copyWith({
@@ -89,6 +137,7 @@ class PlayerState {
     String? currentAudioTrack,
     String? currentSubtitleTrack,
     double? playbackSpeed,
+    AspectRatioMode? aspectRatioMode,
   }) {
     return PlayerState(
       isPlaying: isPlaying ?? this.isPlaying,
@@ -106,6 +155,7 @@ class PlayerState {
       currentAudioTrack: currentAudioTrack ?? this.currentAudioTrack,
       currentSubtitleTrack: currentSubtitleTrack ?? this.currentSubtitleTrack,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
+      aspectRatioMode: aspectRatioMode ?? this.aspectRatioMode,
     );
   }
 }
@@ -321,6 +371,20 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
     await _player!.setRate(speed);
     state = state.copyWith(playbackSpeed: speed);
     AppLogger.info('Playback speed set: ${speed}x');
+  }
+
+  /// Set aspect ratio mode
+  void setAspectRatioMode(AspectRatioMode mode) {
+    state = state.copyWith(aspectRatioMode: mode);
+    AppLogger.info('Aspect ratio mode set: ${mode.displayName}');
+  }
+
+  /// Cycle through aspect ratio modes
+  void cycleAspectRatio() {
+    const modes = AspectRatioMode.values;
+    final currentIndex = modes.indexOf(state.aspectRatioMode);
+    final nextIndex = (currentIndex + 1) % modes.length;
+    setAspectRatioMode(modes[nextIndex]);
   }
 
   @override

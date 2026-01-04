@@ -63,6 +63,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ref.read(playerControllerProvider.notifier).playPause();
         }
       }
+      // A to cycle aspect ratio
+      if (event.logicalKey == LogicalKeyboardKey.keyA) {
+        final currentChannel = ref.read(currentChannelProvider);
+        if (currentChannel != null) {
+          ref.read(playerControllerProvider.notifier).cycleAspectRatio();
+        }
+      }
+      // M to toggle mute
+      if (event.logicalKey == LogicalKeyboardKey.keyM) {
+        final currentChannel = ref.read(currentChannelProvider);
+        if (currentChannel != null) {
+          ref.read(playerControllerProvider.notifier).toggleMute();
+        }
+      }
     }
   }
 
