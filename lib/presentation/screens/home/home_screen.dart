@@ -11,6 +11,7 @@ import '../../widgets/add_playlist_dialog.dart';
 import '../player/player_screen.dart';
 import '../player/fullscreen_player_screen.dart';
 import '../epg_guide/epg_guide_screen.dart';
+import '../multiview/multiview_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../../core/constants/app_constants.dart';
 
@@ -184,6 +185,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
 
           const SizedBox(width: 8),
+
+          // Multi-view button
+          IconButton(
+            icon: const Icon(Icons.grid_view),
+            tooltip: 'Multi-View (4 channels)',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MultiViewScreen()),
+              );
+            },
+          ),
 
           // EPG Guide button
           IconButton(
