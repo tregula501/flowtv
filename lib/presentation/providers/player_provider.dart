@@ -138,13 +138,14 @@ extension BufferSizeExtension on BufferSize {
 class PlayerState {
   final bool isPlaying;
   final bool isBuffering;
-  final bool isPrebuffering; // New: waiting for initial buffer to fill
+  final bool isPrebuffering; // Waiting for initial buffer to fill
+  final bool isReconnecting; // Auto-retry in progress
   final bool isFullscreen;
   final double volume;
   final bool isMuted;
   final Duration position;
   final Duration duration;
-  final Duration bufferedDuration; // New: how much is buffered ahead
+  final Duration bufferedDuration; // How much is buffered ahead
   final String? error;
   final List<TrackInfo> videoTracks;
   final List<TrackInfo> audioTracks;
@@ -155,11 +156,14 @@ class PlayerState {
   final double playbackSpeed;
   final AspectRatioMode aspectRatioMode;
   final BufferSize bufferSize;
+  final int retryAttempt; // Current retry attempt (0 = not retrying)
+  final int maxRetries; // Maximum retry attempts
 
   const PlayerState({
     this.isPlaying = false,
     this.isBuffering = false,
     this.isPrebuffering = false,
+    this.isReconnecting = false,
     this.isFullscreen = false,
     this.volume = 1.0,
     this.isMuted = false,
@@ -176,12 +180,15 @@ class PlayerState {
     this.playbackSpeed = 1.0,
     this.aspectRatioMode = AspectRatioMode.auto,
     this.bufferSize = BufferSize.medium,
+    this.retryAttempt = 0,
+    this.maxRetries = 3,
   });
 
   PlayerState copyWith({
     bool? isPlaying,
     bool? isBuffering,
     bool? isPrebuffering,
+    bool? isReconnecting,
     bool? isFullscreen,
     double? volume,
     bool? isMuted,
@@ -198,11 +205,14 @@ class PlayerState {
     double? playbackSpeed,
     AspectRatioMode? aspectRatioMode,
     BufferSize? bufferSize,
+    int? retryAttempt,
+    int? maxRetries,
   }) {
     return PlayerState(
       isPlaying: isPlaying ?? this.isPlaying,
       isBuffering: isBuffering ?? this.isBuffering,
       isPrebuffering: isPrebuffering ?? this.isPrebuffering,
+      isReconnecting: isReconnecting ?? this.isReconnecting,
       isFullscreen: isFullscreen ?? this.isFullscreen,
       volume: volume ?? this.volume,
       isMuted: isMuted ?? this.isMuted,
@@ -219,6 +229,8 @@ class PlayerState {
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       aspectRatioMode: aspectRatioMode ?? this.aspectRatioMode,
       bufferSize: bufferSize ?? this.bufferSize,
+      retryAttempt: retryAttempt ?? this.retryAttempt,
+      maxRetries: maxRetries ?? this.maxRetries,
     );
   }
 }
@@ -237,12 +249,22 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   DateTime? _prebufferStartTime;
   int _prebufferTimerId = 0;
 
+  // Auto-retry state
+  Channel? _currentChannel;
+  int _retryAttempt = 0;
+  static const int _maxRetries = 3;
+  bool _isRetrying = false;
+  int _retryTimerId = 0;
+  DateTime? _lastSuccessfulPlay;
+  bool _autoRetryEnabled = true;
+
   PlayerControllerNotifier() : super(const PlayerState()) {
     _initPlayer();
   }
 
   Player get player => _player!;
   VideoController get videoController => _videoController!;
+  Channel? get currentChannel => _currentChannel;
 
   void _initPlayer() {
     // Initialize with buffer size configuration
@@ -288,6 +310,17 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
       if (error.isNotEmpty) {
         AppLogger.error('Player error: $error');
         state = state.copyWith(error: error);
+        // Trigger auto-retry on error
+        _handleStreamError(error);
+      }
+    });
+
+    // Monitor for stream ending/disconnection
+    _player!.stream.completed.listen((completed) {
+      if (completed && _currentChannel != null && _autoRetryEnabled) {
+        // Stream ended unexpectedly - could be a disconnect
+        AppLogger.warning('Stream completed unexpectedly, attempting reconnect');
+        _handleStreamError('Stream ended');
       }
     });
 
@@ -399,11 +432,109 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
     });
   }
 
+  /// Handle stream errors with auto-retry
+  void _handleStreamError(String error) {
+    if (!_autoRetryEnabled || _currentChannel == null || _isRetrying) return;
+
+    // Check if we've exceeded max retries
+    if (_retryAttempt >= _maxRetries) {
+      AppLogger.error('Max retry attempts reached ($_maxRetries), giving up');
+      state = state.copyWith(
+        error: 'Connection lost after $_maxRetries retry attempts: $error',
+        isReconnecting: false,
+        retryAttempt: 0,
+      );
+      _resetRetryState();
+      return;
+    }
+
+    // Calculate delay with exponential backoff: 1s, 2s, 4s
+    final delaySeconds = 1 << _retryAttempt; // 2^retryAttempt
+    _retryAttempt++;
+    _retryTimerId++;
+    final currentTimerId = _retryTimerId;
+
+    AppLogger.info('Stream error, retry attempt $_retryAttempt/$_maxRetries in ${delaySeconds}s');
+
+    state = state.copyWith(
+      isReconnecting: true,
+      retryAttempt: _retryAttempt,
+      error: null, // Clear error during retry
+    );
+
+    Future.delayed(Duration(seconds: delaySeconds), () {
+      _attemptReconnect(currentTimerId);
+    });
+  }
+
+  /// Attempt to reconnect to the current channel
+  Future<void> _attemptReconnect(int timerId) async {
+    if (timerId != _retryTimerId || _currentChannel == null) return;
+    if (!mounted) return;
+
+    _isRetrying = true;
+    AppLogger.info('Attempting reconnect to ${_currentChannel!.name}...');
+
+    try {
+      await _player!.stop();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Re-open the stream without resetting retry state yet
+      await _player!.open(Media(_currentChannel!.streamUrl), play: true);
+
+      // Wait a moment to see if playback starts successfully
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Check if we're actually playing
+      if (_player!.state.playing) {
+        AppLogger.info('Reconnect successful!');
+        _resetRetryState();
+        _lastSuccessfulPlay = DateTime.now();
+        state = state.copyWith(
+          isReconnecting: false,
+          retryAttempt: 0,
+          error: null,
+        );
+      } else {
+        // Still not playing, trigger another retry
+        _isRetrying = false;
+        _handleStreamError('Reconnect failed - not playing');
+      }
+    } catch (e) {
+      AppLogger.error('Reconnect attempt failed: $e');
+      _isRetrying = false;
+      _handleStreamError(e.toString());
+    }
+  }
+
+  /// Reset retry state
+  void _resetRetryState() {
+    _retryAttempt = 0;
+    _isRetrying = false;
+    _retryTimerId++;
+  }
+
+  /// Cancel any pending retry
+  void _cancelRetry() {
+    _resetRetryState();
+    state = state.copyWith(isReconnecting: false, retryAttempt: 0);
+  }
+
+  /// Enable or disable auto-retry
+  void setAutoRetryEnabled(bool enabled) {
+    _autoRetryEnabled = enabled;
+    AppLogger.info('Auto-retry ${enabled ? 'enabled' : 'disabled'}');
+  }
+
   /// Play a channel with current buffer settings
   Future<void> playChannel(Channel channel) async {
     try {
-      // Cancel any existing prebuffer
+      // Cancel any existing prebuffer and retry
       _cancelPrebuffering();
+      _cancelRetry();
+
+      // Store current channel for auto-retry
+      _currentChannel = channel;
 
       final bufferSeconds = _currentBufferSize.durationSeconds;
 
@@ -411,7 +542,9 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
         error: null,
         isBuffering: true,
         isPrebuffering: bufferSeconds > 1,
+        isReconnecting: false,
         bufferedDuration: Duration.zero,
+        retryAttempt: 0,
       );
       AppLogger.info('Playing channel: ${channel.name} (buffer: ${_currentBufferSize.displayName})');
 
@@ -436,6 +569,9 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
         Future.delayed(Duration(seconds: bufferSeconds), () {
           _completePrebuffering(currentTimerId);
         });
+      } else {
+        // Mark successful play for immediate playback
+        _lastSuccessfulPlay = DateTime.now();
       }
     } catch (e, stack) {
       AppLogger.error('Failed to play channel', e, stack);
@@ -459,13 +595,21 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   }
 
   /// Set buffer size for streaming
+  /// If a channel is currently playing, refreshes the stream to apply new buffer
   Future<void> setBufferSize(BufferSize size) async {
+    final previousSize = _currentBufferSize;
     _currentBufferSize = size;
     state = state.copyWith(bufferSize: size);
     AppLogger.info('Buffer size set: ${size.displayName}');
 
-    // Apply new buffer settings immediately
+    // Apply new buffer settings
     await _applyBufferSettings();
+
+    // If currently playing a channel and buffer size changed, refresh to apply new buffer
+    if (_currentChannel != null && previousSize != size && state.isPlaying) {
+      AppLogger.info('Refreshing stream to apply new buffer size...');
+      await refreshChannel(_currentChannel!);
+    }
   }
 
   /// Play/Pause toggle
@@ -486,6 +630,8 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   /// Stop
   Future<void> stop() async {
     _cancelPrebuffering();
+    _cancelRetry();
+    _currentChannel = null;
     await _player!.stop();
   }
 

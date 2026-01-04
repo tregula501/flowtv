@@ -9,6 +9,7 @@ void main() {
       expect(state.isPlaying, false);
       expect(state.isBuffering, false);
       expect(state.isPrebuffering, false);
+      expect(state.isReconnecting, false);
       expect(state.isFullscreen, false);
       expect(state.volume, 1.0);
       expect(state.isMuted, false);
@@ -25,6 +26,8 @@ void main() {
       expect(state.playbackSpeed, 1.0);
       expect(state.aspectRatioMode, AspectRatioMode.auto);
       expect(state.bufferSize, BufferSize.medium);
+      expect(state.retryAttempt, 0);
+      expect(state.maxRetries, 3);
     });
 
     group('copyWith', () {
@@ -100,6 +103,25 @@ void main() {
         final newState = state.copyWith(aspectRatioMode: AspectRatioMode.ratio16x9);
 
         expect(newState.aspectRatioMode, AspectRatioMode.ratio16x9);
+      });
+
+      test('should update reconnecting state', () {
+        const state = PlayerState();
+        final newState = state.copyWith(
+          isReconnecting: true,
+          retryAttempt: 2,
+        );
+
+        expect(newState.isReconnecting, true);
+        expect(newState.retryAttempt, 2);
+        expect(newState.maxRetries, 3); // unchanged default
+      });
+
+      test('should update buffer size', () {
+        const state = PlayerState();
+        final newState = state.copyWith(bufferSize: BufferSize.large);
+
+        expect(newState.bufferSize, BufferSize.large);
       });
     });
   });

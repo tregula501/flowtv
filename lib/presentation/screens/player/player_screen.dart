@@ -155,6 +155,42 @@ class PlayerScreen extends ConsumerWidget {
                       ),
                     ),
                   )
+                // Reconnecting indicator (auto-retry in progress)
+                else if (playerState.isReconnecting)
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            color: Colors.orange,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Reconnecting...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Attempt ${playerState.retryAttempt} of ${playerState.maxRetries}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
                 // Regular buffering indicator (during playback)
                 else if (playerState.isBuffering)
                   const Center(
@@ -163,8 +199,8 @@ class PlayerScreen extends ConsumerWidget {
                     ),
                   ),
 
-                // Error message
-                if (playerState.error != null)
+                // Error message (only shown when not reconnecting)
+                if (playerState.error != null && !playerState.isReconnecting)
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(16),
