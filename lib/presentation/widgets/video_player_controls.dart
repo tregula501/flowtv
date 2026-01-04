@@ -106,6 +106,9 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
 
                 const Spacer(),
 
+                // Quality/Settings button
+                _QualitySettingsButton(),
+
                 // Fullscreen button
                 IconButton(
                   icon: Icon(
@@ -159,6 +162,203 @@ class _RecordButton extends ConsumerWidget {
               SnackBar(content: Text('Started recording ${currentChannel.name}')),
             );
           }
+        }
+      },
+    );
+  }
+}
+
+class _QualitySettingsButton extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playerState = ref.watch(playerControllerProvider);
+    final hasMultipleTracks = playerState.audioTracks.length > 1 ||
+        playerState.videoTracks.length > 1 ||
+        playerState.subtitleTracks.isNotEmpty;
+
+    return PopupMenuButton<String>(
+      icon: Icon(
+        Icons.settings,
+        color: hasMultipleTracks ? Colors.white : Colors.white70,
+      ),
+      tooltip: 'Quality & Settings',
+      color: Colors.grey.shade900,
+      itemBuilder: (context) => [
+        // Audio tracks section
+        if (playerState.audioTracks.length > 1) ...[
+          const PopupMenuItem(
+            enabled: false,
+            height: 32,
+            child: Text(
+              'AUDIO',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          ...playerState.audioTracks.map((track) => PopupMenuItem(
+                value: 'audio:${track.id}',
+                child: Row(
+                  children: [
+                    Icon(
+                      playerState.currentAudioTrack == track.id
+                          ? Icons.check
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: playerState.currentAudioTrack == track.id
+                          ? Colors.blue
+                          : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(track.displayName)),
+                  ],
+                ),
+              ),),
+          const PopupMenuDivider(),
+        ],
+
+        // Video tracks section
+        if (playerState.videoTracks.length > 1) ...[
+          const PopupMenuItem(
+            enabled: false,
+            height: 32,
+            child: Text(
+              'VIDEO QUALITY',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          ...playerState.videoTracks.map((track) => PopupMenuItem(
+                value: 'video:${track.id}',
+                child: Row(
+                  children: [
+                    Icon(
+                      playerState.currentVideoTrack == track.id
+                          ? Icons.check
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: playerState.currentVideoTrack == track.id
+                          ? Colors.blue
+                          : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(track.displayName)),
+                  ],
+                ),
+              ),),
+          const PopupMenuDivider(),
+        ],
+
+        // Subtitle tracks section
+        if (playerState.subtitleTracks.isNotEmpty) ...[
+          const PopupMenuItem(
+            enabled: false,
+            height: 32,
+            child: Text(
+              'SUBTITLES',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          PopupMenuItem(
+            value: 'subtitle:off',
+            child: Row(
+              children: [
+                Icon(
+                  playerState.currentSubtitleTrack == null ||
+                          playerState.currentSubtitleTrack == 'no'
+                      ? Icons.check
+                      : Icons.radio_button_unchecked,
+                  size: 18,
+                  color: playerState.currentSubtitleTrack == null ||
+                          playerState.currentSubtitleTrack == 'no'
+                      ? Colors.blue
+                      : Colors.grey,
+                ),
+                const SizedBox(width: 8),
+                const Text('Off'),
+              ],
+            ),
+          ),
+          ...playerState.subtitleTracks.map((track) => PopupMenuItem(
+                value: 'subtitle:${track.id}',
+                child: Row(
+                  children: [
+                    Icon(
+                      playerState.currentSubtitleTrack == track.id
+                          ? Icons.check
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: playerState.currentSubtitleTrack == track.id
+                          ? Colors.blue
+                          : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(track.displayName)),
+                  ],
+                ),
+              ),),
+          const PopupMenuDivider(),
+        ],
+
+        // Playback speed section
+        const PopupMenuItem(
+          enabled: false,
+          height: 32,
+          child: Text(
+            'PLAYBACK SPEED',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+        ...[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((speed) => PopupMenuItem(
+              value: 'speed:$speed',
+              child: Row(
+                children: [
+                  Icon(
+                    playerState.playbackSpeed == speed
+                        ? Icons.check
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                    color:
+                        playerState.playbackSpeed == speed ? Colors.blue : Colors.grey,
+                  ),
+                  const SizedBox(width: 8),
+                  Text('${speed}x${speed == 1.0 ? ' (Normal)' : ''}'),
+                ],
+              ),
+            ),),
+      ],
+      onSelected: (value) {
+        final controller = ref.read(playerControllerProvider.notifier);
+        final parts = value.split(':');
+        final type = parts[0];
+        final id = parts[1];
+
+        switch (type) {
+          case 'audio':
+            controller.setAudioTrack(id);
+            break;
+          case 'video':
+            controller.setVideoTrack(id);
+            break;
+          case 'subtitle':
+            controller.setSubtitleTrack(id == 'off' ? null : id);
+            break;
+          case 'speed':
+            controller.setPlaybackSpeed(double.parse(id));
+            break;
         }
       },
     );

@@ -8,6 +8,35 @@ import 'package:window_manager/window_manager.dart';
 import '../../data/models/channel.dart';
 import '../../core/utils/logger.dart';
 
+/// Track info for audio/video/subtitle tracks
+class TrackInfo {
+  final String id;
+  final String? title;
+  final String? language;
+  final String? codec;
+  final int? width;
+  final int? height;
+  final int? bitrate;
+
+  const TrackInfo({
+    required this.id,
+    this.title,
+    this.language,
+    this.codec,
+    this.width,
+    this.height,
+    this.bitrate,
+  });
+
+  String get displayName {
+    if (title != null && title!.isNotEmpty) return title!;
+    if (language != null && language!.isNotEmpty) return language!;
+    if (width != null && height != null) return '${width}x$height';
+    if (codec != null) return codec!;
+    return 'Track $id';
+  }
+}
+
 /// Player state
 class PlayerState {
   final bool isPlaying;
@@ -18,6 +47,13 @@ class PlayerState {
   final Duration position;
   final Duration duration;
   final String? error;
+  final List<TrackInfo> videoTracks;
+  final List<TrackInfo> audioTracks;
+  final List<TrackInfo> subtitleTracks;
+  final String? currentVideoTrack;
+  final String? currentAudioTrack;
+  final String? currentSubtitleTrack;
+  final double playbackSpeed;
 
   const PlayerState({
     this.isPlaying = false,
@@ -28,6 +64,13 @@ class PlayerState {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.error,
+    this.videoTracks = const [],
+    this.audioTracks = const [],
+    this.subtitleTracks = const [],
+    this.currentVideoTrack,
+    this.currentAudioTrack,
+    this.currentSubtitleTrack,
+    this.playbackSpeed = 1.0,
   });
 
   PlayerState copyWith({
@@ -39,6 +82,13 @@ class PlayerState {
     Duration? position,
     Duration? duration,
     String? error,
+    List<TrackInfo>? videoTracks,
+    List<TrackInfo>? audioTracks,
+    List<TrackInfo>? subtitleTracks,
+    String? currentVideoTrack,
+    String? currentAudioTrack,
+    String? currentSubtitleTrack,
+    double? playbackSpeed,
   }) {
     return PlayerState(
       isPlaying: isPlaying ?? this.isPlaying,
@@ -49,6 +99,13 @@ class PlayerState {
       position: position ?? this.position,
       duration: duration ?? this.duration,
       error: error,
+      videoTracks: videoTracks ?? this.videoTracks,
+      audioTracks: audioTracks ?? this.audioTracks,
+      subtitleTracks: subtitleTracks ?? this.subtitleTracks,
+      currentVideoTrack: currentVideoTrack ?? this.currentVideoTrack,
+      currentAudioTrack: currentAudioTrack ?? this.currentAudioTrack,
+      currentSubtitleTrack: currentSubtitleTrack ?? this.currentSubtitleTrack,
+      playbackSpeed: playbackSpeed ?? this.playbackSpeed,
     );
   }
 }
@@ -100,6 +157,47 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
         AppLogger.error('Player error: $error');
         state = state.copyWith(error: error);
       }
+    });
+
+    // Listen to track changes
+    _player!.stream.tracks.listen((tracks) {
+      final videoTracks = tracks.video.map((t) => TrackInfo(
+        id: t.id,
+        title: t.title,
+        language: t.language,
+        codec: null,
+        width: t.w,
+        height: t.h,
+      ),).toList();
+
+      final audioTracks = tracks.audio.map((t) => TrackInfo(
+        id: t.id,
+        title: t.title,
+        language: t.language,
+        codec: null,
+      ),).toList();
+
+      final subtitleTracks = tracks.subtitle.map((t) => TrackInfo(
+        id: t.id,
+        title: t.title,
+        language: t.language,
+        codec: null,
+      ),).toList();
+
+      state = state.copyWith(
+        videoTracks: videoTracks,
+        audioTracks: audioTracks,
+        subtitleTracks: subtitleTracks,
+      );
+    });
+
+    // Listen to track selection changes
+    _player!.stream.track.listen((track) {
+      state = state.copyWith(
+        currentVideoTrack: track.video.id,
+        currentAudioTrack: track.audio.id,
+        currentSubtitleTrack: track.subtitle.id,
+      );
     });
   }
 
@@ -178,6 +276,51 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
       // For mobile/other platforms, just update state (UI will handle it)
       state = state.copyWith(isFullscreen: fullscreen);
     }
+  }
+
+  /// Set video track
+  Future<void> setVideoTrack(String trackId) async {
+    final tracks = _player!.state.tracks.video;
+    final track = tracks.firstWhere(
+      (t) => t.id == trackId,
+      orElse: () => tracks.first,
+    );
+    await _player!.setVideoTrack(track);
+    AppLogger.info('Video track set: $trackId');
+  }
+
+  /// Set audio track
+  Future<void> setAudioTrack(String trackId) async {
+    final tracks = _player!.state.tracks.audio;
+    final track = tracks.firstWhere(
+      (t) => t.id == trackId,
+      orElse: () => tracks.first,
+    );
+    await _player!.setAudioTrack(track);
+    AppLogger.info('Audio track set: $trackId');
+  }
+
+  /// Set subtitle track
+  Future<void> setSubtitleTrack(String? trackId) async {
+    if (trackId == null) {
+      await _player!.setSubtitleTrack(SubtitleTrack.no());
+      AppLogger.info('Subtitles disabled');
+      return;
+    }
+    final tracks = _player!.state.tracks.subtitle;
+    final track = tracks.firstWhere(
+      (t) => t.id == trackId,
+      orElse: () => SubtitleTrack.no(),
+    );
+    await _player!.setSubtitleTrack(track);
+    AppLogger.info('Subtitle track set: $trackId');
+  }
+
+  /// Set playback speed
+  Future<void> setPlaybackSpeed(double speed) async {
+    await _player!.setRate(speed);
+    state = state.copyWith(playbackSpeed: speed);
+    AppLogger.info('Playback speed set: ${speed}x');
   }
 
   @override
