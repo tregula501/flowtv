@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/channel_provider.dart';
 import '../providers/playlist_provider.dart';
+import 'add_playlist_dialog.dart';
 
 class CategorySidebar extends ConsumerWidget {
   const CategorySidebar({super.key});
@@ -70,10 +71,11 @@ class CategorySidebar extends ConsumerWidget {
                     icon: Icons.star,
                     label: 'Favorites',
                     count: favoriteChannels.length,
-                    isSelected: false, // Handle separately
+                    isSelected: selectedGroup == favoritesFilterKey,
                     iconColor: Colors.amber,
                     onTap: () {
-                      // TODO: Show favorites view
+                      ref.read(selectedGroupProvider.notifier).state =
+                          favoritesFilterKey;
                     },
                   ),
 
@@ -101,7 +103,10 @@ class CategorySidebar extends ConsumerWidget {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: () {
-                  // TODO: Show add playlist dialog
+                  showDialog(
+                    context: context,
+                    builder: (context) => const AddPlaylistDialog(),
+                  );
                 },
                 icon: const Icon(Icons.add),
                 label: const Text('Add Playlist'),

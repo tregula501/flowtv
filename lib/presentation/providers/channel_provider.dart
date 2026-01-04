@@ -37,7 +37,10 @@ final channelGroupsProvider = Provider<List<String>>((ref) {
       [];
 });
 
-/// Currently selected group
+/// Special constant for favorites filter
+const String favoritesFilterKey = '__FAVORITES__';
+
+/// Currently selected group (null = all, favoritesFilterKey = favorites only)
 final selectedGroupProvider = StateProvider<String?>((ref) => null);
 
 /// Filtered channels by selected group
@@ -48,6 +51,9 @@ final filteredChannelsProvider = Provider<List<Channel>>((ref) {
   return channelsAsync.whenOrNull(
         data: (channels) {
           if (selectedGroup == null) return channels;
+          if (selectedGroup == favoritesFilterKey) {
+            return channels.where((c) => c.isFavorite).toList();
+          }
           return channels.where((c) => c.group == selectedGroup).toList();
         },
       ) ??
