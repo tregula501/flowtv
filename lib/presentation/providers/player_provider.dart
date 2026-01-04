@@ -91,6 +91,7 @@ enum BufferSize {
   medium,
   large,
   veryLarge,
+  extraLarge, // For very unstable connections
 }
 
 extension BufferSizeExtension on BufferSize {
@@ -104,6 +105,8 @@ extension BufferSizeExtension on BufferSize {
         return 'Large (15s)';
       case BufferSize.veryLarge:
         return 'Very Large (30s)';
+      case BufferSize.extraLarge:
+        return 'Extra Large (60s)';
     }
   }
 
@@ -117,6 +120,24 @@ extension BufferSizeExtension on BufferSize {
         return 15;
       case BufferSize.veryLarge:
         return 30;
+      case BufferSize.extraLarge:
+        return 60;
+    }
+  }
+
+  /// Minimum seconds to buffer before resuming playback after a stall
+  int get minBufferBeforeResume {
+    switch (this) {
+      case BufferSize.small:
+        return 1;
+      case BufferSize.medium:
+        return 2;
+      case BufferSize.large:
+        return 5;
+      case BufferSize.veryLarge:
+        return 10;
+      case BufferSize.extraLarge:
+        return 15;
     }
   }
 
@@ -130,6 +151,8 @@ extension BufferSizeExtension on BufferSize {
         return 'More stable, higher latency';
       case BufferSize.veryLarge:
         return 'Most stable for slow connections';
+      case BufferSize.extraLarge:
+        return 'Maximum stability for very unstable connections';
     }
   }
 }
@@ -274,7 +297,8 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   void _initPlayer() {
     // Initialize with buffer size configuration
-    final bufferBytes = _currentBufferSize.durationSeconds * 2 * 1024 * 1024;
+    // Use 4MB per second for high-bitrate streams (up to 32 Mbps for HD/4K IPTV)
+    final bufferBytes = _currentBufferSize.durationSeconds * 4 * 1024 * 1024;
     _player = Player(
       configuration: PlayerConfiguration(
         bufferSize: bufferBytes,
@@ -377,32 +401,58 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   }
 
   /// Apply MPV-specific buffer settings via NativePlayer
-  /// Note: MPV's cache options control how much is buffered, but for IPTV streams
-  /// the buffer behavior is largely controlled by the stream itself.
-  /// The "prebuffer" effect is simulated by keeping isBuffering=true until
-  /// enough data has been received.
+  /// Optimized for live IPTV streaming stability
   Future<void> _applyBufferSettings() async {
     try {
       if (_player?.platform is native.NativePlayer) {
         final nativePlayer = _player!.platform as native.NativePlayer;
         final bufferSecs = _currentBufferSize.durationSeconds;
-        final bufferBytes = bufferSecs * 2 * 1024 * 1024;
+        final minResumeBuffer = _currentBufferSize.minBufferBeforeResume;
 
-        // Core cache settings
+        // Calculate buffer size: 4MB per second for high-bitrate streams (up to 32 Mbps)
+        // This is more generous than before to handle HD/4K IPTV streams
+        final bufferBytes = bufferSecs * 4 * 1024 * 1024;
+
+        // ===== Core Cache Settings =====
         await nativePlayer.setProperty('cache', 'yes');
         await nativePlayer.setProperty('cache-secs', bufferSecs.toString());
 
-        // Demuxer settings - how much to read ahead
+        // ===== Network Timeout Settings =====
+        // Increase timeouts to handle slow/unstable networks
+        await nativePlayer.setProperty('network-timeout', '30'); // 30 sec network timeout
+        await nativePlayer.setProperty('stream-lavf-o', 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
+
+        // ===== Demuxer Buffer Settings =====
         await nativePlayer.setProperty('demuxer-max-bytes', bufferBytes.toString());
+        await nativePlayer.setProperty('demuxer-max-back-bytes', (bufferBytes ~/ 2).toString());
         await nativePlayer.setProperty('demuxer-readahead-secs', bufferSecs.toString());
 
-        // Try demuxer-cache-wait which should wait for cache to fill
-        // This is the key option for "prebuffering"
+        // ===== Cache Pause/Resume Settings =====
+        // These are critical for stable playback - pause when buffer is low, resume when refilled
+        await nativePlayer.setProperty('cache-pause', 'yes');
+        await nativePlayer.setProperty('cache-pause-initial', 'yes');
+        await nativePlayer.setProperty('cache-pause-wait', minResumeBuffer.toString());
+
+        // For larger buffers, wait for cache to fill before playing
         if (bufferSecs > 1) {
           await nativePlayer.setProperty('demuxer-cache-wait', 'yes');
         }
 
-        AppLogger.info('Applied MPV buffer settings: cache-secs=$bufferSecs, demuxer-cache-wait=${bufferSecs > 1}');
+        // ===== HLS-specific Optimizations =====
+        // Many IPTV streams use HLS - optimize for it
+        await nativePlayer.setProperty('hls-bitrate', 'max'); // Use highest quality
+        await nativePlayer.setProperty('demuxer-lavf-o', 'live_start_index=-3'); // Start 3 segments back
+
+        // ===== Stability Settings =====
+        await nativePlayer.setProperty('force-seekable', 'yes'); // Allow seeking in live streams
+        await nativePlayer.setProperty('hr-seek', 'yes'); // Accurate seeking
+
+        AppLogger.info(
+          'Applied MPV buffer settings: cache-secs=$bufferSecs, '
+          'buffer=${bufferBytes ~/ 1024 ~/ 1024}MB, '
+          'cache-pause-wait=$minResumeBuffer, '
+          'network-timeout=30s'
+        );
       }
     } catch (e) {
       AppLogger.warning('Could not apply MPV buffer settings: $e');

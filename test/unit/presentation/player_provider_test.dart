@@ -248,6 +248,7 @@ void main() {
         expect(BufferSize.medium.displayName, 'Medium (5s)');
         expect(BufferSize.large.displayName, 'Large (15s)');
         expect(BufferSize.veryLarge.displayName, 'Very Large (30s)');
+        expect(BufferSize.extraLarge.displayName, 'Extra Large (60s)');
       });
     });
 
@@ -257,6 +258,17 @@ void main() {
         expect(BufferSize.medium.durationSeconds, 5);
         expect(BufferSize.large.durationSeconds, 15);
         expect(BufferSize.veryLarge.durationSeconds, 30);
+        expect(BufferSize.extraLarge.durationSeconds, 60);
+      });
+    });
+
+    group('minBufferBeforeResume', () {
+      test('should return correct minimum buffer values', () {
+        expect(BufferSize.small.minBufferBeforeResume, 1);
+        expect(BufferSize.medium.minBufferBeforeResume, 2);
+        expect(BufferSize.large.minBufferBeforeResume, 5);
+        expect(BufferSize.veryLarge.minBufferBeforeResume, 10);
+        expect(BufferSize.extraLarge.minBufferBeforeResume, 15);
       });
     });
 
@@ -266,15 +278,17 @@ void main() {
         expect(BufferSize.medium.description, isNotEmpty);
         expect(BufferSize.large.description, isNotEmpty);
         expect(BufferSize.veryLarge.description, isNotEmpty);
+        expect(BufferSize.extraLarge.description, isNotEmpty);
       });
     });
 
     test('should have all expected values', () {
-      expect(BufferSize.values.length, 4);
+      expect(BufferSize.values.length, 5);
       expect(BufferSize.values.contains(BufferSize.small), true);
       expect(BufferSize.values.contains(BufferSize.medium), true);
       expect(BufferSize.values.contains(BufferSize.large), true);
       expect(BufferSize.values.contains(BufferSize.veryLarge), true);
+      expect(BufferSize.values.contains(BufferSize.extraLarge), true);
     });
   });
 }
