@@ -393,7 +393,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
   }
 }
 
-class _ChannelPickerSheet extends ConsumerWidget {
+class _ChannelPickerSheet extends ConsumerStatefulWidget {
   final ScrollController scrollController;
   final Function(Channel) onChannelSelected;
 
@@ -403,7 +403,30 @@ class _ChannelPickerSheet extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ChannelPickerSheet> createState() => _ChannelPickerSheetState();
+}
+
+class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Channel> _filterChannels(List<Channel> channels) {
+    if (_searchQuery.isEmpty) return channels;
+    final query = _searchQuery.toLowerCase();
+    return channels.where((channel) {
+      return channel.name.toLowerCase().contains(query) ||
+          (channel.group?.toLowerCase().contains(query) ?? false);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final channelsAsync = ref.watch(channelsProvider);
 
     return Column(
@@ -428,36 +451,83 @@ class _ChannelPickerSheet extends ConsumerWidget {
           ),
         ),
 
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search channels...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            onChanged: (value) => setState(() => _searchQuery = value),
+            autofocus: true,
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
         // Channel list
         Expanded(
           child: channelsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error: $e')),
-            data: (channels) => ListView.builder(
-              controller: scrollController,
-              itemCount: channels.length,
-              itemBuilder: (context, index) {
-                final channel = channels[index];
-                return ListTile(
-                  leading: channel.logoUrl != null
-                      ? Image.network(
-                          channel.logoUrl!,
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.tv, size: 40),
-                        )
-                      : const Icon(Icons.tv, size: 40),
-                  title: Text(channel.name),
-                  subtitle: channel.group != null ? Text(channel.group!) : null,
-                  trailing: channel.isFavorite
-                      ? const Icon(Icons.star, color: Colors.amber, size: 20)
-                      : null,
-                  onTap: () => onChannelSelected(channel),
+            data: (channels) {
+              final filteredChannels = _filterChannels(channels);
+              if (filteredChannels.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 8),
+                      Text(
+                        'No channels found',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
                 );
-              },
-            ),
+              }
+              return ListView.builder(
+                controller: widget.scrollController,
+                itemCount: filteredChannels.length,
+                itemBuilder: (context, index) {
+                  final channel = filteredChannels[index];
+                  return ListTile(
+                    leading: channel.logoUrl != null
+                        ? Image.network(
+                            channel.logoUrl!,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.tv, size: 40),
+                          )
+                        : const Icon(Icons.tv, size: 40),
+                    title: Text(channel.name),
+                    subtitle: channel.group != null ? Text(channel.group!) : null,
+                    trailing: channel.isFavorite
+                        ? const Icon(Icons.star, color: Colors.amber, size: 20)
+                        : null,
+                    onTap: () => widget.onChannelSelected(channel),
+                  );
+                },
+              );
+            },
           ),
         ),
       ],

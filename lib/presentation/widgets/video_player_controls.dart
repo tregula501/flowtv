@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/player_provider.dart';
 import '../providers/channel_provider.dart';
 import '../providers/recording_provider.dart';
+import 'cast_button.dart';
 
 class VideoPlayerControls extends ConsumerStatefulWidget {
   const VideoPlayerControls({super.key});
@@ -132,6 +133,11 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
 
                 // Record button
                 _RecordButton(),
+
+                const SizedBox(width: 8),
+
+                // Cast button (only visible on Android)
+                const CastButton(iconColor: Colors.white70),
 
                 const Spacer(),
 

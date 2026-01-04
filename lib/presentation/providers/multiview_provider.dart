@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+// ignore: implementation_imports
+import 'package:media_kit/src/player/native/player/player.dart' as native;
 
 import '../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../core/utils/logger.dart';
+import 'player_provider.dart' show BufferSize, BufferSizeExtension;
 
 /// Maximum number of views in multi-view mode
 const int maxMultiViewChannels = 4;
@@ -79,17 +82,30 @@ class MultiViewState {
 
 /// Multi-view controller notifier - migrated to Riverpod 3.x Notifier
 class MultiViewControllerNotifier extends Notifier<MultiViewState> {
+  // Use medium buffer for multi-view (balance between stability and resources)
+  static const BufferSize _bufferSize = BufferSize.medium;
+
   @override
   MultiViewState build() {
     // Initialize slots when building
     final slots = <MultiViewSlot>[];
 
+    // Calculate buffer size: 4MB per second for high-bitrate streams
+    final bufferBytes = _bufferSize.durationSeconds * 4 * 1024 * 1024;
+
     for (int i = 0; i < maxMultiViewChannels; i++) {
-      final player = Player();
+      final player = Player(
+        configuration: PlayerConfiguration(
+          bufferSize: bufferBytes,
+        ),
+      );
       final videoController = VideoController(player);
 
       // Set up listeners for each player
       _setupPlayerListeners(i, player);
+
+      // Apply MPV-specific buffer settings
+      _applyBufferSettings(player, i);
 
       slots.add(MultiViewSlot(
         index: i,
@@ -114,9 +130,62 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
     return initialState;
   }
 
+  /// Apply MPV-specific buffer settings for stable streaming
+  Future<void> _applyBufferSettings(Player player, int slotIndex) async {
+    try {
+      if (player.platform is native.NativePlayer) {
+        final nativePlayer = player.platform as native.NativePlayer;
+        final bufferSecs = _bufferSize.durationSeconds;
+        final minResumeBuffer = _bufferSize.minBufferBeforeResume;
+        final bufferBytes = bufferSecs * 4 * 1024 * 1024;
+
+        // Core cache settings
+        await nativePlayer.setProperty('cache', 'yes');
+        await nativePlayer.setProperty('cache-secs', bufferSecs.toString());
+
+        // Network timeout settings
+        await nativePlayer.setProperty('network-timeout', '30');
+        await nativePlayer.setProperty('stream-lavf-o', 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
+
+        // Demuxer buffer settings
+        await nativePlayer.setProperty('demuxer-max-bytes', bufferBytes.toString());
+        await nativePlayer.setProperty('demuxer-max-back-bytes', (bufferBytes ~/ 2).toString());
+        await nativePlayer.setProperty('demuxer-readahead-secs', bufferSecs.toString());
+
+        // Cache pause/resume settings
+        await nativePlayer.setProperty('cache-pause', 'yes');
+        await nativePlayer.setProperty('cache-pause-initial', 'yes');
+        await nativePlayer.setProperty('cache-pause-wait', minResumeBuffer.toString());
+
+        if (bufferSecs > 1) {
+          await nativePlayer.setProperty('demuxer-cache-wait', 'yes');
+        }
+
+        // HLS optimizations
+        await nativePlayer.setProperty('hls-bitrate', 'max');
+        await nativePlayer.setProperty('demuxer-lavf-o', 'live_start_index=-3');
+
+        // Stability settings
+        await nativePlayer.setProperty('force-seekable', 'yes');
+        await nativePlayer.setProperty('hr-seek', 'yes');
+
+        AppLogger.info(
+          'MultiView slot $slotIndex: Applied buffer settings (${_bufferSize.displayName})'
+        );
+      }
+    } catch (e) {
+      AppLogger.warning('MultiView slot $slotIndex: Could not apply buffer settings: $e');
+    }
+  }
+
   void _setupPlayerListeners(int index, Player player) {
     player.stream.playing.listen((playing) {
-      _updateSlot(index, (slot) => slot.copyWith(isPlaying: playing));
+      // When playback starts successfully, clear any previous error
+      if (playing) {
+        _updateSlot(index, (slot) => slot.copyWith(isPlaying: true, clearError: true));
+      } else {
+        _updateSlot(index, (slot) => slot.copyWith(isPlaying: false));
+      }
     });
 
     player.stream.buffering.listen((buffering) {
