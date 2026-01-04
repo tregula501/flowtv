@@ -61,6 +61,9 @@ dependencies:
   # Note: Chromecast UI framework is prepared via CastService interface.
   # Native Android casting will be implemented via platform channels.
 
+  # Note: Recording uses FFmpeg via Process (Windows/Desktop).
+  # FFmpeg must be installed and available in PATH or app directory.
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
