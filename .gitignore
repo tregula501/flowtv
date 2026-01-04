@@ -1,0 +1,40 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.isar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+*.dmg
+
+# Windows
+Thumbs.db
+*.exe
+
+# Secrets
+*.env
+*.pem
+*.key
+
+# Generated
+*.g.dart
+*.freezed.dart
+*.gr.dart
+lib/l10n/*.dart
+
+# Build
+/build/
+*.apk
+*.aab
+*.ipa
+
+# Test
+coverage/

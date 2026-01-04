@@ -1,0 +1,20 @@
+{
+  "@@locale": "en",
+  "appTitle": "FlowTV",
+  "allChannels": "All Channels",
+  "favorites": "Favorites",
+  "settings": "Settings",
+  "addPlaylist": "Add Playlist",
+  "searchChannels": "Search channels...",
+  "noChannels": "No channels found",
+  "playlistName": "Playlist Name",
+  "playlistUrl": "Playlist URL",
+  "epgUrl": "EPG URL",
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "refresh": "Refresh",
+  "loading": "Loading...",
+  "error": "Error",
+  "retry": "Retry"
+}
