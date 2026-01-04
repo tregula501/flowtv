@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/playlist_provider.dart';
 import '../../providers/channel_provider.dart';
+import '../../providers/player_provider.dart';
 import '../../widgets/category_sidebar.dart';
 import '../../widgets/channel_grid.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../player/player_screen.dart';
+import '../player/fullscreen_player_screen.dart';
 import '../epg_guide/epg_guide_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../../core/constants/app_constants.dart';
@@ -37,6 +39,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           event.logicalKey == LogicalKeyboardKey.keyF) {
         _focusNode.requestFocus();
       }
+      // ESC to exit fullscreen
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        final isFullscreen = ref.read(playerControllerProvider).isFullscreen;
+        if (isFullscreen) {
+          ref.read(playerControllerProvider.notifier).setFullscreen(false);
+        }
+      }
+      // F to toggle fullscreen when playing
+      if (event.logicalKey == LogicalKeyboardKey.keyF &&
+          !HardwareKeyboard.instance.isControlPressed) {
+        final currentChannel = ref.read(currentChannelProvider);
+        if (currentChannel != null) {
+          ref.read(playerControllerProvider.notifier).toggleFullscreen();
+        }
+      }
+      // Space to play/pause
+      if (event.logicalKey == LogicalKeyboardKey.space) {
+        final currentChannel = ref.read(currentChannelProvider);
+        if (currentChannel != null) {
+          ref.read(playerControllerProvider.notifier).playPause();
+        }
+      }
     }
   }
 
@@ -45,6 +69,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final playlistsAsync = ref.watch(playlistsProvider);
     final activePlaylist = ref.watch(activePlaylistProvider);
     final currentChannel = ref.watch(currentChannelProvider);
+    final playerState = ref.watch(playerControllerProvider);
+
+    // Show fullscreen player if in fullscreen mode
+    if (playerState.isFullscreen && currentChannel != null) {
+      return KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: _handleKeyEvent,
+        autofocus: true,
+        child: const FullscreenPlayerScreen(),
+      );
+    }
 
     return KeyboardListener(
       focusNode: FocusNode(),

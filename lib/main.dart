@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'core/utils/logger.dart';
@@ -11,6 +14,26 @@ Future<void> main() async {
 
   // Initialize media_kit for video playback
   MediaKit.ensureInitialized();
+
+  // Initialize window manager for desktop
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    await windowManager.ensureInitialized();
+
+    const windowOptions = WindowOptions(
+      size: Size(1280, 720),
+      minimumSize: Size(800, 600),
+      center: true,
+      backgroundColor: Colors.black,
+      skipTaskbar: false,
+      titleBarStyle: TitleBarStyle.normal,
+      title: 'FlowTV',
+    );
+
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
 
   // Initialize logger
   AppLogger.init();

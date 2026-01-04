@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../../data/models/channel.dart';
 import '../../core/utils/logger.dart';
@@ -154,13 +157,27 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   }
 
   /// Toggle fullscreen
-  void toggleFullscreen() {
-    state = state.copyWith(isFullscreen: !state.isFullscreen);
+  Future<void> toggleFullscreen() async {
+    final newFullscreen = !state.isFullscreen;
+    await setFullscreen(newFullscreen);
   }
 
   /// Set fullscreen state
-  void setFullscreen(bool fullscreen) {
-    state = state.copyWith(isFullscreen: fullscreen);
+  Future<void> setFullscreen(bool fullscreen) async {
+    // For desktop platforms, use window_manager
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        await windowManager.ensureInitialized();
+        await windowManager.setFullScreen(fullscreen);
+        state = state.copyWith(isFullscreen: fullscreen);
+        AppLogger.info('Fullscreen: $fullscreen');
+      } catch (e) {
+        AppLogger.error('Failed to toggle fullscreen: $e');
+      }
+    } else {
+      // For mobile/other platforms, just update state (UI will handle it)
+      state = state.copyWith(isFullscreen: fullscreen);
+    }
   }
 
   @override

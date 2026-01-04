@@ -16,11 +16,13 @@ class EpgGuideScreen extends ConsumerStatefulWidget {
 }
 
 class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
-  late ScrollController _horizontalController;
+  late ScrollController _timeHeaderController;
+  late ScrollController _programHorizontalController;
   late ScrollController _channelListController;
   late ScrollController _programGridController;
   late DateTime _startTime;
-  bool _isSyncingScroll = false;
+  bool _isSyncingVerticalScroll = false;
+  bool _isSyncingHorizontalScroll = false;
 
   static const double _timeSlotWidth = 200.0;
   static const double _channelColumnWidth = 200.0;
@@ -30,13 +32,18 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   @override
   void initState() {
     super.initState();
-    _horizontalController = ScrollController();
+    _timeHeaderController = ScrollController();
+    _programHorizontalController = ScrollController();
     _channelListController = ScrollController();
     _programGridController = ScrollController();
 
     // Sync vertical scrolling between channel list and program grid
     _channelListController.addListener(_onChannelListScroll);
     _programGridController.addListener(_onProgramGridScroll);
+
+    // Sync horizontal scrolling between time header and program grid
+    _timeHeaderController.addListener(_onTimeHeaderScroll);
+    _programHorizontalController.addListener(_onProgramHorizontalScroll);
 
     _startTime = DateTime.now().subtract(const Duration(hours: 1));
     _startTime = DateTime(
@@ -48,24 +55,41 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   }
 
   void _onChannelListScroll() {
-    if (_isSyncingScroll) return;
-    _isSyncingScroll = true;
+    if (_isSyncingVerticalScroll) return;
+    _isSyncingVerticalScroll = true;
     _programGridController.jumpTo(_channelListController.offset);
-    _isSyncingScroll = false;
+    _isSyncingVerticalScroll = false;
   }
 
   void _onProgramGridScroll() {
-    if (_isSyncingScroll) return;
-    _isSyncingScroll = true;
+    if (_isSyncingVerticalScroll) return;
+    _isSyncingVerticalScroll = true;
     _channelListController.jumpTo(_programGridController.offset);
-    _isSyncingScroll = false;
+    _isSyncingVerticalScroll = false;
+  }
+
+  void _onTimeHeaderScroll() {
+    if (_isSyncingHorizontalScroll) return;
+    _isSyncingHorizontalScroll = true;
+    _programHorizontalController.jumpTo(_timeHeaderController.offset);
+    _isSyncingHorizontalScroll = false;
+  }
+
+  void _onProgramHorizontalScroll() {
+    if (_isSyncingHorizontalScroll) return;
+    _isSyncingHorizontalScroll = true;
+    _timeHeaderController.jumpTo(_programHorizontalController.offset);
+    _isSyncingHorizontalScroll = false;
   }
 
   @override
   void dispose() {
     _channelListController.removeListener(_onChannelListScroll);
     _programGridController.removeListener(_onProgramGridScroll);
-    _horizontalController.dispose();
+    _timeHeaderController.removeListener(_onTimeHeaderScroll);
+    _programHorizontalController.removeListener(_onProgramHorizontalScroll);
+    _timeHeaderController.dispose();
+    _programHorizontalController.dispose();
     _channelListController.dispose();
     _programGridController.dispose();
     super.dispose();
@@ -191,7 +215,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
           // Time slots (synced with horizontal scroll)
           Expanded(
             child: SingleChildScrollView(
-              controller: _horizontalController,
+              controller: _timeHeaderController,
               scrollDirection: Axis.horizontal,
               child: Row(children: slots),
             ),
@@ -247,28 +271,19 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
     List<Channel> channels,
     Map<String, List<EpgProgram>> epgData,
   ) {
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        // Sync horizontal scroll with time header
-        if (notification is ScrollUpdateNotification &&
-            notification.metrics.axis == Axis.horizontal) {
-          _horizontalController.jumpTo(notification.metrics.pixels);
-        }
-        return false;
-      },
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: _timeSlotWidth * _hoursToShow,
-          child: ListView.builder(
-            controller: _programGridController,
-            itemCount: channels.length,
-            itemBuilder: (context, index) {
-              final channel = channels[index];
-              final programs = epgData[channel.epgId] ?? [];
-              return _buildProgramRow(channel, programs);
-            },
-          ),
+    return SingleChildScrollView(
+      controller: _programHorizontalController,
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: _timeSlotWidth * _hoursToShow,
+        child: ListView.builder(
+          controller: _programGridController,
+          itemCount: channels.length,
+          itemBuilder: (context, index) {
+            final channel = channels[index];
+            final programs = epgData[channel.epgId] ?? [];
+            return _buildProgramRow(channel, programs);
+          },
         ),
       ),
     );
@@ -395,8 +410,16 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   void _scrollToNow() {
     final now = DateTime.now();
     final offset = now.difference(_startTime).inMinutes * (_timeSlotWidth / 60);
-    _horizontalController.animateTo(
-      offset - 100,
+    final targetOffset = (offset - 100).clamp(0.0, double.infinity);
+
+    // Scroll both time header and program grid
+    _timeHeaderController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+    _programHorizontalController.animateTo(
+      targetOffset,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );
