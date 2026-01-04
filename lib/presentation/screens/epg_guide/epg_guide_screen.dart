@@ -210,7 +210,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
       child: Row(
         children: [
           // Empty space for channel column
-          SizedBox(width: _channelColumnWidth),
+          const SizedBox(width: _channelColumnWidth),
           const VerticalDivider(width: 1),
           // Time slots (synced with horizontal scroll)
           Expanded(
@@ -308,7 +308,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   Widget _buildProgramBlock(Channel channel, EpgProgram program) {
     final startOffset = program.startTime.difference(_startTime).inMinutes;
     final duration = program.durationMinutes;
-    final pixelsPerMinute = _timeSlotWidth / 60;
+    const pixelsPerMinute = _timeSlotWidth / 60;
 
     final left = startOffset * pixelsPerMinute;
     final width = duration * pixelsPerMinute;

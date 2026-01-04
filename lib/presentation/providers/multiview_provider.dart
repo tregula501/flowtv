@@ -84,7 +84,7 @@ final multiViewControllerProvider =
 });
 
 class MultiViewControllerNotifier extends StateNotifier<MultiViewState> {
-  MultiViewControllerNotifier() : super(MultiViewState(slots: [])) {
+  MultiViewControllerNotifier() : super(const MultiViewState(slots: [])) {
     _initSlots();
   }
 
@@ -103,7 +103,7 @@ class MultiViewControllerNotifier extends StateNotifier<MultiViewState> {
         player: player,
         videoController: videoController,
         isAudioActive: i == 0, // First slot has audio by default
-      ));
+      ),);
     }
 
     state = state.copyWith(slots: slots, activeAudioSlot: 0);
@@ -167,11 +167,14 @@ class MultiViewControllerNotifier extends StateNotifier<MultiViewState> {
     final slot = state.slots[slotIndex];
 
     try {
-      _updateSlot(slotIndex, (s) => s.copyWith(
-            channel: channel,
-            clearError: true,
-            isBuffering: true,
-          ));
+      _updateSlot(
+        slotIndex,
+        (s) => s.copyWith(
+          channel: channel,
+          clearError: true,
+          isBuffering: true,
+        ),
+      );
 
       await slot.player.open(Media(channel.streamUrl));
       AppLogger.info('MultiView slot $slotIndex: Playing ${channel.name}');
@@ -188,12 +191,15 @@ class MultiViewControllerNotifier extends StateNotifier<MultiViewState> {
     final slot = state.slots[slotIndex];
     await slot.player.stop();
 
-    _updateSlot(slotIndex, (s) => s.copyWith(
-          clearChannel: true,
-          clearError: true,
-          isPlaying: false,
-          isBuffering: false,
-        ));
+    _updateSlot(
+      slotIndex,
+      (s) => s.copyWith(
+        clearChannel: true,
+        clearError: true,
+        isPlaying: false,
+        isBuffering: false,
+      ),
+    );
 
     AppLogger.info('MultiView slot $slotIndex: Cleared');
   }

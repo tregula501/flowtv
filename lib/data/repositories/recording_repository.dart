@@ -89,8 +89,11 @@ class RecordingRepository {
   }
 
   /// Update recording status
-  Future<void> updateStatus(int recordingId, RecordingStatus status,
-      {String? errorMessage}) async {
+  Future<void> updateStatus(
+    int recordingId,
+    RecordingStatus status, {
+    String? errorMessage,
+  }) async {
     final isar = DatabaseService.instance;
 
     await isar.writeTxn(() async {

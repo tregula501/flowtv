@@ -146,7 +146,7 @@ class SettingsScreen extends ConsumerWidget {
                     }
                   },
                 ),
-              )),
+              ),),
           ListTile(
             leading: const Icon(Icons.add),
             title: const Text('Add Playlist'),

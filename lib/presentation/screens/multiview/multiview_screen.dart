@@ -15,8 +15,6 @@ class MultiViewScreen extends ConsumerStatefulWidget {
 }
 
 class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
-  int? _selectedSlotForChannel;
-
   @override
   void initState() {
     super.initState();
@@ -110,9 +108,6 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
                 return _MultiViewTile(
                   slot: slot,
                   onAddChannel: () {
-                    setState(() {
-                      _selectedSlotForChannel = index;
-                    });
                     _showChannelPicker(index);
                   },
                   onRemoveChannel: () {
