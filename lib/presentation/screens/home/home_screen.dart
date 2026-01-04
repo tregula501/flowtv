@@ -12,6 +12,7 @@ import '../player/player_screen.dart';
 import '../player/fullscreen_player_screen.dart';
 import '../epg_guide/epg_guide_screen.dart';
 import '../multiview/multiview_screen.dart';
+import '../recordings/recordings_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../../core/constants/app_constants.dart';
 
@@ -206,6 +207,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const EpgGuideScreen()),
+              );
+            },
+          ),
+
+          // Recordings button
+          IconButton(
+            icon: const Icon(Icons.video_library),
+            tooltip: 'Recordings',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RecordingsScreen()),
               );
             },
           ),

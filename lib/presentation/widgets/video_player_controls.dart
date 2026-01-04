@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/player_provider.dart';
+import '../providers/channel_provider.dart';
+import '../providers/recording_provider.dart';
 
 class VideoPlayerControls extends ConsumerStatefulWidget {
   const VideoPlayerControls({super.key});
@@ -97,6 +99,11 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
                   ),
                 ),
 
+                const SizedBox(width: 16),
+
+                // Record button
+                _RecordButton(),
+
                 const Spacer(),
 
                 // Fullscreen button
@@ -114,6 +121,46 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _RecordButton extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentChannel = ref.watch(currentChannelProvider);
+    final activeRecordings = ref.watch(activeRecordingsProvider);
+
+    if (currentChannel == null) {
+      return const SizedBox.shrink();
+    }
+
+    final isRecording = activeRecordings.any((r) => r.channelId == currentChannel.id);
+
+    return IconButton(
+      icon: Icon(
+        Icons.fiber_manual_record,
+        color: isRecording ? Colors.red : Colors.white70,
+      ),
+      tooltip: isRecording ? 'Stop Recording' : 'Start Recording',
+      onPressed: () async {
+        final manager = ref.read(recordingManagerProvider);
+        if (isRecording) {
+          await manager.stopRecording(currentChannel.id);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Stopped recording ${currentChannel.name}')),
+            );
+          }
+        } else {
+          await manager.startRecording(currentChannel);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Started recording ${currentChannel.name}')),
+            );
+          }
+        }
+      },
     );
   }
 }

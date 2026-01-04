@@ -15,6 +15,11 @@ extension DateTimeExtensions on DateTime {
     return '${year.toString()}-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
   }
 
+  /// Format as date and time (MM/DD HH:mm)
+  String get dateTimeString {
+    return '$shortDateString $timeString';
+  }
+
   /// Check if date is today
   bool get isToday {
     final now = DateTime.now();
