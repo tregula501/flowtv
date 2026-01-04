@@ -15,6 +15,25 @@ class VideoPlayerControls extends ConsumerStatefulWidget {
 class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
   bool _isVisible = true;
   bool _isHovering = false;
+  int _hideTimerId = 0;
+
+  void _showControls() {
+    setState(() => _isVisible = true);
+    _scheduleHide();
+  }
+
+  void _scheduleHide() {
+    _hideTimerId++;
+    final currentTimerId = _hideTimerId;
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && currentTimerId == _hideTimerId && !_isHovering) {
+        final isPlaying = ref.read(playerControllerProvider).isPlaying;
+        if (isPlaying) {
+          setState(() => _isVisible = false);
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,26 +41,33 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
     final playerController = ref.watch(playerControllerProvider.notifier);
 
     return MouseRegion(
-      onEnter: (_) => setState(() {
+      onEnter: (_) {
         _isHovering = true;
-        _isVisible = true;
-      }),
-      onExit: (_) => setState(() {
+        _showControls();
+      },
+      onExit: (_) {
         _isHovering = false;
-        if (playerState.isPlaying) {
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted && !_isHovering && playerState.isPlaying) {
-              setState(() => _isVisible = false);
-            }
-          });
+        _scheduleHide();
+      },
+      onHover: (_) {
+        if (!_isVisible) {
+          _showControls();
         }
-      }),
+      },
       child: GestureDetector(
-        onTap: () => setState(() => _isVisible = !_isVisible),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
-          opacity: _isVisible ? 1.0 : 0.0,
-          child: Container(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          setState(() => _isVisible = !_isVisible);
+          if (_isVisible) {
+            _scheduleHide();
+          }
+        },
+        child: IgnorePointer(
+          ignoring: !_isVisible,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity: _isVisible ? 1.0 : 0.0,
+            child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -73,6 +99,9 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
                   ),
                   onPressed: () => playerController.stop(),
                 ),
+
+                // Refresh button (for frozen streams)
+                _RefreshButton(),
 
                 const SizedBox(width: 16),
 
@@ -122,6 +151,7 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );
@@ -371,6 +401,37 @@ class _QualitySettingsButton extends ConsumerWidget {
                 ],
               ),
             ),),
+        const PopupMenuDivider(),
+
+        // Buffer size section
+        const PopupMenuItem(
+          enabled: false,
+          height: 32,
+          child: Text(
+            'BUFFER SIZE',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+        ...BufferSize.values.map((size) => PopupMenuItem(
+              value: 'buffer:${size.index}',
+              child: Row(
+                children: [
+                  Icon(
+                    playerState.bufferSize == size
+                        ? Icons.check
+                        : Icons.radio_button_unchecked,
+                    size: 18,
+                    color: playerState.bufferSize == size ? Colors.blue : Colors.grey,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(size.displayName),
+                ],
+              ),
+            ),),
       ],
       onSelected: (value) {
         final controller = ref.read(playerControllerProvider.notifier);
@@ -394,8 +455,45 @@ class _QualitySettingsButton extends ConsumerWidget {
           case 'speed':
             controller.setPlaybackSpeed(double.parse(id));
             break;
+          case 'buffer':
+            controller.setBufferSize(BufferSize.values[int.parse(id)]);
+            break;
         }
       },
+    );
+  }
+}
+
+class _RefreshButton extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentChannel = ref.watch(currentChannelProvider);
+    final playerState = ref.watch(playerControllerProvider);
+
+    if (currentChannel == null) {
+      return const SizedBox.shrink();
+    }
+
+    return IconButton(
+      icon: Icon(
+        Icons.refresh,
+        color: playerState.isBuffering ? Colors.orange : Colors.white70,
+      ),
+      tooltip: 'Refresh Stream',
+      onPressed: playerState.isBuffering
+          ? null
+          : () async {
+              final controller = ref.read(playerControllerProvider.notifier);
+              await controller.refreshChannel(currentChannel);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Refreshing ${currentChannel.name}...'),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
     );
   }
 }

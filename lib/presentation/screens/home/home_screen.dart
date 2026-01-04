@@ -173,10 +173,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           const Spacer(),
 
-          // Search bar
-          SizedBox(
-            width: 300,
-            child: TextField(
+          // Search bar - flexible width
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 300),
+              child: TextField(
               controller: _searchController,
               focusNode: _focusNode,
               decoration: InputDecoration(
@@ -196,6 +197,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onChanged: (value) {
                 ref.read(channelSearchQueryProvider.notifier).state = value;
               },
+            ),
             ),
           ),
 

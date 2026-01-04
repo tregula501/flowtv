@@ -19,7 +19,7 @@ dependencies:
   # Video Player - media_kit with FFmpeg/libmpv
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
-  media_kit_libs_video: ^1.0.5
+  media_kit_libs_video: ^1.0.7
 
   # Database - Isar NoSQL
   isar: ^3.1.0+1

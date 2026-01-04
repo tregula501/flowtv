@@ -106,8 +106,57 @@ class PlayerScreen extends ConsumerWidget {
                   ),
                 ),
 
-                // Buffering indicator
-                if (playerState.isBuffering)
+                // Prebuffering indicator with progress
+                if (playerState.isPrebuffering)
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            color: Colors.white,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Prebuffering...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${playerState.bufferedDuration.inSeconds}s / ${playerState.bufferSize.durationSeconds}s',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: 150,
+                            child: LinearProgressIndicator(
+                              value: playerState.bufferSize.durationSeconds > 0
+                                  ? (playerState.bufferedDuration.inMilliseconds /
+                                          (playerState.bufferSize.durationSeconds * 1000))
+                                      .clamp(0.0, 1.0)
+                                  : 0.0,
+                              backgroundColor: Colors.white24,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                // Regular buffering indicator (during playback)
+                else if (playerState.isBuffering)
                   const Center(
                     child: CircularProgressIndicator(
                       color: Colors.white,

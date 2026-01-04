@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
+// ignore: implementation_imports
+import 'package:media_kit/src/player/native/player/player.dart' as native;
 
 import '../../data/models/channel.dart';
 import '../../core/utils/logger.dart';
@@ -83,15 +85,66 @@ extension AspectRatioModeExtension on AspectRatioMode {
   }
 }
 
+/// Buffer size options for streaming
+enum BufferSize {
+  small,
+  medium,
+  large,
+  veryLarge,
+}
+
+extension BufferSizeExtension on BufferSize {
+  String get displayName {
+    switch (this) {
+      case BufferSize.small:
+        return 'Small (1s)';
+      case BufferSize.medium:
+        return 'Medium (5s)';
+      case BufferSize.large:
+        return 'Large (15s)';
+      case BufferSize.veryLarge:
+        return 'Very Large (30s)';
+    }
+  }
+
+  int get durationSeconds {
+    switch (this) {
+      case BufferSize.small:
+        return 1;
+      case BufferSize.medium:
+        return 5;
+      case BufferSize.large:
+        return 15;
+      case BufferSize.veryLarge:
+        return 30;
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case BufferSize.small:
+        return 'Lowest latency, may buffer more';
+      case BufferSize.medium:
+        return 'Balanced latency and stability';
+      case BufferSize.large:
+        return 'More stable, higher latency';
+      case BufferSize.veryLarge:
+        return 'Most stable for slow connections';
+    }
+  }
+}
+
 /// Player state
 class PlayerState {
   final bool isPlaying;
   final bool isBuffering;
+  final bool isPrebuffering; // New: waiting for initial buffer to fill
   final bool isFullscreen;
   final double volume;
   final bool isMuted;
   final Duration position;
   final Duration duration;
+  final Duration bufferedDuration; // New: how much is buffered ahead
   final String? error;
   final List<TrackInfo> videoTracks;
   final List<TrackInfo> audioTracks;
@@ -101,15 +154,18 @@ class PlayerState {
   final String? currentSubtitleTrack;
   final double playbackSpeed;
   final AspectRatioMode aspectRatioMode;
+  final BufferSize bufferSize;
 
   const PlayerState({
     this.isPlaying = false,
     this.isBuffering = false,
+    this.isPrebuffering = false,
     this.isFullscreen = false,
     this.volume = 1.0,
     this.isMuted = false,
     this.position = Duration.zero,
     this.duration = Duration.zero,
+    this.bufferedDuration = Duration.zero,
     this.error,
     this.videoTracks = const [],
     this.audioTracks = const [],
@@ -119,16 +175,19 @@ class PlayerState {
     this.currentSubtitleTrack,
     this.playbackSpeed = 1.0,
     this.aspectRatioMode = AspectRatioMode.auto,
+    this.bufferSize = BufferSize.medium,
   });
 
   PlayerState copyWith({
     bool? isPlaying,
     bool? isBuffering,
+    bool? isPrebuffering,
     bool? isFullscreen,
     double? volume,
     bool? isMuted,
     Duration? position,
     Duration? duration,
+    Duration? bufferedDuration,
     String? error,
     List<TrackInfo>? videoTracks,
     List<TrackInfo>? audioTracks,
@@ -138,15 +197,18 @@ class PlayerState {
     String? currentSubtitleTrack,
     double? playbackSpeed,
     AspectRatioMode? aspectRatioMode,
+    BufferSize? bufferSize,
   }) {
     return PlayerState(
       isPlaying: isPlaying ?? this.isPlaying,
       isBuffering: isBuffering ?? this.isBuffering,
+      isPrebuffering: isPrebuffering ?? this.isPrebuffering,
       isFullscreen: isFullscreen ?? this.isFullscreen,
       volume: volume ?? this.volume,
       isMuted: isMuted ?? this.isMuted,
       position: position ?? this.position,
       duration: duration ?? this.duration,
+      bufferedDuration: bufferedDuration ?? this.bufferedDuration,
       error: error,
       videoTracks: videoTracks ?? this.videoTracks,
       audioTracks: audioTracks ?? this.audioTracks,
@@ -156,6 +218,7 @@ class PlayerState {
       currentSubtitleTrack: currentSubtitleTrack ?? this.currentSubtitleTrack,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       aspectRatioMode: aspectRatioMode ?? this.aspectRatioMode,
+      bufferSize: bufferSize ?? this.bufferSize,
     );
   }
 }
@@ -169,6 +232,10 @@ final playerControllerProvider =
 class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   Player? _player;
   VideoController? _videoController;
+  BufferSize _currentBufferSize = BufferSize.medium;
+  bool _isPrebuffering = false;
+  DateTime? _prebufferStartTime;
+  int _prebufferTimerId = 0;
 
   PlayerControllerNotifier() : super(const PlayerState()) {
     _initPlayer();
@@ -178,8 +245,17 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   VideoController get videoController => _videoController!;
 
   void _initPlayer() {
-    _player = Player();
+    // Initialize with buffer size configuration
+    final bufferBytes = _currentBufferSize.durationSeconds * 2 * 1024 * 1024;
+    _player = Player(
+      configuration: PlayerConfiguration(
+        bufferSize: bufferBytes,
+      ),
+    );
     _videoController = VideoController(_player!);
+
+    // Apply MPV-specific buffer settings
+    _applyBufferSettings();
 
     // Listen to player streams
     _player!.stream.playing.listen((playing) {
@@ -188,6 +264,12 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
     _player!.stream.buffering.listen((buffering) {
       state = state.copyWith(isBuffering: buffering);
+    });
+
+    // Listen to buffer position for display purposes
+    _player!.stream.buffer.listen((buffer) {
+      // For live streams, buffer is absolute position; for display we track elapsed prebuffer time
+      state = state.copyWith(bufferedDuration: buffer);
     });
 
     _player!.stream.volume.listen((volume) {
@@ -251,17 +333,139 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
     });
   }
 
-  /// Play a channel
+  /// Apply MPV-specific buffer settings via NativePlayer
+  /// Note: MPV's cache options control how much is buffered, but for IPTV streams
+  /// the buffer behavior is largely controlled by the stream itself.
+  /// The "prebuffer" effect is simulated by keeping isBuffering=true until
+  /// enough data has been received.
+  Future<void> _applyBufferSettings() async {
+    try {
+      if (_player?.platform is native.NativePlayer) {
+        final nativePlayer = _player!.platform as native.NativePlayer;
+        final bufferSecs = _currentBufferSize.durationSeconds;
+        final bufferBytes = bufferSecs * 2 * 1024 * 1024;
+
+        // Core cache settings
+        await nativePlayer.setProperty('cache', 'yes');
+        await nativePlayer.setProperty('cache-secs', bufferSecs.toString());
+
+        // Demuxer settings - how much to read ahead
+        await nativePlayer.setProperty('demuxer-max-bytes', bufferBytes.toString());
+        await nativePlayer.setProperty('demuxer-readahead-secs', bufferSecs.toString());
+
+        // Try demuxer-cache-wait which should wait for cache to fill
+        // This is the key option for "prebuffering"
+        if (bufferSecs > 1) {
+          await nativePlayer.setProperty('demuxer-cache-wait', 'yes');
+        }
+
+        AppLogger.info('Applied MPV buffer settings: cache-secs=$bufferSecs, demuxer-cache-wait=${bufferSecs > 1}');
+      }
+    } catch (e) {
+      AppLogger.warning('Could not apply MPV buffer settings: $e');
+    }
+  }
+
+  /// Complete prebuffering and start playback
+  void _completePrebuffering(int timerId) {
+    if (!_isPrebuffering || timerId != _prebufferTimerId) return;
+
+    _isPrebuffering = false;
+    _prebufferStartTime = null;
+    state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
+    _player!.play();
+    AppLogger.info('Prebuffer complete, starting playback');
+  }
+
+  /// Cancel prebuffering (used when stopping or changing channels)
+  void _cancelPrebuffering() {
+    _isPrebuffering = false;
+    _prebufferStartTime = null;
+    _prebufferTimerId++; // Invalidate any pending timers
+    state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
+  }
+
+  /// Update prebuffer progress display
+  void _updatePrebufferProgress(int timerId) {
+    if (!_isPrebuffering || timerId != _prebufferTimerId || _prebufferStartTime == null) return;
+    if (!mounted) return;
+
+    final elapsed = DateTime.now().difference(_prebufferStartTime!);
+    state = state.copyWith(bufferedDuration: elapsed);
+
+    // Schedule next update
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _updatePrebufferProgress(timerId);
+    });
+  }
+
+  /// Play a channel with current buffer settings
   Future<void> playChannel(Channel channel) async {
     try {
-      state = state.copyWith(error: null, isBuffering: true);
-      AppLogger.info('Playing channel: ${channel.name}');
+      // Cancel any existing prebuffer
+      _cancelPrebuffering();
 
-      await _player!.open(Media(channel.streamUrl));
+      final bufferSeconds = _currentBufferSize.durationSeconds;
+
+      state = state.copyWith(
+        error: null,
+        isBuffering: true,
+        isPrebuffering: bufferSeconds > 1,
+        bufferedDuration: Duration.zero,
+      );
+      AppLogger.info('Playing channel: ${channel.name} (buffer: ${_currentBufferSize.displayName})');
+
+      // Apply buffer settings before playing
+      await _applyBufferSettings();
+
+      // Open the stream
+      await _player!.open(Media(channel.streamUrl), play: bufferSeconds <= 1);
+
+      // For buffer sizes > 1 second, wait before playing
+      if (bufferSeconds > 1) {
+        _isPrebuffering = true;
+        _prebufferStartTime = DateTime.now();
+        _prebufferTimerId++;
+        final currentTimerId = _prebufferTimerId;
+
+        // Start progress updates
+        _updatePrebufferProgress(currentTimerId);
+
+        // Wait for the buffer duration then start playback
+        AppLogger.info('Prebuffering for ${bufferSeconds}s...');
+        Future.delayed(Duration(seconds: bufferSeconds), () {
+          _completePrebuffering(currentTimerId);
+        });
+      }
     } catch (e, stack) {
       AppLogger.error('Failed to play channel', e, stack);
+      _cancelPrebuffering();
       state = state.copyWith(error: e.toString());
     }
+  }
+
+  /// Refresh/reload the current channel (useful for frozen streams)
+  Future<void> refreshChannel(Channel channel) async {
+    try {
+      AppLogger.info('Refreshing channel: ${channel.name}');
+      await _player!.stop();
+      // Small delay before reopening
+      await Future.delayed(const Duration(milliseconds: 300));
+      await playChannel(channel);
+    } catch (e, stack) {
+      AppLogger.error('Failed to refresh channel', e, stack);
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  /// Set buffer size for streaming
+  Future<void> setBufferSize(BufferSize size) async {
+    _currentBufferSize = size;
+    state = state.copyWith(bufferSize: size);
+    AppLogger.info('Buffer size set: ${size.displayName}');
+
+    // Apply new buffer settings immediately
+    await _applyBufferSettings();
   }
 
   /// Play/Pause toggle
@@ -281,6 +485,7 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
   /// Stop
   Future<void> stop() async {
+    _cancelPrebuffering();
     await _player!.stop();
   }
 
