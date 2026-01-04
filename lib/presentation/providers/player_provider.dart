@@ -255,7 +255,6 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   static const int _maxRetries = 3;
   bool _isRetrying = false;
   int _retryTimerId = 0;
-  DateTime? _lastSuccessfulPlay;
   bool _autoRetryEnabled = true;
 
   PlayerControllerNotifier() : super(const PlayerState()) {
@@ -489,7 +488,6 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
       if (_player!.state.playing) {
         AppLogger.info('Reconnect successful!');
         _resetRetryState();
-        _lastSuccessfulPlay = DateTime.now();
         state = state.copyWith(
           isReconnecting: false,
           retryAttempt: 0,
@@ -569,9 +567,6 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
         Future.delayed(Duration(seconds: bufferSeconds), () {
           _completePrebuffering(currentTimerId);
         });
-      } else {
-        // Mark successful play for immediate playback
-        _lastSuccessfulPlay = DateTime.now();
       }
     } catch (e, stack) {
       AppLogger.error('Failed to play channel', e, stack);
