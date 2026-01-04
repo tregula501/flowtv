@@ -5,37 +5,69 @@ import '../datasources/local/drift/app_database.dart';
 import '../datasources/remote/xmltv_parser.dart';
 import '../../core/utils/logger.dart';
 
+/// Progress callback for tracking import progress
+/// [current] is the number of items processed so far
+/// [total] is the total number of items to process
+/// [phase] describes what phase we're in (e.g., "Downloading", "Parsing", "Storing")
+typedef ProgressCallback = void Function(int current, int total, String phase);
+
 /// Repository for EPG data operations
 class EpgRepository {
   final XmltvParser _parser = XmltvParser();
 
   AppDatabase get _db => DatabaseService.instance;
 
-  /// Fetch and store EPG from URL
-  Future<int> fetchAndStoreEpg(String url) async {
-    final result = await _parser.parseFromUrl(url);
+  /// Fetch and store EPG from URL with optional progress callback
+  Future<int> fetchAndStoreEpg(
+    String url, {
+    ProgressCallback? onProgress,
+  }) async {
+    // Phase 1: Download and parse
+    onProgress?.call(0, 100, 'Downloading EPG...');
 
-    // Clear old EPG data
+    final result = await _parser.parseFromUrl(url);
+    final programs = result.programs;
+    final total = programs.length;
+
+    AppLogger.info('Parsed $total EPG programs, starting database insert...');
+    onProgress?.call(0, total, 'Clearing old data...');
+
+    // Phase 2: Clear old EPG data
     await _db.delete(_db.epgPrograms).go();
 
-    // Store new programs
-    for (final program in result.programs) {
-      await _db.into(_db.epgPrograms).insert(
-        EpgProgramsCompanion.insert(
-          channelId: program.channelId,
-          title: program.title,
-          startTime: program.startTime,
-          endTime: program.endTime,
-          description: Value(program.description),
-          category: Value(program.category),
-          episode: Value(program.episode),
-          iconUrl: Value(program.iconUrl),
-        ),
-      );
+    // Phase 3: Batch insert new programs in chunks for progress tracking
+    const batchSize = 1000;
+    int processed = 0;
+
+    for (int i = 0; i < programs.length; i += batchSize) {
+      final end = (i + batchSize > programs.length) ? programs.length : i + batchSize;
+      final chunk = programs.sublist(i, end);
+
+      // Use Drift batch for efficient bulk insert
+      await _db.batch((batch) {
+        for (final program in chunk) {
+          batch.insert(
+            _db.epgPrograms,
+            EpgProgramsCompanion.insert(
+              channelId: program.channelId,
+              title: program.title,
+              startTime: program.startTime,
+              endTime: program.endTime,
+              description: Value(program.description),
+              category: Value(program.category),
+              episode: Value(program.episode),
+              iconUrl: Value(program.iconUrl),
+            ),
+          );
+        }
+      });
+
+      processed = end;
+      onProgress?.call(processed, total, 'Storing programs...');
     }
 
-    AppLogger.info('Stored ${result.programCount} EPG programs');
-    return result.programCount;
+    AppLogger.info('Stored $total EPG programs using batch inserts');
+    return total;
   }
 
   /// Get programs for a channel

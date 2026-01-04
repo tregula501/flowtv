@@ -9,21 +9,24 @@ A modern, cross-platform IPTV streaming application with EPG (Electronic Program
 ## Features
 
 ### Core Features
-- **M3U Playlist Support** - Import playlists via URL or file
+- **M3U Playlist Support** - Import playlists via URL, edit metadata, and manage multiple profiles
 - **Xtream Codes API** - Full support for Live TV, VOD, and Series
-- **EPG Integration** - XMLTV guide with program schedules
+- **EPG Integration** - XMLTV guide with program schedules and progress tracking
 - **Multi-Playlist Profiles** - Switch between different IPTV providers
+- **Batch Import Optimization** - Fast playlist and EPG loading with real-time progress
 
 ### Playback
 - **Adaptive Streaming** - HLS/RTMP with auto-quality adjustment
+- **Buffer Management** - Configurable prebuffering and auto-retry on connection loss
 - **DVR Recording** - Record live TV to local storage
 - **Timeshift** - Pause and rewind live TV
 - **Multi-View** - Watch up to 4 channels simultaneously
 - **Catch-up TV** - Watch previously aired content
 
 ### User Experience
-- **TiviMate-Inspired UI** - Clean, intuitive interface
-- **Dark & Light Themes** - Comfortable viewing any time
+- **TiviMate-Inspired UI** - Clean, intuitive interface with dark and light themes
+- **Progress Indicators** - Real-time progress bars for EPG and playlist loading
+- **Playlist Management** - Edit, refresh, and manage playlists with visual feedback
 - **Full Keyboard Navigation** - Desktop-optimized controls
 - **D-Pad Navigation** - Ready for TV remotes
 - **Channel Search** - Search channels and EPG programs
@@ -73,7 +76,7 @@ cd flowtv
 # Install dependencies
 flutter pub get
 
-# Generate code (Isar, Riverpod, Freezed)
+# Generate code (Drift, Riverpod, Freezed)
 dart run build_runner build --delete-conflicting-outputs
 
 # Run in development mode
@@ -91,9 +94,26 @@ flutter build windows --release
 2. Go to **Settings** > **Playlists**
 3. Click **Add Playlist**
 4. Choose method:
-   - **URL**: Paste your M3U playlist URL
+   - **URL**: Paste your M3U playlist URL (with optional EPG URL)
    - **File**: Select a local `.m3u` or `.m3u8` file
    - **Xtream**: Enter server URL, username, and password
+5. Watch the progress bar as channels are imported
+6. Once complete, the playlist will be ready to use
+
+### Managing Playlists
+
+- **Set Active**: Switch between loaded playlists
+- **Edit**: Modify playlist name, URL, or EPG URL
+- **Refresh**: Re-download channels from the source URL
+- **Delete**: Remove a playlist and all its channels
+
+### Loading EPG
+
+1. Ensure your playlist has an EPG URL configured (auto-detected or manually set)
+2. Go to **Settings** > **EPG**
+3. Click the refresh button to load the TV guide
+4. Watch the real-time progress bar showing programs being imported
+5. Set auto-refresh interval for automatic updates
 
 ### Keyboard Shortcuts (Desktop)
 
@@ -112,13 +132,65 @@ flutter build windows --release
 
 ```
 lib/
-├── core/           # Constants, themes, utilities
-├── data/           # Models, repositories, data sources
-├── domain/         # Business logic, use cases
+├── core/           # Constants, themes, utilities, extensions
+├── data/           # Models, repositories, data sources, parsers
+│   ├── datasources/
+│   │   ├── local/  # Drift database, local storage
+│   │   └── remote/ # M3U parser, XMLTV parser, HTTP clients
+│   └── repositories/  # EPG and Playlist repositories
 ├── presentation/   # UI screens, widgets, providers
+│   ├── providers/  # Riverpod state management
+│   ├── screens/    # App screens
+│   └── widgets/    # Reusable UI components
 ├── l10n/           # Localization files
 └── platform/       # Platform-specific code
 ```
+
+## Technical Stack
+
+### Database & State Management
+- **Drift** - Type-safe SQL database with reactive queries
+- **Riverpod 3.x** - Provider-based state management with scoped access
+- **Freezed** - Code generation for immutable models
+
+### Data & Parsing
+- **M3U Parser** - Full attribute extraction (tvg-id, logo, group-title, etc.)
+- **XMLTV Parser** - EPG guide parsing with timezone support
+- **Batch Imports** - Optimized bulk database inserts for performance
+
+### UI & UX
+- **Flutter 3.27+** - Cross-platform framework
+- **Material 3** - Modern design system
+- **Responsive Layout** - Works on desktop, tablet, and mobile
+
+### Performance Optimizations
+- **Batch Insert Operations** - Reduces 435,000+ individual DB calls to ~435 batch operations
+- **Progress Tracking** - Real-time UI updates during long operations
+- **Auto-retry with Exponential Backoff** - Handles connection failures gracefully
+- **Configurable Buffering** - Prebuffer and auto-retry strategies
+
+## Recent Updates (Phase 2)
+
+### Database Migration
+- Migrated from Isar to **Drift** for better type safety and reactive queries
+- Batch insert operations for EPG (chunk size: 1000) and playlists (chunk size: 500)
+- Dramatic performance improvement: Loading 435,000 EPG programs now completes in seconds
+
+### Progress Tracking UI
+- Real-time progress bars in Settings for both EPG and playlist operations
+- Shows current/total items and operation phase (Downloading, Parsing, Storing)
+- Visual feedback with circular and linear progress indicators
+
+### Playlist Management
+- **Edit Playlists** - Change name, M3U URL, and EPG URL without re-importing
+- **Refresh Playlists** - Re-download channels with progress tracking
+- **Set Active Playlist** - Switch between multiple loaded playlists
+- **Delete Playlists** - Remove with all associated channels
+
+### State Management
+- Upgraded to **Riverpod 3.x** with Notifier pattern
+- Scoped state providers for playlist and EPG progress
+- Reactive UI that automatically updates with database changes
 
 ## Contributing
 
@@ -132,12 +204,41 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
 
 ## Roadmap
 
+### Completed
 - [x] Phase 1: Core M3U playback
-- [ ] Phase 2: EPG & Xtream Codes
+  - M3U/M3U8 parser with full attribute support
+  - Favorites system
+  - Channel search and filtering
+  - Category organization
+
+### In Progress
+- [🔄] Phase 2: EPG & Xtream Codes
+  - [x] XMLTV EPG parsing and storage (Drift database)
+  - [x] Batch import optimization with progress tracking
+  - [x] Edit playlist functionality
+  - [x] Auto-retry on stream failures
+  - [x] Buffer size configuration
+  - [ ] Xtream Codes API integration
+  - [ ] EPG grid view UI
+  - [ ] Catch-up TV support
+
+### Planned
 - [ ] Phase 3: DVR & Multi-view
+  - Recording to local storage
+  - Multi-view (up to 4 channels)
+  - Recording management
 - [ ] Phase 4: Profiles & Parental controls
-- [ ] Phase 5: Desktop polish
-- [ ] Phase 6: Mobile & TV platforms
+  - PIN-protected profiles
+  - Channel locks and restrictions
+  - Viewing history
+- [ ] Phase 5: Mobile & TV platforms
+  - Android app optimization
+  - iOS support
+  - TV remote navigation
+- [ ] Phase 6: Advanced features
+  - Subtitle/audio track selection
+  - Streaming quality selection
+  - Custom HTTP headers
 
 ## License
 

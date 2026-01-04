@@ -5,6 +5,7 @@ import '../../providers/theme_provider.dart';
 import '../../providers/playlist_provider.dart';
 import '../../providers/epg_provider.dart';
 import '../../widgets/add_playlist_dialog.dart';
+import '../../widgets/edit_playlist_dialog.dart';
 import '../../../core/extensions/datetime_extensions.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -51,6 +52,13 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildProgressSubtitle(ProgressState progress) {
+    return Text(
+      progress.phase,
+      style: const TextStyle(fontStyle: FontStyle.italic),
+    );
+  }
+
   Widget _buildSection(BuildContext context, String title, List<Widget> children) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,6 +99,7 @@ class SettingsScreen extends ConsumerWidget {
 
   Widget _buildPlaylistsTile(BuildContext context, WidgetRef ref) {
     final playlistsAsync = ref.watch(playlistsProvider);
+    final progressState = ref.watch(playlistProgressProvider);
 
     return playlistsAsync.when(
       loading: () => const ListTile(
@@ -105,6 +114,44 @@ class SettingsScreen extends ConsumerWidget {
       ),
       data: (playlists) => Column(
         children: [
+          // Show progress bar when loading
+          if (progressState.isLoading)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          progressState.phase,
+                          style: const TextStyle(fontStyle: FontStyle.italic),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (progressState.total > 0) ...[
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: progressState.progress,
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${progressState.current} / ${progressState.total}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ...playlists.map((playlist) => ListTile(
                 leading: Icon(
                   playlist.isActive ? Icons.check_circle : Icons.circle_outlined,
@@ -123,6 +170,10 @@ class SettingsScreen extends ConsumerWidget {
                       child: Text('Set Active'),
                     ),
                     const PopupMenuItem(
+                      value: 'edit',
+                      child: Text('Edit'),
+                    ),
+                    const PopupMenuItem(
                       value: 'refresh',
                       child: Text('Refresh'),
                     ),
@@ -136,6 +187,14 @@ class SettingsScreen extends ConsumerWidget {
                     switch (value) {
                       case 'activate':
                         await manager.setActivePlaylist(playlist.id);
+                        break;
+                      case 'edit':
+                        if (context.mounted) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => EditPlaylistDialog(playlist: playlist),
+                          );
+                        }
                         break;
                       case 'refresh':
                         await manager.refreshPlaylist(playlist.id);
@@ -163,7 +222,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Widget _buildEpgTile(BuildContext context, WidgetRef ref) {
-    final isLoading = ref.watch(epgLoadingProvider);
+    final progressState = ref.watch(epgProgressProvider);
     final lastUpdate = ref.watch(epgLastUpdateProvider);
     final refreshInterval = ref.watch(epgRefreshIntervalProvider);
 
@@ -172,12 +231,14 @@ class SettingsScreen extends ConsumerWidget {
         ListTile(
           leading: const Icon(Icons.schedule),
           title: const Text('TV Guide (EPG)'),
-          subtitle: Text(
-            lastUpdate != null
-                ? 'Last updated: ${lastUpdate.relativeTime}'
-                : 'Not loaded',
-          ),
-          trailing: isLoading
+          subtitle: progressState.isLoading
+              ? _buildProgressSubtitle(progressState)
+              : Text(
+                  lastUpdate != null
+                      ? 'Last updated: ${lastUpdate.relativeTime}'
+                      : 'Not loaded',
+                ),
+          trailing: progressState.isLoading
               ? const SizedBox(
                   width: 24,
                   height: 24,
@@ -188,6 +249,25 @@ class SettingsScreen extends ConsumerWidget {
                   onPressed: () => ref.read(epgManagerProvider).fetchEpg(),
                 ),
         ),
+        if (progressState.isLoading && progressState.total > 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LinearProgressIndicator(
+                  value: progressState.progress,
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${progressState.current} / ${progressState.total}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
         ListTile(
           leading: const Icon(Icons.timer),
           title: const Text('Auto-refresh interval'),

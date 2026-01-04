@@ -12,6 +12,65 @@ final epgRepositoryProvider = Provider<EpgRepository>((ref) {
   return EpgRepository();
 });
 
+/// Progress state for tracking long-running operations
+class ProgressState {
+  final int current;
+  final int total;
+  final String phase;
+  final bool isLoading;
+
+  const ProgressState({
+    this.current = 0,
+    this.total = 0,
+    this.phase = '',
+    this.isLoading = false,
+  });
+
+  double get progress => total > 0 ? (current / total).clamp(0.0, 1.0) : 0.0;
+
+  ProgressState copyWith({
+    int? current,
+    int? total,
+    String? phase,
+    bool? isLoading,
+  }) {
+    return ProgressState(
+      current: current ?? this.current,
+      total: total ?? this.total,
+      phase: phase ?? this.phase,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
+/// EPG progress state notifier
+class EpgProgressNotifier extends Notifier<ProgressState> {
+  @override
+  ProgressState build() => const ProgressState();
+
+  void startLoading(String phase) {
+    state = ProgressState(phase: phase, isLoading: true);
+  }
+
+  void updateProgress(int current, int total, String phase) {
+    state = ProgressState(
+      current: current,
+      total: total,
+      phase: phase,
+      isLoading: true,
+    );
+  }
+
+  void stopLoading() {
+    state = const ProgressState();
+  }
+}
+
+/// EPG progress state provider
+final epgProgressProvider = NotifierProvider<EpgProgressNotifier, ProgressState>(
+  EpgProgressNotifier.new,
+);
+
 /// EPG loading state notifier - migrated to Riverpod 3.x
 class EpgLoadingNotifier extends Notifier<bool> {
   @override
@@ -93,10 +152,16 @@ class EpgManager {
     }
 
     _ref.read(epgLoadingProvider.notifier).setLoading(true);
+    _ref.read(epgProgressProvider.notifier).startLoading('Downloading EPG...');
 
     try {
       final repo = _ref.read(epgRepositoryProvider);
-      final count = await repo.fetchAndStoreEpg(activePlaylist!.epgUrl!);
+      final count = await repo.fetchAndStoreEpg(
+        activePlaylist!.epgUrl!,
+        onProgress: (current, total, phase) {
+          _ref.read(epgProgressProvider.notifier).updateProgress(current, total, phase);
+        },
+      );
 
       _ref.read(epgLastUpdateProvider.notifier).setLastUpdate(DateTime.now());
       AppLogger.info('EPG updated: $count programs');
@@ -105,21 +170,29 @@ class EpgManager {
       rethrow;
     } finally {
       _ref.read(epgLoadingProvider.notifier).setLoading(false);
+      _ref.read(epgProgressProvider.notifier).stopLoading();
     }
   }
 
   /// Fetch EPG from specific URL
   Future<int> fetchEpgFromUrl(String url) async {
     _ref.read(epgLoadingProvider.notifier).setLoading(true);
+    _ref.read(epgProgressProvider.notifier).startLoading('Downloading EPG...');
 
     try {
       final repo = _ref.read(epgRepositoryProvider);
-      final count = await repo.fetchAndStoreEpg(url);
+      final count = await repo.fetchAndStoreEpg(
+        url,
+        onProgress: (current, total, phase) {
+          _ref.read(epgProgressProvider.notifier).updateProgress(current, total, phase);
+        },
+      );
 
       _ref.read(epgLastUpdateProvider.notifier).setLastUpdate(DateTime.now());
       return count;
     } finally {
       _ref.read(epgLoadingProvider.notifier).setLoading(false);
+      _ref.read(epgProgressProvider.notifier).stopLoading();
     }
   }
 
