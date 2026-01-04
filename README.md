@@ -218,8 +218,8 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
   - [x] Edit playlist functionality
   - [x] Auto-retry on stream failures
   - [x] Buffer size configuration
-  - [ ] Xtream Codes API integration
-  - [ ] EPG grid view UI
+  - [x] EPG grid view UI (time-based layout with synchronized scrolling, live highlighting)
+  - [🔄] Xtream Codes API integration (80% complete - API client & data models done, needs UI integration)
   - [ ] Catch-up TV support
 
 ### Planned
