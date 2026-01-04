@@ -188,14 +188,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         icon: const Icon(Icons.clear, size: 20),
                         onPressed: () {
                           _searchController.clear();
-                          ref.read(channelSearchQueryProvider.notifier).state = '';
+                          ref.read(channelSearchQueryProvider.notifier).clear();
                         },
                       )
                     : null,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
               onChanged: (value) {
-                ref.read(channelSearchQueryProvider.notifier).state = value;
+                ref.read(channelSearchQueryProvider.notifier).setQuery(value);
               },
             ),
             ),

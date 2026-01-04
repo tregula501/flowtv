@@ -13,8 +13,8 @@ dependencies:
     sdk: flutter
 
   # State Management
-  flutter_riverpod: ^2.6.1
-  riverpod_annotation: ^2.6.1
+  flutter_riverpod: ^3.1.0
+  riverpod_annotation: ^4.0.0
 
   # Video Player - media_kit with FFmpeg/libmpv
   media_kit: ^1.2.6
@@ -63,7 +63,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   build_runner: ^2.4.14
-  riverpod_generator: ^2.4.0
+  riverpod_generator: ^4.0.0
   drift_dev: ^2.22.1
   freezed: ^3.0.0
   json_serializable: ^6.8.0

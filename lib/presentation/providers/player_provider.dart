@@ -235,13 +235,8 @@ class PlayerState {
   }
 }
 
-/// Video player controller provider
-final playerControllerProvider =
-    StateNotifierProvider<PlayerControllerNotifier, PlayerState>((ref) {
-  return PlayerControllerNotifier();
-});
-
-class PlayerControllerNotifier extends StateNotifier<PlayerState> {
+/// Player controller notifier - migrated to Riverpod 3.x Notifier
+class PlayerControllerNotifier extends Notifier<PlayerState> {
   Player? _player;
   VideoController? _videoController;
   BufferSize _currentBufferSize = BufferSize.medium;
@@ -257,8 +252,20 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   int _retryTimerId = 0;
   bool _autoRetryEnabled = true;
 
-  PlayerControllerNotifier() : super(const PlayerState()) {
+  // Track if disposed
+  bool _isDisposed = false;
+
+  @override
+  PlayerState build() {
     _initPlayer();
+
+    // Register disposal callback
+    ref.onDispose(() {
+      _isDisposed = true;
+      _player?.dispose();
+    });
+
+    return const PlayerState();
   }
 
   Player get player => _player!;
@@ -280,33 +287,33 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
     // Listen to player streams
     _player!.stream.playing.listen((playing) {
-      state = state.copyWith(isPlaying: playing);
+      if (!_isDisposed) state = state.copyWith(isPlaying: playing);
     });
 
     _player!.stream.buffering.listen((buffering) {
-      state = state.copyWith(isBuffering: buffering);
+      if (!_isDisposed) state = state.copyWith(isBuffering: buffering);
     });
 
     // Listen to buffer position for display purposes
     _player!.stream.buffer.listen((buffer) {
       // For live streams, buffer is absolute position; for display we track elapsed prebuffer time
-      state = state.copyWith(bufferedDuration: buffer);
+      if (!_isDisposed) state = state.copyWith(bufferedDuration: buffer);
     });
 
     _player!.stream.volume.listen((volume) {
-      state = state.copyWith(volume: volume / 100);
+      if (!_isDisposed) state = state.copyWith(volume: volume / 100);
     });
 
     _player!.stream.position.listen((position) {
-      state = state.copyWith(position: position);
+      if (!_isDisposed) state = state.copyWith(position: position);
     });
 
     _player!.stream.duration.listen((duration) {
-      state = state.copyWith(duration: duration);
+      if (!_isDisposed) state = state.copyWith(duration: duration);
     });
 
     _player!.stream.error.listen((error) {
-      if (error.isNotEmpty) {
+      if (error.isNotEmpty && !_isDisposed) {
         AppLogger.error('Player error: $error');
         state = state.copyWith(error: error);
         // Trigger auto-retry on error
@@ -316,7 +323,7 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
     // Monitor for stream ending/disconnection
     _player!.stream.completed.listen((completed) {
-      if (completed && _currentChannel != null && _autoRetryEnabled) {
+      if (completed && _currentChannel != null && _autoRetryEnabled && !_isDisposed) {
         // Stream ended unexpectedly - could be a disconnect
         AppLogger.warning('Stream completed unexpectedly, attempting reconnect');
         _handleStreamError('Stream ended');
@@ -325,6 +332,8 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
     // Listen to track changes
     _player!.stream.tracks.listen((tracks) {
+      if (_isDisposed) return;
+
       final videoTracks = tracks.video.map((t) => TrackInfo(
         id: t.id,
         title: t.title,
@@ -332,21 +341,21 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
         codec: null,
         width: t.w,
         height: t.h,
-      ),).toList();
+      )).toList();
 
       final audioTracks = tracks.audio.map((t) => TrackInfo(
         id: t.id,
         title: t.title,
         language: t.language,
         codec: null,
-      ),).toList();
+      )).toList();
 
       final subtitleTracks = tracks.subtitle.map((t) => TrackInfo(
         id: t.id,
         title: t.title,
         language: t.language,
         codec: null,
-      ),).toList();
+      )).toList();
 
       state = state.copyWith(
         videoTracks: videoTracks,
@@ -357,11 +366,13 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
     // Listen to track selection changes
     _player!.stream.track.listen((track) {
-      state = state.copyWith(
-        currentVideoTrack: track.video.id,
-        currentAudioTrack: track.audio.id,
-        currentSubtitleTrack: track.subtitle.id,
-      );
+      if (!_isDisposed) {
+        state = state.copyWith(
+          currentVideoTrack: track.video.id,
+          currentAudioTrack: track.audio.id,
+          currentSubtitleTrack: track.subtitle.id,
+        );
+      }
     });
   }
 
@@ -400,7 +411,7 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
   /// Complete prebuffering and start playback
   void _completePrebuffering(int timerId) {
-    if (!_isPrebuffering || timerId != _prebufferTimerId) return;
+    if (!_isPrebuffering || timerId != _prebufferTimerId || _isDisposed) return;
 
     _isPrebuffering = false;
     _prebufferStartTime = null;
@@ -420,7 +431,7 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   /// Update prebuffer progress display
   void _updatePrebufferProgress(int timerId) {
     if (!_isPrebuffering || timerId != _prebufferTimerId || _prebufferStartTime == null) return;
-    if (!mounted) return;
+    if (_isDisposed) return;
 
     final elapsed = DateTime.now().difference(_prebufferStartTime!);
     state = state.copyWith(bufferedDuration: elapsed);
@@ -433,7 +444,7 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
 
   /// Handle stream errors with auto-retry
   void _handleStreamError(String error) {
-    if (!_autoRetryEnabled || _currentChannel == null || _isRetrying) return;
+    if (!_autoRetryEnabled || _currentChannel == null || _isRetrying || _isDisposed) return;
 
     // Check if we've exceeded max retries
     if (_retryAttempt >= _maxRetries) {
@@ -469,7 +480,7 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
   /// Attempt to reconnect to the current channel
   Future<void> _attemptReconnect(int timerId) async {
     if (timerId != _retryTimerId || _currentChannel == null) return;
-    if (!mounted) return;
+    if (_isDisposed) return;
 
     _isRetrying = true;
     AppLogger.info('Attempting reconnect to ${_currentChannel!.name}...');
@@ -488,11 +499,13 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
       if (_player!.state.playing) {
         AppLogger.info('Reconnect successful!');
         _resetRetryState();
-        state = state.copyWith(
-          isReconnecting: false,
-          retryAttempt: 0,
-          error: null,
-        );
+        if (!_isDisposed) {
+          state = state.copyWith(
+            isReconnecting: false,
+            retryAttempt: 0,
+            error: null,
+          );
+        }
       } else {
         // Still not playing, trigger another retry
         _isRetrying = false;
@@ -732,10 +745,10 @@ class PlayerControllerNotifier extends StateNotifier<PlayerState> {
     final nextIndex = (currentIndex + 1) % modes.length;
     setAspectRatioMode(modes[nextIndex]);
   }
-
-  @override
-  void dispose() {
-    _player?.dispose();
-    super.dispose();
-  }
 }
+
+/// Video player controller provider
+final playerControllerProvider =
+    NotifierProvider<PlayerControllerNotifier, PlayerState>(
+  PlayerControllerNotifier.new,
+);

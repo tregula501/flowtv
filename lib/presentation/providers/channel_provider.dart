@@ -37,8 +37,20 @@ final channelGroupsProvider = Provider<List<String>>((ref) {
 /// Special constant for favorites filter
 const String favoritesFilterKey = '__FAVORITES__';
 
+/// Selected group notifier - migrated to Riverpod 3.x
+class SelectedGroupNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? group) {
+    state = group;
+  }
+}
+
 /// Currently selected group (null = all, favoritesFilterKey = favorites only)
-final selectedGroupProvider = StateProvider<String?>((ref) => null);
+final selectedGroupProvider = NotifierProvider<SelectedGroupNotifier, String?>(
+  SelectedGroupNotifier.new,
+);
 
 /// Filtered channels by selected group
 final filteredChannelsProvider = Provider<List<Channel>>((ref) {
@@ -67,11 +79,39 @@ final favoriteChannelsProvider = Provider<List<Channel>>((ref) {
       [];
 });
 
+/// Current channel notifier - migrated to Riverpod 3.x
+class CurrentChannelNotifier extends Notifier<Channel?> {
+  @override
+  Channel? build() => null;
+
+  void select(Channel? channel) {
+    state = channel;
+  }
+}
+
 /// Currently playing channel
-final currentChannelProvider = StateProvider<Channel?>((ref) => null);
+final currentChannelProvider = NotifierProvider<CurrentChannelNotifier, Channel?>(
+  CurrentChannelNotifier.new,
+);
+
+/// Search query notifier - migrated to Riverpod 3.x
+class ChannelSearchQueryNotifier extends Notifier<String> {
+  @override
+  String build() => '';
+
+  void setQuery(String query) {
+    state = query;
+  }
+
+  void clear() {
+    state = '';
+  }
+}
 
 /// Search query
-final channelSearchQueryProvider = StateProvider<String>((ref) => '');
+final channelSearchQueryProvider = NotifierProvider<ChannelSearchQueryNotifier, String>(
+  ChannelSearchQueryNotifier.new,
+);
 
 /// Searched channels
 final searchedChannelsProvider = Provider<List<Channel>>((ref) {

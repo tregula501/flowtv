@@ -77,18 +77,11 @@ class MultiViewState {
   }
 }
 
-/// Multi-view controller provider
-final multiViewControllerProvider =
-    StateNotifierProvider<MultiViewControllerNotifier, MultiViewState>((ref) {
-  return MultiViewControllerNotifier();
-});
-
-class MultiViewControllerNotifier extends StateNotifier<MultiViewState> {
-  MultiViewControllerNotifier() : super(const MultiViewState(slots: [])) {
-    _initSlots();
-  }
-
-  void _initSlots() {
+/// Multi-view controller notifier - migrated to Riverpod 3.x Notifier
+class MultiViewControllerNotifier extends Notifier<MultiViewState> {
+  @override
+  MultiViewState build() {
+    // Initialize slots when building
     final slots = <MultiViewSlot>[];
 
     for (int i = 0; i < maxMultiViewChannels; i++) {
@@ -103,11 +96,22 @@ class MultiViewControllerNotifier extends StateNotifier<MultiViewState> {
         player: player,
         videoController: videoController,
         isAudioActive: i == 0, // First slot has audio by default
-      ),);
+      ));
     }
 
-    state = state.copyWith(slots: slots, activeAudioSlot: 0);
-    _updateAudioState();
+    // Register disposal callback
+    ref.onDispose(() {
+      for (final slot in state.slots) {
+        slot.player.dispose();
+      }
+    });
+
+    final initialState = MultiViewState(slots: slots, activeAudioSlot: 0);
+
+    // Schedule audio state update after build
+    Future.microtask(() => _updateAudioState());
+
+    return initialState;
   }
 
   void _setupPlayerListeners(int index, Player player) {
@@ -265,12 +269,10 @@ class MultiViewControllerNotifier extends StateNotifier<MultiViewState> {
   /// Get count of active slots
   int get activeSlotCount =>
       state.slots.where((s) => s.channel != null).length;
-
-  @override
-  void dispose() {
-    for (final slot in state.slots) {
-      slot.player.dispose();
-    }
-    super.dispose();
-  }
 }
+
+/// Multi-view controller provider
+final multiViewControllerProvider =
+    NotifierProvider<MultiViewControllerNotifier, MultiViewState>(
+  MultiViewControllerNotifier.new,
+);

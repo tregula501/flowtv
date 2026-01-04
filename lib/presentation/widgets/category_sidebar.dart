@@ -61,7 +61,7 @@ class CategorySidebar extends ConsumerWidget {
                   label: 'All Channels',
                   isSelected: selectedGroup == null,
                   onTap: () {
-                    ref.read(selectedGroupProvider.notifier).state = null;
+                    ref.read(selectedGroupProvider.notifier).select(null);
                   },
                 ),
 
@@ -74,8 +74,8 @@ class CategorySidebar extends ConsumerWidget {
                     isSelected: selectedGroup == favoritesFilterKey,
                     iconColor: Colors.amber,
                     onTap: () {
-                      ref.read(selectedGroupProvider.notifier).state =
-                          favoritesFilterKey;
+                      ref.read(selectedGroupProvider.notifier).select(
+                          favoritesFilterKey);
                     },
                   ),
 
@@ -88,7 +88,7 @@ class CategorySidebar extends ConsumerWidget {
                     label: group,
                     isSelected: selectedGroup == group,
                     onTap: () {
-                      ref.read(selectedGroupProvider.notifier).state = group;
+                      ref.read(selectedGroupProvider.notifier).select(group);
                     },
                   );
                 }),

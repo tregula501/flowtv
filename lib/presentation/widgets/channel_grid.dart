@@ -53,7 +53,7 @@ class ChannelGrid extends ConsumerWidget {
           channel: channel,
           isPlaying: isPlaying,
           onTap: () {
-            ref.read(currentChannelProvider.notifier).state = channel;
+            ref.read(currentChannelProvider.notifier).select(channel);
             ref.read(playerControllerProvider.notifier).playChannel(channel);
             ref.read(channelManagerProvider).markAsWatched(channel.id);
           },

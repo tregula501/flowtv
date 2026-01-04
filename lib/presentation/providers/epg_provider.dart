@@ -12,14 +12,50 @@ final epgRepositoryProvider = Provider<EpgRepository>((ref) {
   return EpgRepository();
 });
 
+/// EPG loading state notifier - migrated to Riverpod 3.x
+class EpgLoadingNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void setLoading(bool loading) {
+    state = loading;
+  }
+}
+
 /// EPG loading state
-final epgLoadingProvider = StateProvider<bool>((ref) => false);
+final epgLoadingProvider = NotifierProvider<EpgLoadingNotifier, bool>(
+  EpgLoadingNotifier.new,
+);
+
+/// EPG last update notifier - migrated to Riverpod 3.x
+class EpgLastUpdateNotifier extends Notifier<DateTime?> {
+  @override
+  DateTime? build() => null;
+
+  void setLastUpdate(DateTime? time) {
+    state = time;
+  }
+}
 
 /// EPG last update time
-final epgLastUpdateProvider = StateProvider<DateTime?>((ref) => null);
+final epgLastUpdateProvider = NotifierProvider<EpgLastUpdateNotifier, DateTime?>(
+  EpgLastUpdateNotifier.new,
+);
+
+/// EPG refresh interval notifier - migrated to Riverpod 3.x
+class EpgRefreshIntervalNotifier extends Notifier<int> {
+  @override
+  int build() => 6; // default 6 hours
+
+  void setInterval(int hours) {
+    state = hours;
+  }
+}
 
 /// EPG auto-refresh interval in hours (default 6)
-final epgRefreshIntervalProvider = StateProvider<int>((ref) => 6);
+final epgRefreshIntervalProvider = NotifierProvider<EpgRefreshIntervalNotifier, int>(
+  EpgRefreshIntervalNotifier.new,
+);
 
 /// Current program for a channel
 final currentProgramProvider = FutureProvider.family<EpgProgram?, String>(
@@ -56,34 +92,34 @@ class EpgManager {
       return;
     }
 
-    _ref.read(epgLoadingProvider.notifier).state = true;
+    _ref.read(epgLoadingProvider.notifier).setLoading(true);
 
     try {
       final repo = _ref.read(epgRepositoryProvider);
       final count = await repo.fetchAndStoreEpg(activePlaylist!.epgUrl!);
 
-      _ref.read(epgLastUpdateProvider.notifier).state = DateTime.now();
+      _ref.read(epgLastUpdateProvider.notifier).setLastUpdate(DateTime.now());
       AppLogger.info('EPG updated: $count programs');
     } catch (e) {
       AppLogger.error('Failed to fetch EPG: $e');
       rethrow;
     } finally {
-      _ref.read(epgLoadingProvider.notifier).state = false;
+      _ref.read(epgLoadingProvider.notifier).setLoading(false);
     }
   }
 
   /// Fetch EPG from specific URL
   Future<int> fetchEpgFromUrl(String url) async {
-    _ref.read(epgLoadingProvider.notifier).state = true;
+    _ref.read(epgLoadingProvider.notifier).setLoading(true);
 
     try {
       final repo = _ref.read(epgRepositoryProvider);
       final count = await repo.fetchAndStoreEpg(url);
 
-      _ref.read(epgLastUpdateProvider.notifier).state = DateTime.now();
+      _ref.read(epgLastUpdateProvider.notifier).setLastUpdate(DateTime.now());
       return count;
     } finally {
-      _ref.read(epgLoadingProvider.notifier).state = false;
+      _ref.read(epgLoadingProvider.notifier).setLoading(false);
     }
   }
 

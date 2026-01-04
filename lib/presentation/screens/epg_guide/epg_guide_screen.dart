@@ -397,7 +397,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
-                ref.read(currentChannelProvider.notifier).state = channel;
+                ref.read(currentChannelProvider.notifier).select(channel);
                 ref.read(playerControllerProvider.notifier).playChannel(channel);
               },
               child: const Text('Watch Now'),

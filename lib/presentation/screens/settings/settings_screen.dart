@@ -209,7 +209,7 @@ class SettingsScreen extends ConsumerWidget {
             ],
             onChanged: (value) {
               if (value != null) {
-                ref.read(epgRefreshIntervalProvider.notifier).state = value;
+                ref.read(epgRefreshIntervalProvider.notifier).setInterval(value);
                 // Restart auto-refresh with new interval
                 ref.read(epgManagerProvider).startAutoRefresh();
               }

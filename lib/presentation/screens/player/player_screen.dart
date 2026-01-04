@@ -86,7 +86,7 @@ class PlayerScreen extends ConsumerWidget {
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white70),
                   onPressed: () {
-                    ref.read(currentChannelProvider.notifier).state = null;
+                    ref.read(currentChannelProvider.notifier).select(null);
                     playerController.stop();
                   },
                 ),

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Theme mode provider
-final themeModeProvider = StateNotifierProvider<ThemeModeNotifier, ThemeMode>(
-  (ref) => ThemeModeNotifier(),
-);
-
-class ThemeModeNotifier extends StateNotifier<ThemeMode> {
-  ThemeModeNotifier() : super(ThemeMode.dark); // Default to dark for IPTV
+/// Theme mode notifier - migrated to Riverpod 3.x Notifier
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() => ThemeMode.dark; // Default to dark for IPTV
 
   void setThemeMode(ThemeMode mode) {
     state = mode;
@@ -19,3 +16,8 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
 
   bool get isDark => state == ThemeMode.dark;
 }
+
+/// Theme mode provider
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(
+  ThemeModeNotifier.new,
+);
