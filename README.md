@@ -21,7 +21,6 @@ A modern, cross-platform IPTV streaming application with EPG (Electronic Program
 - **DVR Recording** - Record live TV to local storage
 - **Timeshift** - Pause and rewind live TV
 - **Multi-View** - Watch up to 4 channels simultaneously
-- **Catch-up TV** - Watch previously aired content
 
 ### User Experience
 - **TiviMate-Inspired UI** - Clean, intuitive interface with dark and light themes
@@ -220,7 +219,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
   - [x] Buffer size configuration
   - [x] EPG grid view UI (time-based layout with synchronized scrolling, live highlighting)
   - [🔄] Xtream Codes API integration (80% complete - API client & data models done, needs UI integration)
-  - [ ] Catch-up TV support
 
 ### Planned
 - [ ] Phase 3: DVR & Multi-view
