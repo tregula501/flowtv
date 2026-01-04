@@ -16,7 +16,7 @@ jobs:
           flutter-version: '3.27.0'
           channel: 'stable'
       - run: flutter pub get
-      - run: dart run build_runner build
+      - run: dart run build_runner build --delete-conflicting-outputs
       - run: flutter analyze
 
   test:
@@ -28,7 +28,7 @@ jobs:
           flutter-version: '3.27.0'
           channel: 'stable'
       - run: flutter pub get
-      - run: dart run build_runner build
+      - run: dart run build_runner build --delete-conflicting-outputs
       - run: flutter test
 
   build-windows:
@@ -45,7 +45,7 @@ jobs:
           channel: 'stable'
       - run: flutter config --enable-windows-desktop
       - run: flutter pub get
-      - run: dart run build_runner build
+      - run: dart run build_runner build --delete-conflicting-outputs
       # Retry build up to 3 times due to media_kit download issues
       - name: Build Windows (with retry)
         uses: nick-fields/retry@v3
