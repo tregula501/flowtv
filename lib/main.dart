@@ -17,8 +17,12 @@ Future<void> main() async {
   AppLogger.info('FlowTV starting...');
 
   // Initialize database
-  await DatabaseService.initialize();
-  AppLogger.info('Database initialized');
+  try {
+    await DatabaseService.initialize();
+    AppLogger.info('Database initialized');
+  } catch (e) {
+    AppLogger.error('Database init failed: $e');
+  }
 
   runApp(
     const ProviderScope(

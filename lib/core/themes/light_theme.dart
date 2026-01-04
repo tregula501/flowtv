@@ -34,7 +34,7 @@ class LightTheme {
         elevation: 0,
         centerTitle: false,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: _surface,
         elevation: 1,
         shape: RoundedRectangleBorder(

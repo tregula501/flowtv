@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -28,6 +30,12 @@ class DatabaseService {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final dbPath = '${dir.path}/flowtv';
+
+      // Create directory if it doesn't exist
+      final dbDir = Directory(dbPath);
+      if (!await dbDir.exists()) {
+        await dbDir.create(recursive: true);
+      }
 
       _isar = await Isar.open(
         [
