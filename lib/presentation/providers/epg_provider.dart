@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/models/epg_program.dart';
+import '../../data/datasources/local/drift/app_database.dart' show EpgProgram;
 import '../../data/repositories/epg_repository.dart';
 import '../../core/utils/logger.dart';
 import 'playlist_provider.dart';

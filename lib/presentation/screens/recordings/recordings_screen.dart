@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/models/recording.dart';
+import '../../../data/datasources/local/drift/app_database.dart' show Recording, RecordingStatus;
 import '../../providers/recording_provider.dart';
 import '../../../core/extensions/datetime_extensions.dart';
 

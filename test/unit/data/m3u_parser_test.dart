@@ -260,7 +260,7 @@ http://example.com/stream.m3u8''';
     });
 
     group('M3uChannel', () {
-      test('toChannel should create Channel with correct properties', () {
+      test('should store all properties correctly', () {
         final m3uChannel = M3uChannel(
           name: 'Test Channel',
           streamUrl: 'http://example.com/stream.m3u8',
@@ -273,18 +273,15 @@ http://example.com/stream.m3u8''';
           isVod: false,
         );
 
-        final channel = m3uChannel.toChannel(1);
-
-        expect(channel.playlistId, 1);
-        expect(channel.name, 'Test Channel');
-        expect(channel.streamUrl, 'http://example.com/stream.m3u8');
-        expect(channel.logoUrl, 'http://example.com/logo.png');
-        expect(channel.epgId, 'test.channel');
-        expect(channel.group, 'Sports');
-        expect(channel.channelNumber, 42);
-        expect(channel.language, 'English');
-        expect(channel.country, 'US');
-        expect(channel.isVod, false);
+        expect(m3uChannel.name, 'Test Channel');
+        expect(m3uChannel.streamUrl, 'http://example.com/stream.m3u8');
+        expect(m3uChannel.logoUrl, 'http://example.com/logo.png');
+        expect(m3uChannel.epgId, 'test.channel');
+        expect(m3uChannel.group, 'Sports');
+        expect(m3uChannel.channelNumber, 42);
+        expect(m3uChannel.language, 'English');
+        expect(m3uChannel.country, 'US');
+        expect(m3uChannel.isVod, false);
       });
     });
   });

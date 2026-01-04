@@ -1,95 +1,77 @@
-import 'dart:io';
+import 'dart:convert';
 
-import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
-
-import '../../models/playlist.dart';
-import '../../models/channel.dart';
-import '../../models/epg_program.dart';
-import '../../models/favorite.dart';
-import '../../models/recording.dart';
-import '../../models/user_profile.dart';
-import '../../models/app_settings.dart';
 import '../../../core/utils/logger.dart';
+import 'drift/app_database.dart';
 
-/// Database service using Isar
+// Export enums
+export 'drift/app_database.dart' show PlaylistType, RecordingStatus, AccessLevel, VideoQuality;
+// Export data classes
+export 'drift/app_database.dart' show Playlist, Channel, EpgProgram, Favorite, Recording, UserProfile, AppSettingsTableData;
+// Export companion classes for inserts
+export 'drift/app_database.dart' show PlaylistsCompanion, ChannelsCompanion, EpgProgramsCompanion, FavoritesCompanion, RecordingsCompanion, UserProfilesCompanion, AppSettingsTableCompanion;
+
+/// Database service using Drift
 class DatabaseService {
-  static Isar? _isar;
+  static AppDatabase? _database;
 
-  static Isar get instance {
-    if (_isar == null) {
+  static AppDatabase get instance {
+    if (_database == null) {
       throw StateError('Database not initialized. Call DatabaseService.initialize() first.');
     }
-    return _isar!;
+    return _database!;
   }
 
   /// Initialize the database
   static Future<void> initialize() async {
-    if (_isar != null) return;
+    if (_database != null) return;
 
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      final dbPath = '${dir.path}/flowtv';
-
-      // Create directory if it doesn't exist
-      final dbDir = Directory(dbPath);
-      if (!await dbDir.exists()) {
-        await dbDir.create(recursive: true);
-      }
-
-      _isar = await Isar.open(
-        [
-          PlaylistSchema,
-          ChannelSchema,
-          EpgProgramSchema,
-          FavoriteSchema,
-          RecordingSchema,
-          UserProfileSchema,
-          AppSettingsSchema,
-        ],
-        directory: dbPath,
-        name: 'flowtv',
-      );
-
-      // Ensure default settings exist
-      await _ensureDefaults();
-
-      AppLogger.info('Database initialized at: $dbPath');
+      _database = AppDatabase();
+      AppLogger.info('Database initialized');
     } catch (e, stack) {
       AppLogger.error('Failed to initialize database', e, stack);
       rethrow;
     }
   }
 
-  /// Ensure default records exist
-  static Future<void> _ensureDefaults() async {
-    final settings = await _isar!.appSettings.get(1);
-    if (settings == null) {
-      await _isar!.writeTxn(() async {
-        await _isar!.appSettings.put(AppSettings.defaults());
-      });
-    }
-
-    // Ensure master profile exists
-    final profiles = await _isar!.userProfiles.where().findAll();
-    if (profiles.isEmpty) {
-      await _isar!.writeTxn(() async {
-        await _isar!.userProfiles.put(UserProfile.master());
-      });
-    }
-  }
-
   /// Close the database
   static Future<void> close() async {
-    await _isar?.close();
-    _isar = null;
+    await _database?.close();
+    _database = null;
   }
 
   /// Clear all data (for testing or reset)
   static Future<void> clearAll() async {
-    await _isar?.writeTxn(() async {
-      await _isar!.clear();
-      await _ensureDefaults();
-    });
+    if (_database == null) return;
+
+    await _database!.delete(_database!.playlists).go();
+    await _database!.delete(_database!.channels).go();
+    await _database!.delete(_database!.epgPrograms).go();
+    await _database!.delete(_database!.favorites).go();
+    await _database!.delete(_database!.recordings).go();
+    await _database!.delete(_database!.userProfiles).go();
+    await _database!.delete(_database!.appSettingsTable).go();
   }
 }
+
+// Helper to parse JSON lists
+List<int> parseIntList(String json) {
+  try {
+    final list = jsonDecode(json) as List;
+    return list.cast<int>();
+  } catch (_) {
+    return [];
+  }
+}
+
+List<String> parseStringList(String json) {
+  try {
+    final list = jsonDecode(json) as List;
+    return list.cast<String>();
+  } catch (_) {
+    return [];
+  }
+}
+
+String encodeIntList(List<int> list) => jsonEncode(list);
+String encodeStringList(List<String> list) => jsonEncode(list);

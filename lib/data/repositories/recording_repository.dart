@@ -1,17 +1,18 @@
 import 'dart:io';
 
-import 'package:isar/isar.dart';
+import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
-import '../models/recording.dart';
-import '../models/channel.dart';
 import '../datasources/local/database_service.dart';
+import '../datasources/local/drift/app_database.dart';
 import '../../core/utils/logger.dart';
 
 class RecordingRepository {
   late String _recordingsDir;
   bool _initialized = false;
+
+  AppDatabase get _db => DatabaseService.instance;
 
   /// Initialize recordings directory
   Future<void> initialize() async {
@@ -56,20 +57,20 @@ class RecordingRepository {
 
     final filePath = generateFilePath(title, scheduledStart);
 
-    final recording = Recording.create(
-      channelId: channelId,
-      title: title,
-      filePath: filePath,
-      scheduledStart: scheduledStart,
-      scheduledEnd: scheduledEnd,
-      epgProgramId: epgProgramId,
+    final id = await _db.into(_db.recordings).insert(
+      RecordingsCompanion.insert(
+        channelId: channelId,
+        title: title,
+        filePath: filePath,
+        scheduledStart: scheduledStart,
+        scheduledEnd: scheduledEnd,
+        status: RecordingStatus.scheduled,
+        createdAt: DateTime.now(),
+        epgProgramId: Value(epgProgramId),
+      ),
     );
 
-    final isar = DatabaseService.instance;
-    await isar.writeTxn(() async {
-      await isar.recordings.put(recording);
-    });
-
+    final recording = await (_db.select(_db.recordings)..where((t) => t.id.equals(id))).getSingle();
     AppLogger.info('Created recording: ${recording.title}');
     return recording;
   }
@@ -94,62 +95,52 @@ class RecordingRepository {
     RecordingStatus status, {
     String? errorMessage,
   }) async {
-    final isar = DatabaseService.instance;
+    final now = DateTime.now();
 
-    await isar.writeTxn(() async {
-      final recording = await isar.recordings.get(recordingId);
-      if (recording != null) {
-        recording.status = status;
-        if (errorMessage != null) {
-          recording.errorMessage = errorMessage;
-        }
-        if (status == RecordingStatus.recording) {
-          recording.actualStart = DateTime.now();
-        }
-        if (status == RecordingStatus.completed ||
-            status == RecordingStatus.failed) {
-          recording.actualEnd = DateTime.now();
-        }
-        await isar.recordings.put(recording);
-      }
-    });
+    await (_db.update(_db.recordings)..where((t) => t.id.equals(recordingId)))
+        .write(RecordingsCompanion(
+      status: Value(status),
+      errorMessage: errorMessage != null ? Value(errorMessage) : const Value.absent(),
+      actualStart: status == RecordingStatus.recording ? Value(now) : const Value.absent(),
+      actualEnd: (status == RecordingStatus.completed || status == RecordingStatus.failed)
+          ? Value(now)
+          : const Value.absent(),
+    ));
   }
 
   /// Update recording file size
   Future<void> updateFileSize(int recordingId) async {
-    final isar = DatabaseService.instance;
+    final recording = await (_db.select(_db.recordings)..where((t) => t.id.equals(recordingId))).getSingleOrNull();
+    if (recording == null) return;
 
-    await isar.writeTxn(() async {
-      final recording = await isar.recordings.get(recordingId);
-      if (recording != null) {
-        final file = File(recording.filePath);
-        if (await file.exists()) {
-          recording.fileSize = await file.length();
+    final file = File(recording.filePath);
+    if (await file.exists()) {
+      final fileSize = await file.length();
+      final durationSeconds = recording.actualStart != null
+          ? DateTime.now().difference(recording.actualStart!).inSeconds
+          : 0;
 
-          if (recording.actualStart != null) {
-            recording.durationSeconds =
-                DateTime.now().difference(recording.actualStart!).inSeconds;
-          }
-        }
-        await isar.recordings.put(recording);
-      }
-    });
+      await (_db.update(_db.recordings)..where((t) => t.id.equals(recordingId)))
+          .write(RecordingsCompanion(
+        fileSize: Value(fileSize),
+        durationSeconds: Value(durationSeconds),
+      ));
+    }
   }
 
   /// Get all recordings
   Future<List<Recording>> getAllRecordings() async {
-    final isar = DatabaseService.instance;
-    return isar.recordings.where().sortByScheduledStartDesc().findAll();
+    return (_db.select(_db.recordings)
+          ..orderBy([(t) => OrderingTerm.desc(t.scheduledStart)]))
+        .get();
   }
 
   /// Get recordings by status
   Future<List<Recording>> getRecordingsByStatus(RecordingStatus status) async {
-    final isar = DatabaseService.instance;
-    return isar.recordings
-        .filter()
-        .statusEqualTo(status)
-        .sortByScheduledStartDesc()
-        .findAll();
+    return (_db.select(_db.recordings)
+          ..where((t) => t.status.equals(status.name))
+          ..orderBy([(t) => OrderingTerm.desc(t.scheduledStart)]))
+        .get();
   }
 
   /// Get active recordings
@@ -169,18 +160,14 @@ class RecordingRepository {
 
   /// Watch all recordings stream
   Stream<List<Recording>> watchRecordings() {
-    final isar = DatabaseService.instance;
-    return isar.recordings
-        .where()
-        .sortByScheduledStartDesc()
-        .watch(fireImmediately: true);
+    return (_db.select(_db.recordings)
+          ..orderBy([(t) => OrderingTerm.desc(t.scheduledStart)]))
+        .watch();
   }
 
   /// Delete a recording
   Future<void> deleteRecording(int recordingId) async {
-    final isar = DatabaseService.instance;
-
-    final recording = await isar.recordings.get(recordingId);
+    final recording = await (_db.select(_db.recordings)..where((t) => t.id.equals(recordingId))).getSingleOrNull();
     if (recording != null) {
       // Delete the file if it exists
       final file = File(recording.filePath);
@@ -190,29 +177,21 @@ class RecordingRepository {
       }
 
       // Delete from database
-      await isar.writeTxn(() async {
-        await isar.recordings.delete(recordingId);
-      });
-
+      await (_db.delete(_db.recordings)..where((t) => t.id.equals(recordingId))).go();
       AppLogger.info('Deleted recording: ${recording.title}');
     }
   }
 
   /// Get recording by ID
   Future<Recording?> getRecording(int id) async {
-    final isar = DatabaseService.instance;
-    return isar.recordings.get(id);
+    return (_db.select(_db.recordings)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
   /// Check for recordings that should start now
   Future<List<Recording>> getRecordingsDueToStart() async {
     final now = DateTime.now();
-    final isar = DatabaseService.instance;
-
-    return isar.recordings
-        .filter()
-        .statusEqualTo(RecordingStatus.scheduled)
-        .scheduledStartLessThan(now)
-        .findAll();
+    return (_db.select(_db.recordings)
+          ..where((t) => t.status.equals(RecordingStatus.scheduled.name) & t.scheduledStart.isSmallerThanValue(now)))
+        .get();
   }
 }

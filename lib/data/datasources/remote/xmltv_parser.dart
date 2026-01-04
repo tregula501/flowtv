@@ -1,13 +1,35 @@
 import 'package:dio/dio.dart';
 import 'package:xml/xml.dart';
 
-import '../../models/epg_program.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/utils/logger.dart';
 
+/// Temporary program data from XMLTV parsing
+class XmltvProgram {
+  final String channelId;
+  final String title;
+  final String? description;
+  final DateTime startTime;
+  final DateTime endTime;
+  final String? category;
+  final String? episode;
+  final String? iconUrl;
+
+  XmltvProgram({
+    required this.channelId,
+    required this.title,
+    this.description,
+    required this.startTime,
+    required this.endTime,
+    this.category,
+    this.episode,
+    this.iconUrl,
+  });
+}
+
 /// Parsed EPG data from XMLTV
 class XmltvParseResult {
-  final List<EpgProgram> programs;
+  final List<XmltvProgram> programs;
   final int channelCount;
   final int programCount;
 
@@ -57,7 +79,7 @@ class XmltvParser {
       final document = XmlDocument.parse(content);
       final tv = document.findElements('tv').first;
 
-      final programs = <EpgProgram>[];
+      final programs = <XmltvProgram>[];
       final channelIds = <String>{};
 
       // Parse programmes
@@ -76,7 +98,7 @@ class XmltvParser {
         final iconElement = programme.findElements('icon').firstOrNull;
         final episodeElement = programme.findElements('episode-num').firstOrNull;
 
-        final program = EpgProgram.create(
+        final program = XmltvProgram(
           channelId: channelId,
           title: titleElement?.innerText ?? 'Unknown',
           startTime: _parseXmltvDate(start),

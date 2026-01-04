@@ -1,8 +1,8 @@
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
 
-import '../../data/models/channel.dart';
 import '../../data/datasources/local/database_service.dart';
+import '../../data/datasources/local/drift/app_database.dart';
 import 'playlist_provider.dart';
 
 /// Channels for active playlist
@@ -13,11 +13,8 @@ final channelsProvider = StreamProvider<List<Channel>>((ref) {
     return Stream.value([]);
   }
 
-  final isar = DatabaseService.instance;
-  return isar.channels
-      .filter()
-      .playlistIdEqualTo(activePlaylist.id)
-      .watch(fireImmediately: true);
+  final db = DatabaseService.instance;
+  return (db.select(db.channels)..where((t) => t.playlistId.equals(activePlaylist.id))).watch();
 });
 
 /// Groups/categories for active playlist
@@ -92,42 +89,29 @@ final channelManagerProvider = Provider<ChannelManager>((ref) {
 });
 
 class ChannelManager {
+  AppDatabase get _db => DatabaseService.instance;
+
   /// Toggle favorite status
   Future<void> toggleFavorite(int channelId) async {
-    final isar = DatabaseService.instance;
-
-    await isar.writeTxn(() async {
-      final channel = await isar.channels.get(channelId);
-      if (channel != null) {
-        channel.isFavorite = !channel.isFavorite;
-        await isar.channels.put(channel);
-      }
-    });
+    final channel = await (_db.select(_db.channels)..where((t) => t.id.equals(channelId))).getSingleOrNull();
+    if (channel != null) {
+      await (_db.update(_db.channels)..where((t) => t.id.equals(channelId)))
+          .write(ChannelsCompanion(isFavorite: Value(!channel.isFavorite)));
+    }
   }
 
   /// Update last watched
   Future<void> markAsWatched(int channelId) async {
-    final isar = DatabaseService.instance;
-
-    await isar.writeTxn(() async {
-      final channel = await isar.channels.get(channelId);
-      if (channel != null) {
-        channel.lastWatched = DateTime.now();
-        await isar.channels.put(channel);
-      }
-    });
+    await (_db.update(_db.channels)..where((t) => t.id.equals(channelId)))
+        .write(ChannelsCompanion(lastWatched: Value(DateTime.now())));
   }
 
   /// Toggle channel lock
   Future<void> toggleLock(int channelId) async {
-    final isar = DatabaseService.instance;
-
-    await isar.writeTxn(() async {
-      final channel = await isar.channels.get(channelId);
-      if (channel != null) {
-        channel.isLocked = !channel.isLocked;
-        await isar.channels.put(channel);
-      }
-    });
+    final channel = await (_db.select(_db.channels)..where((t) => t.id.equals(channelId))).getSingleOrNull();
+    if (channel != null) {
+      await (_db.update(_db.channels)..where((t) => t.id.equals(channelId)))
+          .write(ChannelsCompanion(isLocked: Value(!channel.isLocked)));
+    }
   }
 }

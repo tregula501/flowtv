@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
-import '../../../data/models/channel.dart';
+import '../../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../providers/multiview_provider.dart';
 import '../../providers/channel_provider.dart';
 

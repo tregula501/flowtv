@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-import '../../data/models/channel.dart';
+import '../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../providers/channel_provider.dart';
 import '../providers/player_provider.dart';
 

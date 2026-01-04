@@ -4,8 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
-import '../../data/models/recording.dart';
-import '../../data/models/channel.dart';
+import '../../data/datasources/local/drift/app_database.dart' show Recording, Channel, RecordingStatus;
 import '../../data/repositories/recording_repository.dart';
 import '../../core/utils/logger.dart';
 

@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
-import '../../data/models/channel.dart';
+import '../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../core/utils/logger.dart';
 
 /// Maximum number of views in multi-view mode

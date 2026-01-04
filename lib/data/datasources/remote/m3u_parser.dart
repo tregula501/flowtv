@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
 
-import '../../models/channel.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/utils/logger.dart';
 
@@ -40,21 +39,6 @@ class M3uChannel {
     this.country,
     this.isVod = false,
   });
-
-  Channel toChannel(int playlistId) {
-    return Channel.create(
-      playlistId: playlistId,
-      name: name,
-      streamUrl: streamUrl,
-      logoUrl: logoUrl,
-      epgId: epgId,
-      group: group,
-      channelNumber: channelNumber,
-    )
-      ..language = language
-      ..country = country
-      ..isVod = isVod;
-  }
 }
 
 /// M3U/M3U8 playlist parser

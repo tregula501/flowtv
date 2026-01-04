@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/models/channel.dart';
-import '../../../data/models/epg_program.dart';
+import '../../../data/datasources/local/drift/app_database.dart' show Channel, EpgProgram;
 import '../../providers/channel_provider.dart';
 import '../../providers/epg_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../../core/extensions/datetime_extensions.dart';
+import '../../../core/extensions/epg_program_extensions.dart';
 
 class EpgGuideScreen extends ConsumerStatefulWidget {
   const EpgGuideScreen({super.key});

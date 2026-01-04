@@ -7,7 +7,7 @@ import 'package:window_manager/window_manager.dart';
 // ignore: implementation_imports
 import 'package:media_kit/src/player/native/player/player.dart' as native;
 
-import '../../data/models/channel.dart';
+import '../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../core/utils/logger.dart';
 
 /// Track info for audio/video/subtitle tracks
