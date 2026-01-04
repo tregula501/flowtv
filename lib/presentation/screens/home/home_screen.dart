@@ -8,6 +8,8 @@ import '../../widgets/category_sidebar.dart';
 import '../../widgets/channel_grid.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../player/player_screen.dart';
+import '../epg_guide/epg_guide_screen.dart';
+import '../settings/settings_screen.dart';
 import '../../../core/constants/app_constants.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -146,13 +148,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
 
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
+
+          // EPG Guide button
+          IconButton(
+            icon: const Icon(Icons.schedule),
+            tooltip: 'TV Guide',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EpgGuideScreen()),
+              );
+            },
+          ),
 
           // Settings button
           IconButton(
             icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
             onPressed: () {
-              // TODO: Navigate to settings
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
             },
           ),
         ],
