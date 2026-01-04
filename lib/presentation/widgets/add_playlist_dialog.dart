@@ -273,8 +273,31 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
               epgUrl: epgUrl.isNotEmpty ? epgUrl : null,
             );
       } else {
-        // Xtream - TODO: Implement Xtream Codes API
-        throw Exception('Xtream Codes support coming soon');
+        // Xtream Codes
+        final name = _xtreamNameController.text.trim();
+        final serverUrl = _xtreamServerController.text.trim();
+        final username = _xtreamUsernameController.text.trim();
+        final password = _xtreamPasswordController.text.trim();
+
+        if (name.isEmpty) {
+          throw Exception('Please enter a playlist name');
+        }
+        if (serverUrl.isEmpty) {
+          throw Exception('Please enter a server URL');
+        }
+        if (username.isEmpty) {
+          throw Exception('Please enter a username');
+        }
+        if (password.isEmpty) {
+          throw Exception('Please enter a password');
+        }
+
+        await ref.read(playlistManagerProvider).addXtreamPlaylist(
+              name: name,
+              serverUrl: serverUrl,
+              username: username,
+              password: password,
+            );
       }
 
       if (mounted) {

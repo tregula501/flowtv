@@ -218,7 +218,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
   - [x] Auto-retry on stream failures
   - [x] Buffer size configuration
   - [x] EPG grid view UI (time-based layout with synchronized scrolling, live highlighting)
-  - [🔄] Xtream Codes API integration (80% complete - API client & data models done, needs UI integration)
+  - [x] Xtream Codes API integration (live TV channels with categories)
 
 ### Planned
 - [ ] Phase 3: DVR & Multi-view

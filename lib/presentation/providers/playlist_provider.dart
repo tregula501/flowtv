@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/local/database_service.dart';
 import '../../data/datasources/local/drift/app_database.dart';
 import '../../data/datasources/remote/m3u_parser.dart';
+import '../../data/datasources/remote/xtream_api_client.dart';
 import '../../core/utils/logger.dart';
 import 'epg_provider.dart' show ProgressState;
 
@@ -147,6 +148,106 @@ class PlaylistManager {
     return playlist;
   }
 
+  /// Add a new Xtream Codes playlist
+  Future<Playlist> addXtreamPlaylist({
+    required String name,
+    required String serverUrl,
+    required String username,
+    required String password,
+    PlaylistProgressCallback? onProgress,
+  }) async {
+    _ref.read(playlistProgressProvider.notifier).startLoading('Connecting to server...');
+    onProgress?.call(0, 100, 'Connecting to server...');
+    _updateProgress(0, 100, 'Connecting to server...');
+
+    final client = XtreamApiClient(
+      serverUrl: serverUrl,
+      username: username,
+      password: password,
+    );
+
+    // Authenticate
+    AppLogger.info('Authenticating with Xtream server: $serverUrl');
+    await client.authenticate();
+
+    // Get categories for group mapping
+    onProgress?.call(10, 100, 'Loading categories...');
+    _updateProgress(10, 100, 'Loading categories...');
+    final categories = await client.getLiveCategories();
+    final categoryMap = {for (var c in categories) c.id: c.name};
+
+    // Get channels
+    onProgress?.call(20, 100, 'Loading channels...');
+    _updateProgress(20, 100, 'Loading channels...');
+    final xtreamChannels = await client.getLiveStreams();
+    final total = xtreamChannels.length;
+
+    if (total == 0) {
+      _ref.read(playlistProgressProvider.notifier).stopLoading();
+      throw Exception('No channels found on this server');
+    }
+
+    onProgress?.call(0, total, 'Preparing database...');
+    _updateProgress(0, total, 'Preparing database...');
+
+    // Check if this is the first playlist
+    final existingCount = await _db.playlists.count().getSingle();
+    final isActive = existingCount == 0;
+
+    // Save playlist with Xtream credentials
+    final playlistId = await _db.into(_db.playlists).insert(
+      PlaylistsCompanion.insert(
+        name: name,
+        url: serverUrl,
+        type: PlaylistType.xtream,
+        createdAt: DateTime.now(),
+        username: Value(username),
+        password: Value(password),
+        isActive: Value(isActive),
+        channelCount: Value(total),
+        lastRefresh: Value(DateTime.now()),
+      ),
+    );
+
+    // Batch insert channels in chunks
+    const batchSize = 500;
+    int processed = 0;
+
+    for (int i = 0; i < xtreamChannels.length; i += batchSize) {
+      final end = (i + batchSize > xtreamChannels.length) ? xtreamChannels.length : i + batchSize;
+      final chunk = xtreamChannels.sublist(i, end);
+
+      await _db.batch((batch) {
+        for (final c in chunk) {
+          final streamUrl = client.getLiveStreamUrl(c.id);
+          final group = categoryMap[c.categoryId];
+
+          batch.insert(
+            _db.channels,
+            ChannelsCompanion.insert(
+              playlistId: playlistId,
+              name: c.name,
+              streamUrl: streamUrl,
+              logoUrl: Value(c.streamIcon.isNotEmpty ? c.streamIcon : null),
+              epgId: Value(c.epgChannelId.isNotEmpty ? c.epgChannelId : null),
+              group: Value(group),
+              channelNumber: Value(c.channelNumber),
+            ),
+          );
+        }
+      });
+
+      processed = end;
+      onProgress?.call(processed, total, 'Adding channels...');
+      _updateProgress(processed, total, 'Adding channels...');
+    }
+
+    final playlist = await (_db.select(_db.playlists)..where((t) => t.id.equals(playlistId))).getSingle();
+    AppLogger.info('Added Xtream playlist with $total channels');
+    _ref.read(playlistProgressProvider.notifier).stopLoading();
+    return playlist;
+  }
+
   /// Update playlist metadata
   Future<void> updatePlaylist({
     required int playlistId,
@@ -195,6 +296,17 @@ class PlaylistManager {
     final playlist = await (_db.select(_db.playlists)..where((t) => t.id.equals(playlistId))).getSingleOrNull();
     if (playlist == null) return;
 
+    if (playlist.type == PlaylistType.xtream) {
+      await _refreshXtreamPlaylist(playlist, onProgress: onProgress);
+    } else {
+      await _refreshM3uPlaylist(playlist, onProgress: onProgress);
+    }
+  }
+
+  Future<void> _refreshM3uPlaylist(
+    Playlist playlist, {
+    PlaylistProgressCallback? onProgress,
+  }) async {
     _ref.read(playlistProgressProvider.notifier).startLoading('Downloading playlist...');
 
     // Re-parse the playlist
@@ -209,7 +321,7 @@ class PlaylistManager {
     _updateProgress(0, total, 'Clearing old channels...');
 
     // Delete old channels
-    await (_db.delete(_db.channels)..where((t) => t.playlistId.equals(playlistId))).go();
+    await (_db.delete(_db.channels)..where((t) => t.playlistId.equals(playlist.id))).go();
 
     // Batch insert new channels
     const batchSize = 500;
@@ -224,7 +336,7 @@ class PlaylistManager {
           batch.insert(
             _db.channels,
             ChannelsCompanion.insert(
-              playlistId: playlistId,
+              playlistId: playlist.id,
               name: c.name,
               streamUrl: c.streamUrl,
               logoUrl: Value(c.logoUrl),
@@ -242,14 +354,97 @@ class PlaylistManager {
     }
 
     // Update playlist
-    await (_db.update(_db.playlists)..where((t) => t.id.equals(playlistId)))
+    await (_db.update(_db.playlists)..where((t) => t.id.equals(playlist.id)))
         .write(PlaylistsCompanion(
       channelCount: Value(total),
       lastRefresh: Value(DateTime.now()),
       epgUrl: result.epgUrl != null && playlist.epgUrl == null ? Value(result.epgUrl) : const Value.absent(),
     ));
 
-    AppLogger.info('Refreshed playlist with $total channels using batch inserts');
+    AppLogger.info('Refreshed M3U playlist with $total channels');
+    _ref.read(playlistProgressProvider.notifier).stopLoading();
+  }
+
+  Future<void> _refreshXtreamPlaylist(
+    Playlist playlist, {
+    PlaylistProgressCallback? onProgress,
+  }) async {
+    if (playlist.username == null || playlist.password == null) {
+      throw Exception('Xtream playlist missing credentials');
+    }
+
+    _ref.read(playlistProgressProvider.notifier).startLoading('Connecting to server...');
+    onProgress?.call(0, 100, 'Connecting to server...');
+    _updateProgress(0, 100, 'Connecting to server...');
+
+    final client = XtreamApiClient(
+      serverUrl: playlist.url,
+      username: playlist.username!,
+      password: playlist.password!,
+    );
+
+    // Authenticate
+    await client.authenticate();
+
+    // Get categories for group mapping
+    onProgress?.call(10, 100, 'Loading categories...');
+    _updateProgress(10, 100, 'Loading categories...');
+    final categories = await client.getLiveCategories();
+    final categoryMap = {for (var c in categories) c.id: c.name};
+
+    // Get channels
+    onProgress?.call(20, 100, 'Loading channels...');
+    _updateProgress(20, 100, 'Loading channels...');
+    final xtreamChannels = await client.getLiveStreams();
+    final total = xtreamChannels.length;
+
+    onProgress?.call(0, total, 'Clearing old channels...');
+    _updateProgress(0, total, 'Clearing old channels...');
+
+    // Delete old channels
+    await (_db.delete(_db.channels)..where((t) => t.playlistId.equals(playlist.id))).go();
+
+    // Batch insert new channels
+    const batchSize = 500;
+    int processed = 0;
+
+    for (int i = 0; i < xtreamChannels.length; i += batchSize) {
+      final end = (i + batchSize > xtreamChannels.length) ? xtreamChannels.length : i + batchSize;
+      final chunk = xtreamChannels.sublist(i, end);
+
+      await _db.batch((batch) {
+        for (final c in chunk) {
+          final streamUrl = client.getLiveStreamUrl(c.id);
+          final group = categoryMap[c.categoryId];
+
+          batch.insert(
+            _db.channels,
+            ChannelsCompanion.insert(
+              playlistId: playlist.id,
+              name: c.name,
+              streamUrl: streamUrl,
+              logoUrl: Value(c.streamIcon.isNotEmpty ? c.streamIcon : null),
+              epgId: Value(c.epgChannelId.isNotEmpty ? c.epgChannelId : null),
+              group: Value(group),
+              channelNumber: Value(c.channelNumber),
+            ),
+          );
+        }
+      });
+
+      processed = end;
+      onProgress?.call(processed, total, 'Adding channels...');
+      _updateProgress(processed, total, 'Adding channels...');
+    }
+
+    // Update playlist
+    await (_db.update(_db.playlists)..where((t) => t.id.equals(playlist.id)))
+        .write(PlaylistsCompanion(
+      channelCount: Value(total),
+      lastRefresh: Value(DateTime.now()),
+    ));
+
+    AppLogger.info('Refreshed Xtream playlist with $total channels');
     _ref.read(playlistProgressProvider.notifier).stopLoading();
   }
 }
