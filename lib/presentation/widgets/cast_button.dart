@@ -43,7 +43,7 @@ class CastButton extends ConsumerWidget {
   }
 
   void _showCastDialog(
-      BuildContext context, WidgetRef ref, CastState castState) {
+      BuildContext context, WidgetRef ref, CastState castState,) {
     showModalBottomSheet(
       context: context,
       builder: (context) => _CastDeviceSheet(

@@ -105,7 +105,7 @@ class RecordingRepository {
       actualEnd: (status == RecordingStatus.completed || status == RecordingStatus.failed)
           ? Value(now)
           : const Value.absent(),
-    ));
+    ),);
   }
 
   /// Update recording file size
@@ -124,7 +124,7 @@ class RecordingRepository {
           .write(RecordingsCompanion(
         fileSize: Value(fileSize),
         durationSeconds: Value(durationSeconds),
-      ));
+      ),);
     }
   }
 

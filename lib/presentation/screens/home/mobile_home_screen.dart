@@ -236,7 +236,7 @@ class _MobileChannelList extends ConsumerWidget {
                       ref.read(selectedGroupProvider.notifier).select(group);
                     },
                   ),
-                )),
+                ),),
               ],
             ),
           ),
@@ -738,7 +738,7 @@ class _CastDeviceSheet extends ConsumerWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    'Casting "${channel.name}" to ${device.name}'),
+                                    'Casting "${channel.name}" to ${device.name}',),
                                 backgroundColor: Colors.green,
                               ),
                             );

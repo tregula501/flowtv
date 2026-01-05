@@ -75,7 +75,7 @@ class CategorySidebar extends ConsumerWidget {
                     iconColor: Colors.amber,
                     onTap: () {
                       ref.read(selectedGroupProvider.notifier).select(
-                          favoritesFilterKey);
+                          favoritesFilterKey,);
                     },
                   ),
 

@@ -165,7 +165,7 @@ class CastService {
                     name: d.friendlyName,
                     modelName: d.modelName,
                     device: d,
-                  ))
+                  ),)
               .toList();
 
           // Filter to only video-capable devices
@@ -173,10 +173,10 @@ class CastService {
           _devicesController.add(_devices);
 
           AppLogger.info(
-              'Cast: Found ${allDevices.length} devices, ${_devices.length} video-capable');
+              'Cast: Found ${allDevices.length} devices, ${_devices.length} video-capable',);
           for (final d in allDevices) {
             AppLogger.info(
-                'Cast device: ${d.name} (${d.modelName}) - video=${d.isVideoCapable}');
+                'Cast device: ${d.name} (${d.modelName}) - video=${d.isVideoCapable}',);
           }
         },
         onError: (e) {
@@ -208,7 +208,7 @@ class CastService {
           _sessionController.add(_sessionState);
 
           AppLogger.info(
-              'Cast session: connected=$isConnected, device=${device?.friendlyName}');
+              'Cast session: connected=$isConnected, device=${device?.friendlyName}',);
         },
         onError: (e) {
           AppLogger.error('Cast session error: $e');
@@ -297,8 +297,29 @@ class CastService {
       }
 
       AppLogger.info('Cast: Connecting to ${device.friendlyName}');
-      return await GoogleCastSessionManager.instance
+      final started = await GoogleCastSessionManager.instance
           .startSessionWithDevice(device);
+
+      if (!started) {
+        AppLogger.error('Cast: Failed to start session');
+        return false;
+      }
+
+      // Wait for the connection to actually be established
+      // The session stream will update _sessionState.isConnected
+      AppLogger.info('Cast: Session started, waiting for connection...');
+
+      // Wait up to 10 seconds for connection
+      for (int i = 0; i < 100; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (_sessionState.isConnected) {
+          AppLogger.info('Cast: Connected successfully');
+          return true;
+        }
+      }
+
+      AppLogger.error('Cast: Connection timeout');
+      return false;
     } catch (e) {
       AppLogger.error('Cast: Connection failed - $e');
       return false;
@@ -325,8 +346,6 @@ class CastService {
     }
 
     try {
-      AppLogger.info('Cast: Loading media ${media.title} from ${media.url}');
-
       // Determine content type based on URL
       String contentType = media.contentType;
       if (media.url.contains('.m3u8') || media.url.contains('m3u8')) {
@@ -334,6 +353,12 @@ class CastService {
       } else if (media.url.contains('.mpd')) {
         contentType = 'application/dash+xml';
       }
+
+      AppLogger.info('Cast: Loading media:');
+      AppLogger.info('  Title: ${media.title}');
+      AppLogger.info('  URL: ${media.url}');
+      AppLogger.info('  ContentType: $contentType');
+      AppLogger.info('  Connected device: ${_sessionState.connectedDevice?.name}');
 
       final mediaInfo = GoogleCastMediaInformation(
         contentId: media.url,
@@ -349,15 +374,17 @@ class CastService {
         ),
       );
 
+      AppLogger.info('Cast: Calling loadMedia...');
       await GoogleCastRemoteMediaClient.instance.loadMedia(
         mediaInfo,
         autoPlay: true,
       );
 
-      AppLogger.info('Cast: Media loaded successfully');
+      AppLogger.info('Cast: Media load request sent successfully');
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
       AppLogger.error('Cast: Load media failed - $e');
+      AppLogger.error('Cast: Stack trace - $stackTrace');
       return false;
     }
   }

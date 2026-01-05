@@ -57,8 +57,8 @@ class _AndroidCastServiceWrapper extends CastService {
   @override
   Stream<List<stub.CastDeviceInfo>> get devicesStream =>
       _service.devicesStream.map((devices) => devices
-          .map((d) => stub.CastDeviceInfo(id: d.id, name: d.name, modelName: d.modelName))
-          .toList());
+          .map((d) => stub.CastDeviceInfo(id: d.id, name: d.name, modelName: d.modelName),)
+          .toList(),);
 
   @override
   List<stub.CastDeviceInfo> get devices =>
@@ -80,7 +80,7 @@ class _AndroidCastServiceWrapper extends CastService {
             duration: s.duration,
             volume: s.volume,
             isMuted: s.isMuted,
-          ));
+          ),);
 
   @override
   stub.CastSessionState get sessionState {
@@ -146,7 +146,7 @@ class _AndroidCastServiceWrapper extends CastService {
       subtitle: media.subtitle,
       imageUrl: media.imageUrl,
       contentType: media.contentType,
-    ));
+    ),);
   }
 
   @override

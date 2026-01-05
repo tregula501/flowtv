@@ -84,7 +84,7 @@ class EpgRepository {
           ..where((t) =>
               t.channelId.equals(channelId) &
               t.startTime.isBiggerThanValue(startTime) &
-              t.endTime.isSmallerThanValue(endTime))
+              t.endTime.isSmallerThanValue(endTime),)
           ..orderBy([(t) => OrderingTerm.asc(t.startTime)]))
         .get();
   }
@@ -97,7 +97,7 @@ class EpgRepository {
           ..where((t) =>
               t.channelId.equals(channelId) &
               t.startTime.isSmallerThanValue(now) &
-              t.endTime.isBiggerThanValue(now)))
+              t.endTime.isBiggerThanValue(now),))
         .getSingleOrNull();
   }
 
@@ -108,7 +108,7 @@ class EpgRepository {
     return (_db.select(_db.epgPrograms)
           ..where((t) =>
               t.channelId.equals(channelId) &
-              t.startTime.isBiggerThanValue(now))
+              t.startTime.isBiggerThanValue(now),)
           ..orderBy([(t) => OrderingTerm.asc(t.startTime)])
           ..limit(1))
         .getSingleOrNull();
@@ -122,7 +122,7 @@ class EpgRepository {
     final programs = await (_db.select(_db.epgPrograms)
           ..where((t) =>
               t.startTime.isSmallerThanValue(to) &
-              t.endTime.isBiggerThanValue(from))
+              t.endTime.isBiggerThanValue(from),)
           ..orderBy([
             (t) => OrderingTerm.asc(t.channelId),
             (t) => OrderingTerm.asc(t.startTime),

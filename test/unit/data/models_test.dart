@@ -4,7 +4,7 @@ import 'package:flowtv/data/datasources/local/drift/app_database.dart';
 void main() {
   group('Channel', () {
     test('should create channel with constructor', () {
-      final channel = Channel(
+      const channel = Channel(
         id: 1,
         playlistId: 1,
         name: 'Test Channel',
@@ -30,7 +30,7 @@ void main() {
     });
 
     test('should have correct default values', () {
-      final channel = Channel(
+      const channel = Channel(
         id: 1,
         playlistId: 1,
         name: 'Test',
@@ -49,7 +49,7 @@ void main() {
     });
 
     test('should support optional properties', () {
-      final channel = Channel(
+      const channel = Channel(
         id: 1,
         playlistId: 1,
         name: 'Test',

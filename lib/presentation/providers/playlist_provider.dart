@@ -359,7 +359,7 @@ class PlaylistManager {
       channelCount: Value(total),
       lastRefresh: Value(DateTime.now()),
       epgUrl: result.epgUrl != null && playlist.epgUrl == null ? Value(result.epgUrl) : const Value.absent(),
-    ));
+    ),);
 
     AppLogger.info('Refreshed M3U playlist with $total channels');
     _ref.read(playlistProgressProvider.notifier).stopLoading();
@@ -442,7 +442,7 @@ class PlaylistManager {
         .write(PlaylistsCompanion(
       channelCount: Value(total),
       lastRefresh: Value(DateTime.now()),
-    ));
+    ),);
 
     AppLogger.info('Refreshed Xtream playlist with $total channels');
     _ref.read(playlistProgressProvider.notifier).stopLoading();

@@ -80,7 +80,7 @@ void main() {
 
   group('Channel model (used in multi-view)', () {
     test('should create channel for multi-view slot', () {
-      final channel = Channel(
+      const channel = Channel(
         id: 1,
         playlistId: 1,
         name: 'ESPN HD',

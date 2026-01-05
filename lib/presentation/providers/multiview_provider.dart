@@ -112,7 +112,7 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
         player: player,
         videoController: videoController,
         isAudioActive: i == 0, // First slot has audio by default
-      ));
+      ),);
     }
 
     // Register disposal callback
@@ -170,7 +170,7 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
         await nativePlayer.setProperty('hr-seek', 'yes');
 
         AppLogger.info(
-          'MultiView slot $slotIndex: Applied buffer settings (${_bufferSize.displayName})'
+          'MultiView slot $slotIndex: Applied buffer settings (${_bufferSize.displayName})',
         );
       }
     } catch (e) {

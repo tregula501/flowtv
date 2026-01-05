@@ -116,7 +116,7 @@ class CastControllerNotifier extends Notifier<CastState> {
       subtitle: subtitle,
       imageUrl: imageUrl,
       contentType: contentType,
-    ));
+    ),);
   }
 
   /// Play/resume playback

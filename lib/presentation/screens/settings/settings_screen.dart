@@ -7,6 +7,7 @@ import '../../providers/epg_provider.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../../widgets/edit_playlist_dialog.dart';
 import '../../../core/extensions/datetime_extensions.dart';
+import '../../../core/constants/app_constants.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -303,13 +304,13 @@ class SettingsScreen extends ConsumerWidget {
   Widget _buildAboutTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.info_outline),
-      title: const Text('FlowTV'),
-      subtitle: const Text('Version 0.1.0'),
+      title: const Text(AppConstants.appName),
+      subtitle: const Text('Version ${AppConstants.appVersion}'),
       onTap: () {
         showAboutDialog(
           context: context,
-          applicationName: 'FlowTV',
-          applicationVersion: '0.1.0',
+          applicationName: AppConstants.appName,
+          applicationVersion: AppConstants.appVersion,
           applicationLegalese: 'GPL v3 License',
           children: [
             const SizedBox(height: 16),

@@ -136,7 +136,7 @@ class AppSettingsTable extends Table {
   Recordings,
   UserProfiles,
   AppSettingsTable,
-])
+],)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 

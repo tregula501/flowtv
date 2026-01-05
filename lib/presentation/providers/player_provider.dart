@@ -322,7 +322,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       AppLogger.info('Player created successfully');
 
       // Configure VideoController with platform-specific settings
-      final videoConfig = VideoControllerConfiguration(
+      const videoConfig = VideoControllerConfiguration(
         // Use hardware acceleration on real devices, software on emulators may help
         enableHardwareAcceleration: true,
       );
@@ -393,21 +393,21 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
         codec: null,
         width: t.w,
         height: t.h,
-      )).toList();
+      ),).toList();
 
       final audioTracks = tracks.audio.map((t) => TrackInfo(
         id: t.id,
         title: t.title,
         language: t.language,
         codec: null,
-      )).toList();
+      ),).toList();
 
       final subtitleTracks = tracks.subtitle.map((t) => TrackInfo(
         id: t.id,
         title: t.title,
         language: t.language,
         codec: null,
-      )).toList();
+      ),).toList();
 
       state = state.copyWith(
         videoTracks: videoTracks,

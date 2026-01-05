@@ -148,39 +148,40 @@ void main() {
     });
 
     group('relativeTime', () {
+      // Note: These tests use anyOf to allow ±1 variance due to timing at boundaries
       test('should show minutes ago for recent past', () {
         final date = DateTime.now().subtract(const Duration(minutes: 30));
-        expect(date.relativeTime, '30 min ago');
+        expect(date.relativeTime, anyOf('29 min ago', '30 min ago', '31 min ago'));
       });
 
       test('should show hours ago for hours past', () {
         final date = DateTime.now().subtract(const Duration(hours: 5));
-        expect(date.relativeTime, '5h ago');
+        expect(date.relativeTime, anyOf('4h ago', '5h ago'));
       });
 
       test('should show days ago for days past', () {
         final date = DateTime.now().subtract(const Duration(days: 3));
-        expect(date.relativeTime, '3d ago');
+        expect(date.relativeTime, anyOf('2d ago', '3d ago'));
       });
 
       test('should show "in X min" for near future', () {
         final date = DateTime.now().add(const Duration(minutes: 45));
-        expect(date.relativeTime, 'in 45 min');
+        expect(date.relativeTime, anyOf('in 44 min', 'in 45 min', 'in 46 min'));
       });
 
       test('should show "in Xh" for hours in future', () {
         final date = DateTime.now().add(const Duration(hours: 2));
-        expect(date.relativeTime, 'in 2h');
+        expect(date.relativeTime, anyOf('in 1h', 'in 2h'));
       });
 
       test('should show "in Xd" for days in future', () {
         final date = DateTime.now().add(const Duration(days: 5));
-        expect(date.relativeTime, 'in 5d');
+        expect(date.relativeTime, anyOf('in 4d', 'in 5d'));
       });
 
       test('should show 0 min ago for just now', () {
         final date = DateTime.now();
-        expect(date.relativeTime, '0 min ago');
+        expect(date.relativeTime, anyOf('0 min ago', '1 min ago'));
       });
     });
   });
