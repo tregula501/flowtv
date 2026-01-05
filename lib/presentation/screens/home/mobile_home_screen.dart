@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
-import '../../../core/utils/logger.dart';
 import '../../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../providers/playlist_provider.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../providers/cast_provider.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../settings/settings_screen.dart';
 import '../epg_guide/epg_guide_screen.dart';
@@ -262,9 +262,6 @@ class _MobileChannelList extends ConsumerWidget {
   }
 
   void _playChannel(BuildContext context, WidgetRef ref, Channel channel) {
-    AppLogger.info('Mobile: Playing channel ${channel.name}');
-    AppLogger.info('Mobile: Stream URL: ${channel.streamUrl}');
-
     ref.read(currentChannelProvider.notifier).select(channel);
     ref.read(playerControllerProvider.notifier).playChannel(channel);
     ref.read(channelManagerProvider).markAsWatched(channel.id);
@@ -353,6 +350,8 @@ class _MobilePlayerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerControllerProvider);
     final playerNotifier = ref.read(playerControllerProvider.notifier);
+    final castState = ref.watch(castControllerProvider);
+    final castNotifier = ref.read(castControllerProvider.notifier);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -416,7 +415,7 @@ class _MobilePlayerScreen extends ConsumerWidget {
                 ),
               ),
 
-            // Top bar with back button and channel name
+            // Top bar with back button, channel name, and cast button
             Positioned(
               top: 0,
               left: 0,
@@ -448,6 +447,25 @@ class _MobilePlayerScreen extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    // Chromecast button
+                    if (castState.isSupported)
+                      IconButton(
+                        icon: Icon(
+                          castState.isConnected
+                              ? Icons.cast_connected
+                              : Icons.cast,
+                          color: castState.isConnected
+                              ? Colors.blue
+                              : Colors.white,
+                        ),
+                        onPressed: () => _showCastDialog(
+                          context,
+                          ref,
+                          castState,
+                          castNotifier,
+                          channel,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -499,71 +517,243 @@ class _MobilePlayerScreen extends ConsumerWidget {
               ),
             ),
 
-            // Status indicator (for debugging)
-            Positioned(
-              bottom: 80,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCastDialog(
+    BuildContext context,
+    WidgetRef ref,
+    CastState castState,
+    CastControllerNotifier castNotifier,
+    Channel channel,
+  ) {
+    // Start discovery when dialog opens
+    castNotifier.startDiscovery();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey.shade900,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => _CastDeviceSheet(
+        channel: channel,
+        onClose: () {
+          castNotifier.stopDiscovery();
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+}
+
+/// Chromecast device selection sheet
+class _CastDeviceSheet extends ConsumerWidget {
+  final Channel channel;
+  final VoidCallback onClose;
+
+  const _CastDeviceSheet({
+    required this.channel,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final castState = ref.watch(castControllerProvider);
+    final castNotifier = ref.read(castControllerProvider.notifier);
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            children: [
+              const Icon(Icons.cast, color: Colors.white),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Cast to',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              ),
+              if (castState.isDiscovering)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: onClose,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Connected device info
+          if (castState.isConnected && castState.connectedDevice != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.cast_connected, color: Colors.blue),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: playerState.isPlaying ? Colors.green : Colors.orange,
-                            shape: BoxShape.circle,
+                        Text(
+                          'Connected to ${castState.connectedDevice!.name}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(width: 8),
                         Text(
-                          playerState.isReconnecting
-                              ? 'Reconnecting (${playerState.retryAttempt}/${playerState.maxRetries})'
-                              : playerState.isPrebuffering
-                                  ? 'Prebuffering...'
-                                  : playerState.isBuffering
-                                      ? 'Buffering...'
-                                      : playerState.error != null
-                                          ? 'Error'
-                                          : playerState.isPlaying
-                                              ? 'Playing'
-                                              : 'Ready',
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          'Tap to cast "${channel.name}"',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
-                    // Show video track info if available
-                    if (playerState.videoTracks.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Video: ${playerState.videoTracks.first.displayName}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 10),
-                        ),
-                      ),
-                    // Show position/duration for debugging
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        'Pos: ${playerState.position.inSeconds}s | Buf: ${playerState.bufferedDuration.inSeconds}s',
-                        style: const TextStyle(color: Colors.white70, fontSize: 10),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  // Cast current channel button
+                  ElevatedButton(
+                    onPressed: () async {
+                      final success = await castNotifier.castMedia(
+                        url: channel.streamUrl,
+                        title: channel.name,
+                        subtitle: channel.group,
+                        imageUrl: channel.logoUrl,
+                        contentType: 'video/mp4',
+                      );
+                      if (success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Casting "${channel.name}"'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                        onClose();
+                      }
+                    },
+                    child: const Text('Cast'),
+                  ),
+                  const SizedBox(width: 8),
+                  // Disconnect button
+                  TextButton(
+                    onPressed: () async {
+                      await castNotifier.disconnect();
+                    },
+                    child: const Text('Disconnect'),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+
+          // Device list
+          if (castState.devices.isEmpty && !castState.isDiscovering)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: Text(
+                  'No Cast devices found.\n\n'
+                  'Make sure your device is on the same network.\n\n'
+                  'Note: Audio-only devices (Google Home, Nest Mini)\n'
+                  'are hidden as they cannot display video.',
+                  style: TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: castState.devices.length,
+                itemBuilder: (context, index) {
+                  final device = castState.devices[index];
+                  final isConnected = castState.connectedDevice?.id == device.id;
+
+                  return ListTile(
+                    leading: Icon(
+                      isConnected ? Icons.cast_connected : Icons.cast,
+                      color: isConnected ? Colors.blue : Colors.white,
+                    ),
+                    title: Text(
+                      device.name,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight:
+                            isConnected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: device.modelName != null
+                        ? Text(
+                            device.modelName!,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 12,
+                            ),
+                          )
+                        : null,
+                    trailing: isConnected
+                        ? const Icon(Icons.check, color: Colors.blue)
+                        : null,
+                    onTap: () async {
+                      if (!isConnected) {
+                        final success = await castNotifier.connect(device);
+                        if (success && context.mounted) {
+                          // After connecting, cast the current channel
+                          await castNotifier.castMedia(
+                            url: channel.streamUrl,
+                            title: channel.name,
+                            subtitle: channel.group,
+                            imageUrl: channel.logoUrl,
+                            contentType: 'video/mp4',
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Casting "${channel.name}" to ${device.name}'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                            onClose();
+                          }
+                        }
+                      }
+                    },
+                  );
+                },
+              ),
+            ),
+
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }

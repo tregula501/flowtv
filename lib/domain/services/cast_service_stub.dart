@@ -9,11 +9,16 @@ import '../../core/utils/logger.dart';
 class CastDeviceInfo {
   final String id;
   final String name;
+  final String? modelName;
 
   CastDeviceInfo({
     required this.id,
     required this.name,
+    this.modelName,
   });
+
+  /// Check if this device supports video (has a screen)
+  bool get isVideoCapable => true; // Stub always returns true
 }
 
 /// Cast media info for casting

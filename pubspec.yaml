@@ -59,8 +59,8 @@ dependencies:
   url_launcher: ^6.2.6
   desktop_multi_window: ^0.3.0
 
-  # Note: Chromecast UI framework is prepared via CastService interface.
-  # Native Android casting will be implemented via platform channels.
+  # Chromecast support (Android/iOS)
+  flutter_chrome_cast: ^1.2.8
 
   # Note: Recording uses FFmpeg via Process (Windows/Desktop).
   # FFmpeg must be installed and available in PATH or app directory.
