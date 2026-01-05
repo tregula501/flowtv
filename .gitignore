@@ -35,6 +35,10 @@ lib/l10n/*.dart
 *.apk
 *.aab
 *.ipa
+/web/
 
 # Test
 coverage/
+
+# Misc
+nul

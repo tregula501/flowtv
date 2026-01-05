@@ -107,17 +107,17 @@ class PlayerScreen extends ConsumerWidget {
                   onPressed: () => playerController.toggleFullscreen(),
                 ),
 
-                // Open in new window button
+                // Open in new window button (feature not yet available)
                 IconButton(
-                  icon: const Icon(Icons.open_in_new_rounded, color: Colors.white70, size: 20),
-                  tooltip: 'Open in New Window',
+                  icon: const Icon(Icons.open_in_new_rounded, color: Colors.white38, size: 20),
+                  tooltip: 'Open in New Window (Coming Soon)',
                   onPressed: () async {
                     final success = await playerController.openInNewWindow();
                     if (!success && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Could not open in new window'),
-                          duration: Duration(seconds: 2),
+                          content: Text('Multi-window coming soon! Use external player (VLC) for now.'),
+                          duration: Duration(seconds: 3),
                         ),
                       );
                     }

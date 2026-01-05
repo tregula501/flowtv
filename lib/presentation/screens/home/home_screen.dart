@@ -28,6 +28,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchController = TextEditingController();
   final _focusNode = FocusNode();
 
+  // Resizable player panel width
+  double _playerPanelWidth = 480.0;
+  static const double _minPlayerWidth = 320.0;
+  static const double _maxPlayerWidth = 800.0;
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -172,10 +177,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                 // Video player panel (if channel selected)
                 if (currentChannel != null) ...[
-                  const VerticalDivider(width: 1),
-                  const SizedBox(
-                    width: 480,
-                    child: PlayerScreen(),
+                  // Resizable divider
+                  MouseRegion(
+                    cursor: SystemMouseCursors.resizeColumn,
+                    child: GestureDetector(
+                      onHorizontalDragUpdate: (details) {
+                        setState(() {
+                          _playerPanelWidth -= details.delta.dx;
+                          _playerPanelWidth = _playerPanelWidth.clamp(
+                            _minPlayerWidth,
+                            _maxPlayerWidth,
+                          );
+                        });
+                      },
+                      child: Container(
+                        width: 8,
+                        color: Colors.transparent,
+                        child: Center(
+                          child: Container(
+                            width: 4,
+                            margin: const EdgeInsets.symmetric(vertical: 20),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).dividerColor,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: _playerPanelWidth,
+                    child: const PlayerScreen(),
                   ),
                 ],
               ],

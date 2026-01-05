@@ -93,35 +93,70 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
             ),
           ],
         ),
-        body: Stack(
+        // Use Column/Row with Expanded to fill available space evenly
+        body: Column(
           children: [
-            // 2x2 Grid of video players
-            GridView.builder(
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 16 / 9,
+            // Top row
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _MultiViewTile(
+                      slot: multiViewState.slots[0],
+                      onAddChannel: () => _showChannelPicker(0),
+                      onRemoveChannel: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .clearSlot(0),
+                      onSetAudioActive: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .setActiveAudioSlot(0),
+                    ),
+                  ),
+                  Expanded(
+                    child: _MultiViewTile(
+                      slot: multiViewState.slots[1],
+                      onAddChannel: () => _showChannelPicker(1),
+                      onRemoveChannel: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .clearSlot(1),
+                      onSetAudioActive: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .setActiveAudioSlot(1),
+                    ),
+                  ),
+                ],
               ),
-              itemCount: maxMultiViewChannels,
-              itemBuilder: (context, index) {
-                final slot = multiViewState.slots[index];
-                return _MultiViewTile(
-                  slot: slot,
-                  onAddChannel: () {
-                    _showChannelPicker(index);
-                  },
-                  onRemoveChannel: () {
-                    ref
-                        .read(multiViewControllerProvider.notifier)
-                        .clearSlot(index);
-                  },
-                  onSetAudioActive: () {
-                    ref
-                        .read(multiViewControllerProvider.notifier)
-                        .setActiveAudioSlot(index);
-                  },
-                );
-              },
+            ),
+            // Bottom row
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _MultiViewTile(
+                      slot: multiViewState.slots[2],
+                      onAddChannel: () => _showChannelPicker(2),
+                      onRemoveChannel: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .clearSlot(2),
+                      onSetAudioActive: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .setActiveAudioSlot(2),
+                    ),
+                  ),
+                  Expanded(
+                    child: _MultiViewTile(
+                      slot: multiViewState.slots[3],
+                      onAddChannel: () => _showChannelPicker(3),
+                      onRemoveChannel: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .clearSlot(3),
+                      onSetAudioActive: () => ref
+                          .read(multiViewControllerProvider.notifier)
+                          .setActiveAudioSlot(3),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
