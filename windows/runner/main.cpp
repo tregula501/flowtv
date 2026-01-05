@@ -5,6 +5,9 @@
 #include "flutter_window.h"
 #include "utils.h"
 
+// Include desktop_multi_window plugin
+#include "desktop_multi_window/desktop_multi_window_plugin.h"
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   // Attach to console when present (e.g., 'flutter run') or create a
@@ -17,11 +20,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
+  // Check if this is a sub-window created by desktop_multi_window
+  std::vector<std::string> command_line_arguments = GetCommandLineArguments();
+  if (desktop_multi_window::HandleMultiWindowCommand(command_line_arguments)) {
+    // This is a sub-window, the plugin handles everything
+    ::CoUninitialize();
+    return EXIT_SUCCESS;
+  }
+
   flutter::DartProject project(L"data");
-
-  std::vector<std::string> command_line_arguments =
-      GetCommandLineArguments();
-
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);

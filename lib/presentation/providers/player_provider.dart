@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -955,6 +957,42 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       return false;
     } catch (e) {
       AppLogger.error('Failed to open in external player: $e');
+      return false;
+    }
+  }
+
+  /// Open current channel in a new FlowTV window
+  Future<bool> openInNewWindow() async {
+    if (_currentChannel == null) {
+      AppLogger.warning('No channel to open in new window');
+      return false;
+    }
+
+    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
+      AppLogger.warning('Multi-window only supported on desktop');
+      return false;
+    }
+
+    try {
+      // Prepare channel data to pass to new window
+      final channelData = jsonEncode({
+        'name': _currentChannel!.name,
+        'streamUrl': _currentChannel!.streamUrl,
+        'logoUrl': _currentChannel!.logoUrl,
+      });
+
+      // Create a new window using WindowController
+      final window = await WindowController.create(
+        WindowConfiguration(arguments: channelData),
+      );
+
+      // Show the window
+      await window.show();
+
+      AppLogger.info('Opened ${_currentChannel!.name} in new window');
+      return true;
+    } catch (e) {
+      AppLogger.error('Failed to open new window: $e');
       return false;
     }
   }

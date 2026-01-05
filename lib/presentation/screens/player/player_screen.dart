@@ -82,11 +82,15 @@ class PlayerScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                // Expand button (in-app fullscreen)
+                // Expand/Collapse button (in-app fullscreen)
                 IconButton(
-                  icon: const Icon(Icons.open_in_full, color: Colors.white70, size: 20),
-                  tooltip: 'Expand player',
-                  onPressed: () => playerController.setExpanded(true),
+                  icon: Icon(
+                    playerState.isExpanded ? Icons.close_fullscreen : Icons.open_in_full,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
+                  tooltip: playerState.isExpanded ? 'Exit expanded' : 'Expand player',
+                  onPressed: () => playerController.toggleExpanded(),
                 ),
 
                 // PiP button
@@ -103,9 +107,26 @@ class PlayerScreen extends ConsumerWidget {
                   onPressed: () => playerController.toggleFullscreen(),
                 ),
 
-                // Open in external player button
+                // Open in new window button
                 IconButton(
-                  icon: const Icon(Icons.open_in_new, color: Colors.white70, size: 20),
+                  icon: const Icon(Icons.open_in_new_rounded, color: Colors.white70, size: 20),
+                  tooltip: 'Open in New Window',
+                  onPressed: () async {
+                    final success = await playerController.openInNewWindow();
+                    if (!success && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open in new window'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                ),
+
+                // Open in external player button (VLC)
+                IconButton(
+                  icon: const Icon(Icons.launch, color: Colors.white70, size: 20),
                   tooltip: 'Open in VLC/External Player',
                   onPressed: () async {
                     final success = await playerController.openInExternalPlayer();

@@ -337,52 +337,11 @@ class _ExpandedPlayerView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentChannel = ref.watch(currentChannelProvider);
-
-    return Scaffold(
+    // Simply show the PlayerScreen - it already has all the controls
+    // including the collapse button when in expanded mode
+    return const Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Full player
-          const Positioned.fill(
-            child: PlayerScreen(),
-          ),
-
-          // Exit expanded button in top-right corner
-          Positioned(
-            top: 8,
-            right: 8,
-            child: _DisplayModeButtons(
-              showExpand: false,
-              onExitExpanded: () {
-                ref.read(playerControllerProvider.notifier).setExpanded(false);
-              },
-            ),
-          ),
-
-          // Channel info overlay at bottom
-          if (currentChannel != null)
-            Positioned(
-              left: 16,
-              bottom: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  currentChannel.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+      body: PlayerScreen(),
     );
   }
 }
@@ -489,74 +448,3 @@ class _PiPIconButton extends StatelessWidget {
   }
 }
 
-/// Display mode buttons (expand, PiP, separate window)
-class _DisplayModeButtons extends StatelessWidget {
-  final bool showExpand;
-  final VoidCallback? onExitExpanded;
-
-  const _DisplayModeButtons({
-    this.showExpand = true,
-    this.onExitExpanded,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final playerNotifier = ref.read(playerControllerProvider.notifier);
-        final playerState = ref.watch(playerControllerProvider);
-
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showExpand) ...[
-                // Expand button
-                IconButton(
-                  icon: const Icon(Icons.open_in_full, color: Colors.white, size: 20),
-                  tooltip: 'Expand player',
-                  onPressed: () => playerNotifier.setExpanded(true),
-                ),
-              ] else ...[
-                // Collapse button (exit expanded)
-                IconButton(
-                  icon: const Icon(Icons.close_fullscreen, color: Colors.white, size: 20),
-                  tooltip: 'Exit expanded',
-                  onPressed: onExitExpanded ?? () => playerNotifier.setExpanded(false),
-                ),
-              ],
-
-              // PiP button
-              IconButton(
-                icon: Icon(
-                  playerState.isPiPMode
-                      ? Icons.picture_in_picture_alt
-                      : Icons.picture_in_picture,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                tooltip: playerState.isPiPMode ? 'Exit PiP' : 'Picture-in-Picture',
-                onPressed: () => playerNotifier.togglePiPMode(),
-              ),
-
-              // Fullscreen button
-              IconButton(
-                icon: Icon(
-                  playerState.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                tooltip: playerState.isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
-                onPressed: () => playerNotifier.toggleFullscreen(),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
