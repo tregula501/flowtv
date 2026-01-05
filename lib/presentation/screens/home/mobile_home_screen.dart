@@ -724,10 +724,20 @@ class _CastDeviceSheet extends ConsumerWidget {
                         : null,
                     onTap: () async {
                       if (!isConnected) {
+                        // Show connecting feedback
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Connecting to ${device.name}...'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+
                         final success = await castNotifier.connect(device);
                         if (success && context.mounted) {
                           // After connecting, cast the current channel
-                          await castNotifier.castMedia(
+                          final castSuccess = await castNotifier.castMedia(
                             url: channel.streamUrl,
                             title: channel.name,
                             subtitle: channel.group,
@@ -735,15 +745,30 @@ class _CastDeviceSheet extends ConsumerWidget {
                             contentType: 'video/mp4',
                           );
                           if (context.mounted) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    'Casting "${channel.name}" to ${device.name}',),
-                                backgroundColor: Colors.green,
+                                  castSuccess
+                                      ? 'Casting "${channel.name}" to ${device.name}'
+                                      : 'Connected but failed to start playback',
+                                ),
+                                backgroundColor:
+                                    castSuccess ? Colors.green : Colors.orange,
                               ),
                             );
                             onClose();
                           }
+                        } else if (context.mounted) {
+                          // Connection failed
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Failed to connect to ${device.name}'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
                         }
                       }
                     },

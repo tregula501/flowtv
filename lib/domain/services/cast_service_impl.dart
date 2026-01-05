@@ -127,11 +127,31 @@ class _AndroidCastServiceWrapper extends CastService {
 
   @override
   Future<bool> connect(stub.CastDeviceInfo device) async {
-    // Find the matching Android device
-    final androidDevice = _service.devices.firstWhere(
-      (d) => d.id == device.id,
-      orElse: () => android.CastDeviceInfo(id: device.id, name: device.name, modelName: device.modelName),
-    );
+    // Find the matching Android device with the GoogleCastDevice reference
+    final devices = _service.devices;
+
+    print('Cast connect: Looking for device "${device.name}" (id=${device.id})');
+    print('Cast connect: Available devices count: ${devices.length}');
+
+    android.CastDeviceInfo? androidDevice;
+
+    for (final d in devices) {
+      print('Cast connect: Checking device "${d.name}" (id=${d.id}) hasRef=${d.device != null}');
+      if (d.id == device.id) {
+        androidDevice = d;
+        print('Cast connect: Found matching device!');
+        break;
+      }
+    }
+
+    if (androidDevice == null) {
+      // Device not found in current list - this can happen if discovery
+      // stopped or the device went away. Log for debugging.
+      print('Cast connect: ERROR - Device not found in discovered list');
+      return false;
+    }
+
+    print('Cast connect: Proceeding to connect with device ref=${androidDevice.device != null}');
     return _service.connect(androidDevice);
   }
 

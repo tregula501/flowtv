@@ -338,6 +338,53 @@ class CastService {
     }
   }
 
+  /// Detect content type from URL patterns
+  /// IPTV streams are typically HLS, so we default to that for ambiguous URLs
+  String _detectContentType(String url, String defaultType) {
+    final lowerUrl = url.toLowerCase();
+
+    // Explicit HLS indicators
+    if (lowerUrl.contains('.m3u8') || lowerUrl.contains('m3u8')) {
+      return 'application/x-mpegurl';
+    }
+
+    // Explicit DASH indicators
+    if (lowerUrl.contains('.mpd')) {
+      return 'application/dash+xml';
+    }
+
+    // Explicit video file extensions - use MP4
+    if (lowerUrl.endsWith('.mp4') ||
+        lowerUrl.endsWith('.mkv') ||
+        lowerUrl.endsWith('.avi') ||
+        lowerUrl.endsWith('.mov')) {
+      return 'video/mp4';
+    }
+
+    // Xtream Codes URL pattern: server/username/password/stream_id
+    // These typically end with a numeric ID and serve HLS by default
+    final xtreamPattern = RegExp(r'/[^/]+/[^/]+/\d+$');
+    if (xtreamPattern.hasMatch(url)) {
+      AppLogger.info('Cast: Detected Xtream Codes URL pattern, using HLS');
+      return 'application/x-mpegurl';
+    }
+
+    // URLs ending with just a number (common IPTV pattern) - default to HLS
+    if (RegExp(r'/\d+$').hasMatch(url)) {
+      AppLogger.info('Cast: URL ends with stream ID, defaulting to HLS');
+      return 'application/x-mpegurl';
+    }
+
+    // For IPTV, HLS is far more common than MP4, so default to HLS
+    // unless explicitly set otherwise
+    if (defaultType == 'video/mp4') {
+      AppLogger.info('Cast: IPTV stream, defaulting to HLS instead of MP4');
+      return 'application/x-mpegurl';
+    }
+
+    return defaultType;
+  }
+
   /// Cast media to connected device
   Future<bool> castMedia(CastMediaInfo media) async {
     if (!_sessionState.isConnected) {
@@ -347,12 +394,7 @@ class CastService {
 
     try {
       // Determine content type based on URL
-      String contentType = media.contentType;
-      if (media.url.contains('.m3u8') || media.url.contains('m3u8')) {
-        contentType = 'application/x-mpegurl';
-      } else if (media.url.contains('.mpd')) {
-        contentType = 'application/dash+xml';
-      }
+      final contentType = _detectContentType(media.url, media.contentType);
 
       AppLogger.info('Cast: Loading media:');
       AppLogger.info('  Title: ${media.title}');
