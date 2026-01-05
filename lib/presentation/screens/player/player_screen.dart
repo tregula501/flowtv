@@ -82,9 +82,48 @@ class PlayerScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                // Expand button (in-app fullscreen)
+                IconButton(
+                  icon: const Icon(Icons.open_in_full, color: Colors.white70, size: 20),
+                  tooltip: 'Expand player',
+                  onPressed: () => playerController.setExpanded(true),
+                ),
+
+                // PiP button
+                IconButton(
+                  icon: const Icon(Icons.picture_in_picture, color: Colors.white70, size: 20),
+                  tooltip: 'Picture-in-Picture',
+                  onPressed: () => playerController.togglePiPMode(),
+                ),
+
+                // Fullscreen button
+                IconButton(
+                  icon: const Icon(Icons.fullscreen, color: Colors.white70, size: 20),
+                  tooltip: 'Fullscreen',
+                  onPressed: () => playerController.toggleFullscreen(),
+                ),
+
+                // Open in external player button
+                IconButton(
+                  icon: const Icon(Icons.open_in_new, color: Colors.white70, size: 20),
+                  tooltip: 'Open in VLC/External Player',
+                  onPressed: () async {
+                    final success = await playerController.openInExternalPlayer();
+                    if (!success && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not open in external player. Make sure VLC is installed.'),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  },
+                ),
+
                 // Close button
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white70),
+                  tooltip: 'Close player',
                   onPressed: () {
                     ref.read(currentChannelProvider.notifier).select(null);
                     playerController.stop();

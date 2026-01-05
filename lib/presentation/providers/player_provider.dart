@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
@@ -163,7 +164,9 @@ class PlayerState {
   final bool isBuffering;
   final bool isPrebuffering; // Waiting for initial buffer to fill
   final bool isReconnecting; // Auto-retry in progress
-  final bool isFullscreen;
+  final bool isFullscreen; // OS fullscreen (covers entire monitor)
+  final bool isExpanded; // In-app expanded (player fills app window)
+  final bool isPiPMode; // Picture-in-Picture mode (small always-on-top window)
   final double volume;
   final bool isMuted;
   final Duration position;
@@ -188,6 +191,8 @@ class PlayerState {
     this.isPrebuffering = false,
     this.isReconnecting = false,
     this.isFullscreen = false,
+    this.isExpanded = false,
+    this.isPiPMode = false,
     this.volume = 1.0,
     this.isMuted = false,
     this.position = Duration.zero,
@@ -213,6 +218,8 @@ class PlayerState {
     bool? isPrebuffering,
     bool? isReconnecting,
     bool? isFullscreen,
+    bool? isExpanded,
+    bool? isPiPMode,
     double? volume,
     bool? isMuted,
     Duration? position,
@@ -237,6 +244,8 @@ class PlayerState {
       isPrebuffering: isPrebuffering ?? this.isPrebuffering,
       isReconnecting: isReconnecting ?? this.isReconnecting,
       isFullscreen: isFullscreen ?? this.isFullscreen,
+      isExpanded: isExpanded ?? this.isExpanded,
+      isPiPMode: isPiPMode ?? this.isPiPMode,
       volume: volume ?? this.volume,
       isMuted: isMuted ?? this.isMuted,
       position: position ?? this.position,
@@ -794,6 +803,160 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     final currentIndex = modes.indexOf(state.aspectRatioMode);
     final nextIndex = (currentIndex + 1) % modes.length;
     setAspectRatioMode(modes[nextIndex]);
+  }
+
+  // ===== Display Mode Methods =====
+
+  /// Toggle in-app expanded mode (player fills app window, hides sidebar/grid)
+  void toggleExpanded() {
+    setExpanded(!state.isExpanded);
+  }
+
+  /// Set in-app expanded mode
+  void setExpanded(bool expanded) {
+    // Exit other modes when entering expanded
+    if (expanded && state.isPiPMode) {
+      setPiPMode(false);
+    }
+    state = state.copyWith(isExpanded: expanded);
+    AppLogger.info('Expanded mode: $expanded');
+  }
+
+  /// Saved window state for restoring after PiP
+  Size? _savedWindowSize;
+  Offset? _savedWindowPosition;
+  bool _savedAlwaysOnTop = false;
+
+  /// Toggle Picture-in-Picture mode (small always-on-top window)
+  Future<void> togglePiPMode() async {
+    await setPiPMode(!state.isPiPMode);
+  }
+
+  /// Set Picture-in-Picture mode
+  Future<void> setPiPMode(bool pip) async {
+    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
+      AppLogger.warning('PiP mode only supported on desktop');
+      return;
+    }
+
+    try {
+      await windowManager.ensureInitialized();
+
+      if (pip) {
+        // Save current window state before entering PiP
+        _savedWindowSize = await windowManager.getSize();
+        _savedWindowPosition = await windowManager.getPosition();
+        _savedAlwaysOnTop = await windowManager.isAlwaysOnTop();
+
+        // Exit fullscreen if active
+        if (state.isFullscreen) {
+          await windowManager.setFullScreen(false);
+        }
+
+        // Configure PiP window: small, always on top, positioned in corner
+        await windowManager.setAlwaysOnTop(true);
+        await windowManager.setSize(const Size(400, 250));
+
+        // Position in bottom-right corner of primary screen
+        // (We can't easily get screen size, so just use a reasonable position)
+        await windowManager.setPosition(const Offset(1400, 700));
+
+        state = state.copyWith(
+          isPiPMode: true,
+          isFullscreen: false,
+          isExpanded: false,
+        );
+        AppLogger.info('Entered PiP mode');
+      } else {
+        // Restore previous window state
+        await windowManager.setAlwaysOnTop(_savedAlwaysOnTop);
+
+        if (_savedWindowSize != null) {
+          await windowManager.setSize(_savedWindowSize!);
+        }
+        if (_savedWindowPosition != null) {
+          await windowManager.setPosition(_savedWindowPosition!);
+        }
+
+        state = state.copyWith(isPiPMode: false);
+        AppLogger.info('Exited PiP mode');
+      }
+    } catch (e) {
+      AppLogger.error('Failed to toggle PiP mode: $e');
+    }
+  }
+
+  /// Open current stream in external player (VLC, mpv, etc.)
+  Future<bool> openInExternalPlayer() async {
+    if (_currentChannel == null) {
+      AppLogger.warning('No channel to open in external player');
+      return false;
+    }
+
+    final streamUrl = _currentChannel!.streamUrl;
+
+    try {
+      if (Platform.isWindows) {
+        // Try to find and open with common players
+        // First try VLC
+        final vlcResult = await Process.run(
+          'cmd',
+          ['/c', 'start', 'vlc', streamUrl],
+          runInShell: true,
+        );
+
+        if (vlcResult.exitCode == 0) {
+          AppLogger.info('Opened stream in VLC');
+          return true;
+        }
+
+        // Fallback: open URL with system default handler
+        final result = await Process.run(
+          'cmd',
+          ['/c', 'start', '', streamUrl],
+          runInShell: true,
+        );
+
+        if (result.exitCode == 0) {
+          AppLogger.info('Opened stream with system default player');
+          return true;
+        }
+      } else if (Platform.isMacOS) {
+        // Try VLC first
+        final result = await Process.run(
+          'open',
+          ['-a', 'VLC', streamUrl],
+        );
+
+        if (result.exitCode == 0) {
+          AppLogger.info('Opened stream in VLC');
+          return true;
+        }
+
+        // Fallback to default handler
+        await Process.run('open', [streamUrl]);
+        return true;
+      } else if (Platform.isLinux) {
+        // Try common players in order
+        for (final player in ['vlc', 'mpv', 'celluloid', 'xdg-open']) {
+          try {
+            final result = await Process.run(player, [streamUrl]);
+            if (result.exitCode == 0) {
+              AppLogger.info('Opened stream in $player');
+              return true;
+            }
+          } catch (_) {
+            continue;
+          }
+        }
+      }
+
+      AppLogger.warning('Could not open stream in external player');
+      return false;
+    } catch (e) {
+      AppLogger.error('Failed to open in external player: $e');
+      return false;
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../providers/playlist_provider.dart';
 import '../../providers/channel_provider.dart';
@@ -77,6 +78,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ref.read(playerControllerProvider.notifier).toggleMute();
         }
       }
+      // E to toggle expanded mode
+      if (event.logicalKey == LogicalKeyboardKey.keyE) {
+        final currentChannel = ref.read(currentChannelProvider);
+        if (currentChannel != null) {
+          ref.read(playerControllerProvider.notifier).toggleExpanded();
+        }
+      }
+      // P to toggle PiP mode
+      if (event.logicalKey == LogicalKeyboardKey.keyP) {
+        final currentChannel = ref.read(currentChannelProvider);
+        if (currentChannel != null) {
+          ref.read(playerControllerProvider.notifier).togglePiPMode();
+        }
+      }
     }
   }
 
@@ -87,13 +102,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final currentChannel = ref.watch(currentChannelProvider);
     final playerState = ref.watch(playerControllerProvider);
 
-    // Show fullscreen player if in fullscreen mode
+    // Show fullscreen player if in OS fullscreen mode
     if (playerState.isFullscreen && currentChannel != null) {
       return KeyboardListener(
         focusNode: FocusNode(),
         onKeyEvent: _handleKeyEvent,
         autofocus: true,
         child: const FullscreenPlayerScreen(),
+      );
+    }
+
+    // Show minimal PiP player if in PiP mode
+    if (playerState.isPiPMode && currentChannel != null) {
+      return KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: _handleKeyEvent,
+        autofocus: true,
+        child: const _PiPPlayerView(),
+      );
+    }
+
+    // Show expanded player (fills app window but not OS fullscreen)
+    if (playerState.isExpanded && currentChannel != null) {
+      return KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: _handleKeyEvent,
+        autofocus: true,
+        child: const _ExpandedPlayerView(),
       );
     }
 
@@ -292,6 +327,236 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => const AddPlaylistDialog(),
+    );
+  }
+}
+
+/// Expanded player view - fills the app window
+class _ExpandedPlayerView extends ConsumerWidget {
+  const _ExpandedPlayerView();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentChannel = ref.watch(currentChannelProvider);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Full player
+          const Positioned.fill(
+            child: PlayerScreen(),
+          ),
+
+          // Exit expanded button in top-right corner
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _DisplayModeButtons(
+              showExpand: false,
+              onExitExpanded: () {
+                ref.read(playerControllerProvider.notifier).setExpanded(false);
+              },
+            ),
+          ),
+
+          // Channel info overlay at bottom
+          if (currentChannel != null)
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  currentChannel.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// PiP player view - minimal UI for small window
+class _PiPPlayerView extends ConsumerWidget {
+  const _PiPPlayerView();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentChannel = ref.watch(currentChannelProvider);
+    final playerNotifier = ref.read(playerControllerProvider.notifier);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onDoubleTap: () => playerNotifier.setPiPMode(false),
+        child: Stack(
+          children: [
+            // Video player fills entire window
+            Positioned.fill(
+              child: Video(
+                controller: playerNotifier.videoController,
+                controls: NoVideoControls,
+              ),
+            ),
+
+            // Minimal overlay with exit button
+            Positioned(
+              top: 4,
+              right: 4,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Exit PiP button
+                  _PiPIconButton(
+                    icon: Icons.close_fullscreen,
+                    tooltip: 'Exit PiP (double-click)',
+                    onTap: () => playerNotifier.setPiPMode(false),
+                  ),
+                ],
+              ),
+            ),
+
+            // Channel name at bottom
+            if (currentChannel != null)
+              Positioned(
+                left: 4,
+                bottom: 4,
+                right: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    currentChannel.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small icon button for PiP mode
+class _PiPIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _PiPIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(icon, color: Colors.white, size: 16),
+        ),
+      ),
+    );
+  }
+}
+
+/// Display mode buttons (expand, PiP, separate window)
+class _DisplayModeButtons extends StatelessWidget {
+  final bool showExpand;
+  final VoidCallback? onExitExpanded;
+
+  const _DisplayModeButtons({
+    this.showExpand = true,
+    this.onExitExpanded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final playerNotifier = ref.read(playerControllerProvider.notifier);
+        final playerState = ref.watch(playerControllerProvider);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showExpand) ...[
+                // Expand button
+                IconButton(
+                  icon: const Icon(Icons.open_in_full, color: Colors.white, size: 20),
+                  tooltip: 'Expand player',
+                  onPressed: () => playerNotifier.setExpanded(true),
+                ),
+              ] else ...[
+                // Collapse button (exit expanded)
+                IconButton(
+                  icon: const Icon(Icons.close_fullscreen, color: Colors.white, size: 20),
+                  tooltip: 'Exit expanded',
+                  onPressed: onExitExpanded ?? () => playerNotifier.setExpanded(false),
+                ),
+              ],
+
+              // PiP button
+              IconButton(
+                icon: Icon(
+                  playerState.isPiPMode
+                      ? Icons.picture_in_picture_alt
+                      : Icons.picture_in_picture,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                tooltip: playerState.isPiPMode ? 'Exit PiP' : 'Picture-in-Picture',
+                onPressed: () => playerNotifier.togglePiPMode(),
+              ),
+
+              // Fullscreen button
+              IconButton(
+                icon: Icon(
+                  playerState.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                tooltip: playerState.isFullscreen ? 'Exit fullscreen' : 'Fullscreen',
+                onPressed: () => playerNotifier.toggleFullscreen(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
