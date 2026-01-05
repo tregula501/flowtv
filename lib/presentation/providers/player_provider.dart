@@ -1,8 +1,6 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
-import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -307,17 +305,36 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   Channel? get currentChannel => _currentChannel;
 
   void _initPlayer() {
+    AppLogger.info('=== INITIALIZING PLAYER ===');
+    AppLogger.info('Platform: ${Platform.operatingSystem}');
+
     // Initialize with buffer size configuration
     // Use 4MB per second for high-bitrate streams (up to 32 Mbps for HD/4K IPTV)
     final bufferBytes = _currentBufferSize.durationSeconds * 4 * 1024 * 1024;
-    _player = Player(
-      configuration: PlayerConfiguration(
-        bufferSize: bufferBytes,
-      ),
-    );
-    _videoController = VideoController(_player!);
+    AppLogger.info('Buffer size: ${bufferBytes ~/ 1024 ~/ 1024}MB');
 
-    // Apply MPV-specific buffer settings
+    try {
+      _player = Player(
+        configuration: PlayerConfiguration(
+          bufferSize: bufferBytes,
+        ),
+      );
+      AppLogger.info('Player created successfully');
+
+      // Configure VideoController with platform-specific settings
+      final videoConfig = VideoControllerConfiguration(
+        // Use hardware acceleration on real devices, software on emulators may help
+        enableHardwareAcceleration: true,
+      );
+      _videoController = VideoController(_player!, configuration: videoConfig);
+      AppLogger.info('VideoController created with config: enableHardwareAcceleration=${videoConfig.enableHardwareAcceleration}');
+    } catch (e, stack) {
+      AppLogger.error('Failed to initialize player: $e');
+      AppLogger.error('Stack: $stack');
+      rethrow;
+    }
+
+    // Apply MPV-specific buffer settings (desktop only)
     _applyBufferSettings();
 
     // Listen to player streams
@@ -618,13 +635,23 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
         bufferedDuration: Duration.zero,
         retryAttempt: 0,
       );
-      AppLogger.info('Playing channel: ${channel.name} (buffer: ${_currentBufferSize.displayName})');
 
-      // Apply buffer settings before playing
+      // Enhanced logging for debugging
+      AppLogger.info('=== PLAY CHANNEL START ===');
+      AppLogger.info('Channel: ${channel.name}');
+      AppLogger.info('Stream URL: ${channel.streamUrl}');
+      AppLogger.info('Buffer size: ${_currentBufferSize.displayName}');
+      AppLogger.info('Platform: ${Platform.operatingSystem}');
+
+      // Apply buffer settings before playing (desktop only - uses MPV)
       await _applyBufferSettings();
+
+      AppLogger.info('Opening media stream...');
 
       // Open the stream
       await _player!.open(Media(channel.streamUrl), play: bufferSeconds <= 1);
+
+      AppLogger.info('Media opened successfully, play=${bufferSeconds <= 1}');
 
       // For buffer sizes > 1 second, wait before playing
       if (bufferSeconds > 1) {
@@ -643,7 +670,9 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
         });
       }
     } catch (e, stack) {
-      AppLogger.error('Failed to play channel', e, stack);
+      AppLogger.error('=== PLAY CHANNEL FAILED ===');
+      AppLogger.error('Error: $e');
+      AppLogger.error('Stack: $stack');
       _cancelPrebuffering();
       state = state.copyWith(error: e.toString());
     }
@@ -962,39 +991,19 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   }
 
   /// Open current channel in a new FlowTV window
+  /// NOTE: Multi-window feature requires additional native code setup.
+  /// For now, this feature is disabled. Use external player (VLC) instead.
   Future<bool> openInNewWindow() async {
     if (_currentChannel == null) {
       AppLogger.warning('No channel to open in new window');
       return false;
     }
 
-    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
-      AppLogger.warning('Multi-window only supported on desktop');
-      return false;
-    }
-
-    try {
-      // Prepare channel data to pass to new window
-      final channelData = jsonEncode({
-        'name': _currentChannel!.name,
-        'streamUrl': _currentChannel!.streamUrl,
-        'logoUrl': _currentChannel!.logoUrl,
-      });
-
-      // Create a new window using WindowController
-      final window = await WindowController.create(
-        WindowConfiguration(arguments: channelData),
-      );
-
-      // Show the window
-      await window.show();
-
-      AppLogger.info('Opened ${_currentChannel!.name} in new window');
-      return true;
-    } catch (e) {
-      AppLogger.error('Failed to open new window: $e');
-      return false;
-    }
+    // Multi-window support requires native code integration that isn't complete yet.
+    // The desktop_multi_window package needs additional setup in main.cpp.
+    // For now, we recommend using the "Open in External Player" option instead.
+    AppLogger.warning('Multi-window feature not yet available. Use external player instead.');
+    return false;
   }
 }
 
