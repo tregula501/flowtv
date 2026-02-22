@@ -31,9 +31,17 @@ A modern, cross-platform IPTV streaming application with EPG (Electronic Program
 - **Channel Search** - Search channels and EPG programs
 - **Favorites** - Quick access to your preferred channels
 
+### Casting
+- **Chromecast Support** - Cast live TV to Chromecast and Fire TV devices
+- **Automatic HLS Detection** - Smart content type detection for Xtream streams
+- **Device Discovery** - Auto-discover Cast devices on your network
+- **Cast Controls** - Play, pause, stop, and volume control from the app
+
 ### Privacy & Security
 - **No Account Required** - Works entirely offline
 - **No Analytics** - Your viewing habits stay private
+- **Encrypted Credentials** - Xtream API passwords stored with platform-secure encryption
+- **Credential Redaction** - Passwords automatically stripped from logs
 - **Parental Controls** - PIN-protected profiles and channel locks
 
 ## Installation
@@ -132,14 +140,19 @@ flutter build windows --release
 ```
 lib/
 ├── core/           # Constants, themes, utilities, extensions
-├── data/           # Models, repositories, data sources, parsers
+│   ├── constants/  # App-wide constants
+│   ├── errors/     # Exception types
+│   └── utils/      # Logger, retry helper, secure storage
+├── data/           # Data sources, repositories, parsers
 │   ├── datasources/
 │   │   ├── local/  # Drift database, local storage
-│   │   └── remote/ # M3U parser, XMLTV parser, HTTP clients
+│   │   └── remote/ # M3U parser, XMLTV parser, Xtream API client
 │   └── repositories/  # EPG and Playlist repositories
+├── domain/         # Business logic services
+│   └── services/   # Cast, FFmpeg, player services
 ├── presentation/   # UI screens, widgets, providers
 │   ├── providers/  # Riverpod state management
-│   ├── screens/    # App screens
+│   ├── screens/    # App screens (home, player, EPG, settings, etc.)
 │   └── widgets/    # Reusable UI components
 ├── l10n/           # Localization files
 └── platform/       # Platform-specific code
@@ -148,19 +161,26 @@ lib/
 ## Technical Stack
 
 ### Database & State Management
-- **Drift** - Type-safe SQL database with reactive queries
+- **Drift** - Type-safe SQL database with reactive queries and schema migrations
 - **Riverpod 3.x** - Provider-based state management with scoped access
 - **Freezed** - Code generation for immutable models
 
 ### Data & Parsing
 - **M3U Parser** - Full attribute extraction (tvg-id, logo, group-title, etc.)
 - **XMLTV Parser** - EPG guide parsing with timezone support
+- **Xtream Codes API** - Full client with authentication, categories, and stream URLs
 - **Batch Imports** - Optimized bulk database inserts for performance
+
+### Media & Casting
+- **media_kit (libmpv)** - High-performance video playback with HLS/RTMP
+- **flutter_chrome_cast** - Chromecast device discovery and media casting (Android/iOS)
+- **FFmpeg** - DVR recording to local storage
 
 ### UI & UX
 - **Flutter 3.27+** - Cross-platform framework
 - **Material 3** - Modern design system
-- **Responsive Layout** - Works on desktop, tablet, and mobile
+- **Responsive Layout** - Desktop sidebar + mobile bottom navigation
+- **flutter_secure_storage** - Platform-encrypted credential storage
 
 ### Performance Optimizations
 - **Batch Insert Operations** - Reduces 435,000+ individual DB calls to ~435 batch operations
@@ -168,28 +188,25 @@ lib/
 - **Auto-retry with Exponential Backoff** - Handles connection failures gracefully
 - **Configurable Buffering** - Prebuffer and auto-retry strategies
 
-## Recent Updates (Phase 2)
+## Recent Updates (v0.2.5)
 
-### Database Migration
-- Migrated from Isar to **Drift** for better type safety and reactive queries
-- Batch insert operations for EPG (chunk size: 1000) and playlists (chunk size: 500)
-- Dramatic performance improvement: Loading 435,000 EPG programs now completes in seconds
+### Security & Code Quality
+- Encrypted credential storage with `flutter_secure_storage`
+- Comprehensive code review addressing 25 issues across security, memory management, and architecture
+- URL credential redaction in logger to prevent password leaks
+- Log level filtering (`AppLogger.setLevel()`)
 
-### Progress Tracking UI
-- Real-time progress bars in Settings for both EPG and playlist operations
-- Shows current/total items and operation phase (Downloading, Parsing, Storing)
-- Visual feedback with circular and linear progress indicators
+### Chromecast Support
+- Cast live TV to Chromecast, Fire TV, and other Cast-compatible devices
+- Automatic content type detection for Xtream Codes streams
+- Cast controls (play, pause, stop, volume) from within the app
+- Audio-only devices automatically filtered from device list
 
-### Playlist Management
-- **Edit Playlists** - Change name, M3U URL, and EPG URL without re-importing
-- **Refresh Playlists** - Re-download channels with progress tracking
-- **Set Active Playlist** - Switch between multiple loaded playlists
-- **Delete Playlists** - Remove with all associated channels
-
-### State Management
-- Upgraded to **Riverpod 3.x** with Notifier pattern
-- Scoped state providers for playlist and EPG progress
-- Reactive UI that automatically updates with database changes
+### Architecture Improvements
+- Shared `ICastService` interface with platform-specific implementations
+- Exponential backoff retry for all network operations (M3U, XMLTV, Xtream API)
+- Database schema migration framework (v1 to v2 with EPG index)
+- Fixed memory leaks in FocusNode, StreamSubscription, and Timer lifecycle management
 
 ## Contributing
 
@@ -206,36 +223,33 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
 ### Completed
 - [x] Phase 1: Core M3U playback
   - M3U/M3U8 parser with full attribute support
-  - Favorites system
-  - Channel search and filtering
-  - Category organization
-
-### In Progress
-- [🔄] Phase 2: EPG & Xtream Codes
-  - [x] XMLTV EPG parsing and storage (Drift database)
-  - [x] Batch import optimization with progress tracking
-  - [x] Edit playlist functionality
-  - [x] Auto-retry on stream failures
-  - [x] Buffer size configuration
-  - [x] EPG grid view UI (time-based layout with synchronized scrolling, live highlighting)
-  - [x] Xtream Codes API integration (live TV channels with categories)
+  - Favorites system, channel search and filtering, category organization
+- [x] Phase 2: EPG & Xtream Codes
+  - XMLTV EPG parsing and storage (Drift database)
+  - Batch import optimization with progress tracking
+  - EPG grid view UI with synchronized scrolling and live highlighting
+  - Xtream Codes API integration (live TV, VOD, series)
+  - Buffer size configuration and auto-retry on stream failures
+- [x] Phase 3: DVR & Multi-view
+  - FFmpeg-based recording to local storage
+  - Multi-view (up to 4 channels simultaneously)
+  - Recording management UI
+- [x] Phase 4: Mobile & Casting
+  - Android mobile-optimized UI with bottom navigation
+  - Chromecast / Fire TV casting support
+  - Resizable player panel on desktop
+  - Pop-out player windows
 
 ### Planned
-- [ ] Phase 3: DVR & Multi-view
-  - Recording to local storage
-  - Multi-view (up to 4 channels)
-  - Recording management
-- [ ] Phase 4: Profiles & Parental controls
+- [ ] Phase 5: Profiles & Parental controls
   - PIN-protected profiles
   - Channel locks and restrictions
   - Viewing history
-- [ ] Phase 5: Mobile & TV platforms
-  - Android app optimization
-  - iOS support
-  - TV remote navigation
 - [ ] Phase 6: Advanced features
   - Subtitle/audio track selection
   - Streaming quality selection
+  - Recording playback
+  - iOS support
   - Custom HTTP headers
 
 ## License
