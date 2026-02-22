@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/errors/exceptions.dart';
 import '../../../core/utils/logger.dart';
+import '../../../core/utils/retry.dart';
 
 /// Xtream Codes API response models
 class XtreamUserInfo {
@@ -199,6 +200,16 @@ class XtreamApiClient {
     String action, [
     Map<String, String>? extraParams,
   ]) async {
+    return withRetry(
+      () => _doRequest(action, extraParams),
+      label: 'Xtream $action',
+    );
+  }
+
+  Future<Map<String, dynamic>> _doRequest(
+    String action, [
+    Map<String, String>? extraParams,
+  ]) async {
     try {
       final params = {
         ..._authParams,
@@ -242,6 +253,9 @@ class XtreamApiClient {
     final response = await _request('get_live_categories');
 
     if (response is! List) {
+      AppLogger.warning(
+        'Xtream: get_live_categories returned ${response.runtimeType} instead of List',
+      );
       return [];
     }
 
@@ -256,6 +270,9 @@ class XtreamApiClient {
     final response = await _request('get_live_streams', params);
 
     if (response is! List) {
+      AppLogger.warning(
+        'Xtream: get_live_streams returned ${response.runtimeType} instead of List',
+      );
       return [];
     }
 
@@ -269,6 +286,9 @@ class XtreamApiClient {
     final response = await _request('get_vod_categories');
 
     if (response is! List) {
+      AppLogger.warning(
+        'Xtream: get_vod_categories returned ${response.runtimeType} instead of List',
+      );
       return [];
     }
 
@@ -283,6 +303,9 @@ class XtreamApiClient {
     final response = await _request('get_vod_streams', params);
 
     if (response is! List) {
+      AppLogger.warning(
+        'Xtream: get_vod_streams returned ${response.runtimeType} instead of List',
+      );
       return [];
     }
 
@@ -296,6 +319,9 @@ class XtreamApiClient {
     final response = await _request('get_series_categories');
 
     if (response is! List) {
+      AppLogger.warning(
+        'Xtream: get_series_categories returned ${response.runtimeType} instead of List',
+      );
       return [];
     }
 
@@ -310,6 +336,9 @@ class XtreamApiClient {
     final response = await _request('get_series', params);
 
     if (response is! List) {
+      AppLogger.warning(
+        'Xtream: get_series returned ${response.runtimeType} instead of List',
+      );
       return [];
     }
 

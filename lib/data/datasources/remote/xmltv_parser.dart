@@ -3,6 +3,7 @@ import 'package:xml/xml.dart';
 
 import '../../../core/errors/exceptions.dart';
 import '../../../core/utils/logger.dart';
+import '../../../core/utils/retry.dart';
 
 /// Temporary program data from XMLTV parsing
 class XmltvProgram {
@@ -46,8 +47,15 @@ class XmltvParser {
 
   XmltvParser({Dio? dio}) : _dio = dio ?? Dio();
 
-  /// Parse XMLTV from URL
+  /// Parse XMLTV from URL with automatic retry on transient failures
   Future<XmltvParseResult> parseFromUrl(String url) async {
+    return withRetry(
+      () => _fetchAndParse(url),
+      label: 'XMLTV fetch',
+    );
+  }
+
+  Future<XmltvParseResult> _fetchAndParse(String url) async {
     try {
       AppLogger.info('Fetching EPG from: $url');
 

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/errors/exceptions.dart';
 import '../../../core/utils/logger.dart';
+import '../../../core/utils/retry.dart';
 
 /// Parsed M3U data
 class M3uParseResult {
@@ -47,8 +48,15 @@ class M3uParser {
 
   M3uParser({Dio? dio}) : _dio = dio ?? Dio();
 
-  /// Parse M3U from URL
+  /// Parse M3U from URL with automatic retry on transient failures
   Future<M3uParseResult> parseFromUrl(String url) async {
+    return withRetry(
+      () => _fetchAndParse(url),
+      label: 'M3U fetch',
+    );
+  }
+
+  Future<M3uParseResult> _fetchAndParse(String url) async {
     try {
       AppLogger.info('Fetching M3U from: $url');
 

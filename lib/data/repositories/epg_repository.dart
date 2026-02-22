@@ -33,6 +33,8 @@ class EpgRepository {
     onProgress?.call(0, total, 'Clearing old data...');
 
     // Phase 2: Clear old EPG data
+    // TODO: Replace full-table DELETE with differential upsert to avoid
+    // data loss during refresh and reduce I/O on large EPG datasets.
     await _db.delete(_db.epgPrograms).go();
 
     // Phase 3: Batch insert new programs in chunks for progress tracking
