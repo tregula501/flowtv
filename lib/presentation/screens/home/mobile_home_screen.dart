@@ -371,6 +371,10 @@ class _MobileChannelTile extends StatelessWidget {
           width: 48,
           height: 48,
           fit: BoxFit.contain,
+          loadingBuilder: (_, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return _buildPlaceholder();
+          },
           errorBuilder: (_, _, _) => _buildPlaceholder(),
         ),
       );
