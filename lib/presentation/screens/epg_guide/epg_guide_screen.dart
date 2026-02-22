@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../data/datasources/local/drift/app_database.dart' show Channel, EpgProgram;
 import '../../providers/channel_provider.dart';
 import '../../providers/epg_provider.dart';
@@ -24,10 +25,10 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   bool _isSyncingVerticalScroll = false;
   bool _isSyncingHorizontalScroll = false;
 
-  static const double _timeSlotWidth = 200.0;
-  static const double _channelColumnWidth = 200.0;
-  static const double _rowHeight = 70.0;
-  static const int _hoursToShow = 24;
+  static const double _timeSlotWidth = AppConstants.epgTimeSlotWidth;
+  static const double _channelColumnWidth = AppConstants.epgChannelColumnWidth;
+  static const double _rowHeight = AppConstants.epgGridRowHeight;
+  static const int _hoursToShow = AppConstants.epgHoursToShow;
 
   @override
   void initState() {

@@ -17,8 +17,9 @@ class AppConstants {
 
   // EPG grid dimensions
   static const double epgTimeSlotWidth = 200.0;
-  static const double epgChannelColumnWidth = 160.0;
-  static const double epgGridRowHeight = 52.0;
+  static const double epgChannelColumnWidth = 200.0;
+  static const double epgGridRowHeight = 70.0;
+  static const int epgHoursToShow = 24;
 
   // Player panel dimensions
   static const double minPlayerWidth = 320.0;
