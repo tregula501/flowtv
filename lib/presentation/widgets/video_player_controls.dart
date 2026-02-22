@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -16,7 +18,13 @@ class VideoPlayerControls extends ConsumerStatefulWidget {
 class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
   bool _isVisible = true;
   bool _isHovering = false;
-  int _hideTimerId = 0;
+  Timer? _hideTimer;
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
 
   void _showControls() {
     setState(() => _isVisible = true);
@@ -24,10 +32,9 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
   }
 
   void _scheduleHide() {
-    _hideTimerId++;
-    final currentTimerId = _hideTimerId;
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted && currentTimerId == _hideTimerId && !_isHovering) {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && !_isHovering) {
         final isPlaying = ref.read(playerControllerProvider).isPlaying;
         if (isPlaying) {
           setState(() => _isVisible = false);

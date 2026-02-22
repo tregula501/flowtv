@@ -27,6 +27,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchController = TextEditingController();
   final _focusNode = FocusNode();
+  final _keyboardFocusNode = FocusNode();
 
   // Resizable player panel width
   double _playerPanelWidth = 480.0;
@@ -37,6 +38,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void dispose() {
     _searchController.dispose();
     _focusNode.dispose();
+    _keyboardFocusNode.dispose();
     super.dispose();
   }
 
@@ -110,7 +112,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Show fullscreen player if in OS fullscreen mode
     if (playerState.isFullscreen && currentChannel != null) {
       return KeyboardListener(
-        focusNode: FocusNode(),
+        focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,
         autofocus: true,
         child: const FullscreenPlayerScreen(),
@@ -120,7 +122,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Show minimal PiP player if in PiP mode
     if (playerState.isPiPMode && currentChannel != null) {
       return KeyboardListener(
-        focusNode: FocusNode(),
+        focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,
         autofocus: true,
         child: const _PiPPlayerView(),
@@ -130,7 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Show expanded player (fills app window but not OS fullscreen)
     if (playerState.isExpanded && currentChannel != null) {
       return KeyboardListener(
-        focusNode: FocusNode(),
+        focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,
         autofocus: true,
         child: const _ExpandedPlayerView(),

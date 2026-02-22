@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,8 @@ class PopupPlayerWindow extends StatefulWidget {
 class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
   late final Player _player;
   late final VideoController _videoController;
+  final _keyboardFocusNode = FocusNode();
+  final List<StreamSubscription> _subscriptions = [];
   bool _isPlaying = false;
   bool _isBuffering = true;
   bool _isMuted = false;
@@ -51,24 +54,24 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
     );
     _videoController = VideoController(_player);
 
-    // Listen to player state
-    _player.stream.playing.listen((playing) {
+    // Listen to player state (store subscriptions for cleanup)
+    _subscriptions.add(_player.stream.playing.listen((playing) {
       if (mounted) setState(() => _isPlaying = playing);
-    });
+    }));
 
-    _player.stream.buffering.listen((buffering) {
+    _subscriptions.add(_player.stream.buffering.listen((buffering) {
       if (mounted) setState(() => _isBuffering = buffering);
-    });
+    }));
 
-    _player.stream.error.listen((error) {
+    _subscriptions.add(_player.stream.error.listen((error) {
       if (error.isNotEmpty && mounted) {
         setState(() => _error = error);
       }
-    });
+    }));
 
-    _player.stream.volume.listen((volume) {
+    _subscriptions.add(_player.stream.volume.listen((volume) {
       if (mounted) setState(() => _volume = volume / 100);
-    });
+    }));
 
     // Start playing the stream
     if (widget.streamUrl.isNotEmpty) {
@@ -78,6 +81,10 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
 
   @override
   void dispose() {
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _keyboardFocusNode.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -141,7 +148,7 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
         ),
       ),
       home: KeyboardListener(
-        focusNode: FocusNode(),
+        focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,
         autofocus: true,
         child: Scaffold(
