@@ -325,7 +325,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
 
     return Positioned(
       left: left.clamp(0, double.infinity),
-      width: width.clamp(50, double.infinity),
+      width: width.clamp(70, double.infinity),
       top: 2,
       bottom: 2,
       child: GestureDetector(
@@ -349,7 +349,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
             children: [
               Text(
                 program.title,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontWeight: isLive ? FontWeight.bold : null,
                     ),
                 maxLines: 1,
@@ -358,7 +358,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
               Text(
                 '${program.startTime.timeString} - ${program.endTime.timeString}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: 10,
+                      fontSize: 11,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
               ),
