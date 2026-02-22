@@ -23,6 +23,9 @@ Thumbs.db
 *.env
 *.pem
 *.key
+*.jks
+*.keystore
+android/key.properties
 
 # Generated
 *.g.dart

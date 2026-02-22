@@ -1,4 +1,4 @@
-package com.example.flowtv
+package io.github.tregula501.flowtv
 
 import io.flutter.embedding.android.FlutterActivity
 
