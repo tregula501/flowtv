@@ -59,12 +59,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
       body: playlistsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Error: $err')),
-        data: (playlists) {
-          if (playlists.isEmpty) {
-            return _buildEmptyState(context);
-          }
-          return _buildBody();
-        },
+        data: (playlists) => _buildBody(playlists.isEmpty),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -92,18 +87,34 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(bool noPlaylists) {
     switch (_currentIndex) {
       case 0:
-        return const _MobileChannelList(showFavoritesOnly: false);
+        return noPlaylists
+            ? _buildEmptyState(context)
+            : const _MobileChannelList(showFavoritesOnly: false);
       case 1:
-        return const _MobileChannelList(showFavoritesOnly: true);
+        return noPlaylists
+            ? _buildNoPlaylistTab(
+                context,
+                icon: Icons.star_border,
+                message: 'Add a playlist to see favorites',
+              )
+            : const _MobileChannelList(showFavoritesOnly: true);
       case 2:
-        return const EpgGuideScreen();
+        return noPlaylists
+            ? _buildNoPlaylistTab(
+                context,
+                icon: Icons.schedule,
+                message: 'Add a playlist to view the TV guide',
+              )
+            : const EpgGuideScreen();
       case 3:
         return const SettingsScreen();
       default:
-        return const _MobileChannelList(showFavoritesOnly: false);
+        return noPlaylists
+            ? _buildEmptyState(context)
+            : const _MobileChannelList(showFavoritesOnly: false);
     }
   }
 
@@ -133,6 +144,40 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton.icon(
+              onPressed: () => _showAddPlaylistDialog(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Add Playlist'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoPlaylistTab(
+    BuildContext context, {
+    required IconData icon,
+    required String message,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
               onPressed: () => _showAddPlaylistDialog(context),
               icon: const Icon(Icons.add),
               label: const Text('Add Playlist'),
