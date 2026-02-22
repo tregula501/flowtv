@@ -167,6 +167,7 @@ class PlaylistManager {
       password: password,
     );
 
+    try {
     // Authenticate
     AppLogger.info('Authenticating with Xtream server: $serverUrl');
     await client.authenticate();
@@ -248,6 +249,9 @@ class PlaylistManager {
     AppLogger.info('Added Xtream playlist with $total channels');
     _ref.read(playlistProgressProvider.notifier).stopLoading();
     return playlist;
+    } finally {
+      client.close();
+    }
   }
 
   /// Update playlist metadata
@@ -395,6 +399,7 @@ class PlaylistManager {
       password: password,
     );
 
+    try {
     // Authenticate
     await client.authenticate();
 
@@ -458,5 +463,8 @@ class PlaylistManager {
 
     AppLogger.info('Refreshed Xtream playlist with $total channels');
     _ref.read(playlistProgressProvider.notifier).stopLoading();
+    } finally {
+      client.close();
+    }
   }
 }

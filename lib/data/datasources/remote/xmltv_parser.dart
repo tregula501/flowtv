@@ -44,8 +44,16 @@ class XmltvParseResult {
 /// XMLTV EPG parser
 class XmltvParser {
   final Dio _dio;
+  final bool _ownsDio;
 
-  XmltvParser({Dio? dio}) : _dio = dio ?? Dio();
+  XmltvParser({Dio? dio})
+      : _dio = dio ?? Dio(),
+        _ownsDio = dio == null;
+
+  /// Close the internal Dio client if it was created by this parser.
+  void close() {
+    if (_ownsDio) _dio.close();
+  }
 
   /// Parse XMLTV from URL with automatic retry on transient failures
   Future<XmltvParseResult> parseFromUrl(String url) async {

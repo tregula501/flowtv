@@ -174,6 +174,7 @@ class XtreamSeries {
 /// Xtream Codes API client
 class XtreamApiClient {
   final Dio _dio;
+  final bool _ownsDio;
   final String serverUrl;
   final String username;
   final String password;
@@ -183,7 +184,13 @@ class XtreamApiClient {
     required this.username,
     required this.password,
     Dio? dio,
-  }) : _dio = dio ?? Dio();
+  })  : _dio = dio ?? Dio(),
+        _ownsDio = dio == null;
+
+  /// Close the internal Dio client if it was created by this client.
+  void close() {
+    if (_ownsDio) _dio.close();
+  }
 
   String get _baseUrl {
     var url = serverUrl;

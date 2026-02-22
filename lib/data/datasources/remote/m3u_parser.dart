@@ -45,8 +45,16 @@ class M3uChannel {
 /// M3U/M3U8 playlist parser
 class M3uParser {
   final Dio _dio;
+  final bool _ownsDio;
 
-  M3uParser({Dio? dio}) : _dio = dio ?? Dio();
+  M3uParser({Dio? dio})
+      : _dio = dio ?? Dio(),
+        _ownsDio = dio == null;
+
+  /// Close the internal Dio client if it was created by this parser.
+  void close() {
+    if (_ownsDio) _dio.close();
+  }
 
   /// Parse M3U from URL with automatic retry on transient failures
   Future<M3uParseResult> parseFromUrl(String url) async {
