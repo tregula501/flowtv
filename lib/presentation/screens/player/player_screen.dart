@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -119,12 +121,13 @@ class PlayerScreen extends ConsumerWidget {
                   onPressed: () => playerController.toggleExpanded(),
                 ),
 
-                // PiP button
-                IconButton(
-                  icon: const Icon(Icons.picture_in_picture, color: Colors.white70, size: 20),
-                  tooltip: l10n.pictureInPicture,
-                  onPressed: () => playerController.togglePiPMode(),
-                ),
+                // PiP button (desktop only — uses window_manager)
+                if (!Platform.isAndroid && !Platform.isIOS)
+                  IconButton(
+                    icon: const Icon(Icons.picture_in_picture, color: Colors.white70, size: 20),
+                    tooltip: l10n.pictureInPicture,
+                    onPressed: () => playerController.togglePiPMode(),
+                  ),
 
                 // Fullscreen button
                 IconButton(
