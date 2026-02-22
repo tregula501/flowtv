@@ -3,25 +3,27 @@
 
 import 'dart:io';
 
-// Re-export shared types from stub (they're identical)
-export 'cast_service_stub.dart'
-    show CastDeviceInfo, CastMediaInfo, CastPlaybackState, CastSessionState;
-
-// Import both implementations
-import 'cast_service_stub.dart' as stub;
+import '../../core/utils/logger.dart';
+import 'cast_types.dart';
 import 'cast_service_android.dart' as android;
+import 'cast_service_stub.dart' as stub;
 
-/// CastService factory that returns platform-specific implementation
-class CastService {
+// Re-export shared types for consumers
+export 'cast_types.dart';
+
+/// CastService factory that returns platform-specific implementation.
+/// Both implementations use shared types from cast_types.dart,
+/// so no type mapping or wrapper layer is needed.
+class CastService implements ICastService {
   static CastService? _instance;
 
   static CastService get instance {
     if (_instance != null) return _instance!;
 
     if (Platform.isAndroid || Platform.isIOS) {
-      _instance = _AndroidCastServiceWrapper();
+      _instance = _MobileCastService();
     } else {
-      _instance = _StubCastServiceWrapper();
+      _instance = _DesktopCastService();
     }
     return _instance!;
   }
@@ -29,95 +31,55 @@ class CastService {
   /// Check if casting is supported on this platform
   static bool get isSupported => Platform.isAndroid || Platform.isIOS;
 
-  // These methods will be overridden by the wrapper classes
-  Stream<List<stub.CastDeviceInfo>> get devicesStream =>
-      throw UnimplementedError();
-  List<stub.CastDeviceInfo> get devices => throw UnimplementedError();
-  Stream<stub.CastSessionState> get sessionStream => throw UnimplementedError();
-  stub.CastSessionState get sessionState => throw UnimplementedError();
-
+  @override
+  Stream<List<CastDeviceInfo>> get devicesStream => throw UnimplementedError();
+  @override
+  List<CastDeviceInfo> get devices => throw UnimplementedError();
+  @override
+  Stream<CastSessionState> get sessionStream => throw UnimplementedError();
+  @override
+  CastSessionState get sessionState => throw UnimplementedError();
+  @override
   Future<void> startDiscovery() async {}
+  @override
   void stopDiscovery() {}
-  Future<bool> connect(stub.CastDeviceInfo device) async => false;
+  @override
+  Future<bool> connect(CastDeviceInfo device) async => false;
+  @override
   Future<void> disconnect() async {}
-  Future<bool> castMedia(stub.CastMediaInfo media) async => false;
+  @override
+  Future<bool> castMedia(CastMediaInfo media) async => false;
+  @override
   Future<void> play() async {}
+  @override
   Future<void> pause() async {}
+  @override
   Future<void> stop() async {}
+  @override
   Future<void> seek(Duration position) async {}
+  @override
   Future<void> setVolume(double volume) async {}
+  @override
   Future<void> toggleMute() async {}
+  @override
   void dispose() {}
 }
 
-/// Wrapper for Android implementation
-class _AndroidCastServiceWrapper extends CastService {
+/// Direct delegation to Android CastService — no type mapping needed
+class _MobileCastService extends CastService {
   final android.CastService _service = android.CastService.instance;
 
   @override
-  Stream<List<stub.CastDeviceInfo>> get devicesStream =>
-      _service.devicesStream.map((devices) => devices
-          .map((d) => stub.CastDeviceInfo(id: d.id, name: d.name, modelName: d.modelName),)
-          .toList(),);
+  Stream<List<CastDeviceInfo>> get devicesStream => _service.devicesStream;
 
   @override
-  List<stub.CastDeviceInfo> get devices =>
-      _service.devices.map((d) => stub.CastDeviceInfo(id: d.id, name: d.name, modelName: d.modelName)).toList();
+  List<CastDeviceInfo> get devices => _service.devices;
 
   @override
-  Stream<stub.CastSessionState> get sessionStream =>
-      _service.sessionStream.map((s) => stub.CastSessionState(
-            isConnected: s.isConnected,
-            connectedDevice: s.connectedDevice != null
-                ? stub.CastDeviceInfo(
-                    id: s.connectedDevice!.id,
-                    name: s.connectedDevice!.name,
-                    modelName: s.connectedDevice!.modelName,
-                  )
-                : null,
-            playbackState: _mapPlaybackState(s.playbackState),
-            currentPosition: s.currentPosition,
-            duration: s.duration,
-            volume: s.volume,
-            isMuted: s.isMuted,
-          ),);
+  Stream<CastSessionState> get sessionStream => _service.sessionStream;
 
   @override
-  stub.CastSessionState get sessionState {
-    final s = _service.sessionState;
-    return stub.CastSessionState(
-      isConnected: s.isConnected,
-      connectedDevice: s.connectedDevice != null
-          ? stub.CastDeviceInfo(
-              id: s.connectedDevice!.id,
-              name: s.connectedDevice!.name,
-              modelName: s.connectedDevice!.modelName,
-            )
-          : null,
-      playbackState: _mapPlaybackState(s.playbackState),
-      currentPosition: s.currentPosition,
-      duration: s.duration,
-      volume: s.volume,
-      isMuted: s.isMuted,
-    );
-  }
-
-  stub.CastPlaybackState _mapPlaybackState(android.CastPlaybackState state) {
-    switch (state) {
-      case android.CastPlaybackState.idle:
-        return stub.CastPlaybackState.idle;
-      case android.CastPlaybackState.loading:
-        return stub.CastPlaybackState.loading;
-      case android.CastPlaybackState.buffering:
-        return stub.CastPlaybackState.buffering;
-      case android.CastPlaybackState.playing:
-        return stub.CastPlaybackState.playing;
-      case android.CastPlaybackState.paused:
-        return stub.CastPlaybackState.paused;
-      case android.CastPlaybackState.stopped:
-        return stub.CastPlaybackState.stopped;
-    }
-  }
+  CastSessionState get sessionState => _service.sessionState;
 
   @override
   Future<void> startDiscovery() => _service.startDiscovery();
@@ -126,48 +88,35 @@ class _AndroidCastServiceWrapper extends CastService {
   void stopDiscovery() => _service.stopDiscovery();
 
   @override
-  Future<bool> connect(stub.CastDeviceInfo device) async {
-    // Find the matching Android device with the GoogleCastDevice reference
+  Future<bool> connect(CastDeviceInfo device) async {
+    // Find the matching device with native reference in the discovered list
     final devices = _service.devices;
+    AppLogger.debug(
+        'Cast connect: Looking for "${device.name}" in ${devices.length} devices',);
 
-    print('Cast connect: Looking for device "${device.name}" (id=${device.id})');
-    print('Cast connect: Available devices count: ${devices.length}');
-
-    android.CastDeviceInfo? androidDevice;
-
+    CastDeviceInfo? matchedDevice;
     for (final d in devices) {
-      print('Cast connect: Checking device "${d.name}" (id=${d.id}) hasRef=${d.device != null}');
       if (d.id == device.id) {
-        androidDevice = d;
-        print('Cast connect: Found matching device!');
+        matchedDevice = d;
         break;
       }
     }
 
-    if (androidDevice == null) {
-      // Device not found in current list - this can happen if discovery
-      // stopped or the device went away. Log for debugging.
-      print('Cast connect: ERROR - Device not found in discovered list');
+    if (matchedDevice == null) {
+      AppLogger.debug('Cast connect: Device not found in discovered list');
       return false;
     }
 
-    print('Cast connect: Proceeding to connect with device ref=${androidDevice.device != null}');
-    return _service.connect(androidDevice);
+    AppLogger.debug(
+        'Cast connect: Found device, hasNativeRef=${matchedDevice.nativeDevice != null}',);
+    return _service.connect(matchedDevice);
   }
 
   @override
   Future<void> disconnect() => _service.disconnect();
 
   @override
-  Future<bool> castMedia(stub.CastMediaInfo media) {
-    return _service.castMedia(android.CastMediaInfo(
-      url: media.url,
-      title: media.title,
-      subtitle: media.subtitle,
-      imageUrl: media.imageUrl,
-      contentType: media.contentType,
-    ),);
-  }
+  Future<bool> castMedia(CastMediaInfo media) => _service.castMedia(media);
 
   @override
   Future<void> play() => _service.play();
@@ -191,21 +140,21 @@ class _AndroidCastServiceWrapper extends CastService {
   void dispose() => _service.dispose();
 }
 
-/// Wrapper for stub implementation (desktop platforms)
-class _StubCastServiceWrapper extends CastService {
+/// Direct delegation to stub CastService
+class _DesktopCastService extends CastService {
   final stub.CastService _service = stub.CastService.instance;
 
   @override
-  Stream<List<stub.CastDeviceInfo>> get devicesStream => _service.devicesStream;
+  Stream<List<CastDeviceInfo>> get devicesStream => _service.devicesStream;
 
   @override
-  List<stub.CastDeviceInfo> get devices => _service.devices;
+  List<CastDeviceInfo> get devices => _service.devices;
 
   @override
-  Stream<stub.CastSessionState> get sessionStream => _service.sessionStream;
+  Stream<CastSessionState> get sessionStream => _service.sessionStream;
 
   @override
-  stub.CastSessionState get sessionState => _service.sessionState;
+  CastSessionState get sessionState => _service.sessionState;
 
   @override
   Future<void> startDiscovery() => _service.startDiscovery();
@@ -214,13 +163,13 @@ class _StubCastServiceWrapper extends CastService {
   void stopDiscovery() => _service.stopDiscovery();
 
   @override
-  Future<bool> connect(stub.CastDeviceInfo device) => _service.connect(device);
+  Future<bool> connect(CastDeviceInfo device) => _service.connect(device);
 
   @override
   Future<void> disconnect() => _service.disconnect();
 
   @override
-  Future<bool> castMedia(stub.CastMediaInfo media) => _service.castMedia(media);
+  Future<bool> castMedia(CastMediaInfo media) => _service.castMedia(media);
 
   @override
   Future<void> play() => _service.play();

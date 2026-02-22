@@ -55,23 +55,31 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
     _videoController = VideoController(_player);
 
     // Listen to player state (store subscriptions for cleanup)
-    _subscriptions.add(_player.stream.playing.listen((playing) {
-      if (mounted) setState(() => _isPlaying = playing);
-    }));
+    _subscriptions.add(
+      _player.stream.playing.listen((playing) {
+        if (mounted) setState(() => _isPlaying = playing);
+      }),
+    );
 
-    _subscriptions.add(_player.stream.buffering.listen((buffering) {
-      if (mounted) setState(() => _isBuffering = buffering);
-    }));
+    _subscriptions.add(
+      _player.stream.buffering.listen((buffering) {
+        if (mounted) setState(() => _isBuffering = buffering);
+      }),
+    );
 
-    _subscriptions.add(_player.stream.error.listen((error) {
-      if (error.isNotEmpty && mounted) {
-        setState(() => _error = error);
-      }
-    }));
+    _subscriptions.add(
+      _player.stream.error.listen((error) {
+        if (error.isNotEmpty && mounted) {
+          setState(() => _error = error);
+        }
+      }),
+    );
 
-    _subscriptions.add(_player.stream.volume.listen((volume) {
-      if (mounted) setState(() => _volume = volume / 100);
-    }));
+    _subscriptions.add(
+      _player.stream.volume.listen((volume) {
+        if (mounted) setState(() => _volume = volume / 100);
+      }),
+    );
 
     // Start playing the stream
     if (widget.streamUrl.isNotEmpty) {
