@@ -99,13 +99,9 @@
   "gplLicense": "GPL v3 License",
 
   "selectChannel": "Select a channel to start watching",
-  "exitExpanded": "Exit expanded",
-  "expandPlayer": "Expand player",
   "pictureInPicture": "Picture-in-Picture",
   "exitPipDoubleClick": "Exit PiP (double-click)",
   "fullscreen": "Fullscreen",
-  "openNewWindow": "Open in New Window (Coming Soon)",
-  "multiWindowComingSoon": "Multi-window coming soon! Use external player (VLC) for now.",
   "openExternalPlayer": "Open in VLC/External Player",
   "externalPlayerError": "Could not open in external player. Make sure VLC is installed.",
   "closePlayer": "Close player",

@@ -167,7 +167,6 @@ class PlayerState {
   final bool isPrebuffering; // Waiting for initial buffer to fill
   final bool isReconnecting; // Auto-retry in progress
   final bool isFullscreen; // OS fullscreen (covers entire monitor)
-  final bool isExpanded; // In-app expanded (player fills app window)
   final bool isPiPMode; // Picture-in-Picture mode (small always-on-top window)
   final double volume;
   final bool isMuted;
@@ -193,7 +192,6 @@ class PlayerState {
     this.isPrebuffering = false,
     this.isReconnecting = false,
     this.isFullscreen = false,
-    this.isExpanded = false,
     this.isPiPMode = false,
     this.volume = 1.0,
     this.isMuted = false,
@@ -220,7 +218,6 @@ class PlayerState {
     bool? isPrebuffering,
     bool? isReconnecting,
     bool? isFullscreen,
-    bool? isExpanded,
     bool? isPiPMode,
     double? volume,
     bool? isMuted,
@@ -246,7 +243,6 @@ class PlayerState {
       isPrebuffering: isPrebuffering ?? this.isPrebuffering,
       isReconnecting: isReconnecting ?? this.isReconnecting,
       isFullscreen: isFullscreen ?? this.isFullscreen,
-      isExpanded: isExpanded ?? this.isExpanded,
       isPiPMode: isPiPMode ?? this.isPiPMode,
       volume: volume ?? this.volume,
       isMuted: isMuted ?? this.isMuted,
@@ -874,21 +870,6 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   // ===== Display Mode Methods =====
 
-  /// Toggle in-app expanded mode (player fills app window, hides sidebar/grid)
-  void toggleExpanded() {
-    setExpanded(!state.isExpanded);
-  }
-
-  /// Set in-app expanded mode
-  void setExpanded(bool expanded) {
-    // Exit other modes when entering expanded
-    if (expanded && state.isPiPMode) {
-      setPiPMode(false);
-    }
-    state = state.copyWith(isExpanded: expanded);
-    AppLogger.info('Expanded mode: $expanded');
-  }
-
   /// Saved window state for restoring after PiP
   Size? _savedWindowSize;
   Offset? _savedWindowPosition;
@@ -939,7 +920,6 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
         state = state.copyWith(
           isPiPMode: true,
           isFullscreen: false,
-          isExpanded: false,
         );
         AppLogger.info('Entered PiP mode');
       } else {

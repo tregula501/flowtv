@@ -110,17 +110,6 @@ class PlayerScreen extends ConsumerWidget {
                   },
                 ),
 
-                // Expand/Collapse button (in-app fullscreen)
-                IconButton(
-                  icon: Icon(
-                    playerState.isExpanded ? Icons.close_fullscreen : Icons.open_in_full,
-                    color: Colors.white70,
-                    size: 20,
-                  ),
-                  tooltip: playerState.isExpanded ? l10n.exitExpanded : l10n.expandPlayer,
-                  onPressed: () => playerController.toggleExpanded(),
-                ),
-
                 // PiP button (desktop only — uses window_manager)
                 if (!Platform.isAndroid && !Platform.isIOS)
                   IconButton(

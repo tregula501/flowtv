@@ -86,13 +86,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ref.read(playerControllerProvider.notifier).toggleMute();
         }
       }
-      // E to toggle expanded mode
-      if (event.logicalKey == LogicalKeyboardKey.keyE) {
-        final currentChannel = ref.read(currentChannelProvider);
-        if (currentChannel != null) {
-          ref.read(playerControllerProvider.notifier).toggleExpanded();
-        }
-      }
       // P to toggle PiP mode
       if (event.logicalKey == LogicalKeyboardKey.keyP) {
         final currentChannel = ref.read(currentChannelProvider);
@@ -112,7 +105,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Only watch the display-mode fields to avoid rebuilds on every player tick
     final isFullscreen = ref.watch(playerControllerProvider.select((s) => s.isFullscreen));
     final isPiPMode = ref.watch(playerControllerProvider.select((s) => s.isPiPMode));
-    final isExpanded = ref.watch(playerControllerProvider.select((s) => s.isExpanded));
 
     // Show fullscreen player if in OS fullscreen mode
     if (isFullscreen && currentChannel != null) {
@@ -131,16 +123,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         onKeyEvent: _handleKeyEvent,
         autofocus: true,
         child: const _PiPPlayerView(),
-      );
-    }
-
-    // Show expanded player (fills app window but not OS fullscreen)
-    if (isExpanded && currentChannel != null) {
-      return KeyboardListener(
-        focusNode: _keyboardFocusNode,
-        onKeyEvent: _handleKeyEvent,
-        autofocus: true,
-        child: const _ExpandedPlayerView(),
       );
     }
 
@@ -372,21 +354,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => const AddPlaylistDialog(),
-    );
-  }
-}
-
-/// Expanded player view - fills the app window
-class _ExpandedPlayerView extends ConsumerWidget {
-  const _ExpandedPlayerView();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Simply show the PlayerScreen - it already has all the controls
-    // including the collapse button when in expanded mode
-    return const Scaffold(
-      backgroundColor: Colors.black,
-      body: PlayerScreen(),
     );
   }
 }
