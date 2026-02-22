@@ -136,23 +136,6 @@ class PlayerScreen extends ConsumerWidget {
                   onPressed: () => playerController.toggleFullscreen(),
                 ),
 
-                // Open in new window button (feature not yet available)
-                IconButton(
-                  icon: const Icon(Icons.open_in_new_rounded, color: Colors.white38, size: 20),
-                  tooltip: l10n.openNewWindow,
-                  onPressed: () async {
-                    final success = await playerController.openInNewWindow();
-                    if (!success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.multiWindowComingSoon),
-                          duration: const Duration(seconds: 3),
-                        ),
-                      );
-                    }
-                  },
-                ),
-
                 // Open in external player button (VLC) — desktop only
                 if (!Platform.isAndroid && !Platform.isIOS)
                   IconButton(

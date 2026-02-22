@@ -1057,21 +1057,6 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     }
   }
 
-  /// Open current channel in a new FlowTV window
-  /// NOTE: Multi-window feature requires additional native code setup.
-  /// For now, this feature is disabled. Use external player (VLC) instead.
-  Future<bool> openInNewWindow() async {
-    if (_currentChannel == null) {
-      AppLogger.warning('No channel to open in new window');
-      return false;
-    }
-
-    // Multi-window support requires native code integration that isn't complete yet.
-    // The desktop_multi_window package needs additional setup in main.cpp.
-    // For now, we recommend using the "Open in External Player" option instead.
-    AppLogger.warning('Multi-window feature not yet available. Use external player instead.');
-    return false;
-  }
 }
 
 /// Video player controller provider
