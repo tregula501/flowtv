@@ -24,6 +24,7 @@ class MobileHomeScreen extends ConsumerStatefulWidget {
 class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   int _currentIndex = 0;
   final _searchController = TextEditingController();
+  bool _isSearching = false;
 
   @override
   void dispose() {
@@ -51,12 +52,33 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.appTitle),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: l10n.searchChannels,
+                  border: InputBorder.none,
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      ref.read(channelSearchQueryProvider.notifier).clear();
+                      setState(() => _isSearching = false);
+                    },
+                  ),
+                ),
+                onChanged: (value) {
+                  ref.read(channelSearchQueryProvider.notifier).setQuery(value);
+                },
+              )
+            : Text(l10n.appTitle),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearchDialog(context),
-          ),
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () => setState(() => _isSearching = true),
+            ),
         ],
       ),
       body: playlistsAsync.when(
@@ -203,19 +225,6 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     );
   }
 
-  void _showSearchDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => _SearchDialog(
-        controller: _searchController,
-        onSearch: (query) {
-          ref.read(channelSearchQueryProvider.notifier).setQuery(query);
-          Navigator.pop(context);
-          setState(() => _currentIndex = 0); // Switch to channels tab
-        },
-      ),
-    );
-  }
 }
 
 /// Mobile channel list with categories
@@ -725,51 +734,6 @@ class _MobilePlayerScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Search dialog
-class _SearchDialog extends StatelessWidget {
-  final TextEditingController controller;
-  final Function(String) onSearch;
-
-  const _SearchDialog({
-    required this.controller,
-    required this.onSearch,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return AlertDialog(
-      title: Text(l10n.searchChannelsDialog),
-      content: TextField(
-        controller: controller,
-        decoration: InputDecoration(
-          hintText: l10n.enterChannelName,
-          prefixIcon: const Icon(Icons.search),
-        ),
-        autofocus: true,
-        onSubmitted: onSearch,
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            controller.clear();
-            onSearch('');
-          },
-          child: Text(l10n.clear),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.cancel),
-        ),
-        ElevatedButton(
-          onPressed: () => onSearch(controller.text),
-          child: Text(l10n.search),
-        ),
-      ],
     );
   }
 }

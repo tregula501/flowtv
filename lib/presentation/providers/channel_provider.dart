@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -110,16 +112,30 @@ final recentlyWatchedChannelsProvider = Provider<List<Channel>>((ref) {
       [];
 });
 
-/// Search query notifier - migrated to Riverpod 3.x
+/// Search query notifier with 300ms debounce
 class ChannelSearchQueryNotifier extends Notifier<String> {
+  Timer? _debounce;
+
   @override
-  String build() => '';
+  String build() {
+    ref.onDispose(() => _debounce?.cancel());
+    return '';
+  }
 
   void setQuery(String query) {
-    state = query;
+    _debounce?.cancel();
+    if (query.isEmpty) {
+      // Clear immediately for responsiveness
+      state = '';
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      state = query;
+    });
   }
 
   void clear() {
+    _debounce?.cancel();
     state = '';
   }
 }
