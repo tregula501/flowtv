@@ -12,12 +12,13 @@ extension StringExtensions on String {
     return split(' ').map((word) => word.capitalize).join(' ');
   }
 
-  /// Check if string is a valid URL
+  /// Check if string is a valid HTTP/HTTPS URL
   bool get isValidUrl {
-    final urlPattern = RegExp(
-      r'^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$',
-    );
-    return urlPattern.hasMatch(this);
+    final uri = Uri.tryParse(this);
+    return uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
   }
 
   /// Check if string is a valid M3U URL
