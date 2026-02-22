@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../../domain/services/cast_types.dart';
 import '../../providers/cast_provider.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
@@ -14,7 +15,7 @@ import '../../widgets/video_player_controls.dart';
 class PlayerScreen extends ConsumerWidget {
   const PlayerScreen({super.key});
 
-  Widget _buildVideoWithAspectRatio(
+  static Widget _buildVideoWithAspectRatio(
     VideoController controller,
     AspectRatioMode mode,
   ) {
@@ -156,170 +157,270 @@ class PlayerScreen extends ConsumerWidget {
             ),
           ),
 
-          // Video player
+          // Video player / Cast overlay
           Expanded(
-            child: Stack(
-              children: [
-                // Video with aspect ratio control
-                Center(
-                  child: _buildVideoWithAspectRatio(
-                    playerController.videoController,
-                    playerState.aspectRatioMode,
-                  ),
-                ),
+            child: Consumer(
+              builder: (context, ref, _) {
+                final castState = ref.watch(castControllerProvider);
+                final isCasting = castState.isConnected &&
+                    castState.playbackState != CastPlaybackState.idle;
 
-                // Prebuffering indicator with progress
-                if (playerState.isPrebuffering)
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(
-                            color: Colors.white,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            l10n.prebuffering,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${playerState.bufferedDuration.inSeconds}s / ${playerState.bufferSize.durationSeconds}s',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: 150,
-                            child: LinearProgressIndicator(
-                              value: playerState.bufferSize.durationSeconds > 0
-                                  ? (playerState.bufferedDuration.inMilliseconds /
-                                          (playerState.bufferSize.durationSeconds * 1000))
-                                      .clamp(0.0, 1.0)
-                                  : 0.0,
-                              backgroundColor: Colors.white24,
-                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                // Reconnecting indicator (auto-retry in progress)
-                else if (playerState.isReconnecting)
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(
-                            color: Colors.orange,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            l10n.reconnecting,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.retryAttempt(playerState.retryAttempt, playerState.maxRetries),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                // Regular buffering indicator (during playback)
-                else if (playerState.isBuffering)
-                  const Center(
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                    ),
-                  ),
+                if (isCasting) {
+                  return _CastOverlay(
+                    deviceName: castState.connectedDevice?.name ?? '',
+                    playbackState: castState.playbackState,
+                    onStop: () async {
+                      await ref
+                          .read(castControllerProvider.notifier)
+                          .disconnect();
+                    },
+                  );
+                }
 
-                // Error message (only shown when not reconnecting)
-                if (playerState.error != null && !playerState.isReconnecting)
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      margin: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: Colors.white,
-                            size: 48,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.playbackError,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(color: Colors.white),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            playerState.error!,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: () {
-                              playerController.playChannel(currentChannel);
-                            },
-                            child: Text(l10n.retry),
-                          ),
-                        ],
+                return Stack(
+                  children: [
+                    // Video with aspect ratio control
+                    Center(
+                      child: _buildVideoWithAspectRatio(
+                        playerController.videoController,
+                        playerState.aspectRatioMode,
                       ),
                     ),
-                  ),
 
-                // Controls overlay
-                const Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: VideoPlayerControls(),
-                ),
-              ],
+                    // Prebuffering indicator with progress
+                    if (playerState.isPrebuffering)
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(
+                                color: Colors.white,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                l10n.prebuffering,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${playerState.bufferedDuration.inSeconds}s / ${playerState.bufferSize.durationSeconds}s',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: 150,
+                                child: LinearProgressIndicator(
+                                  value: playerState.bufferSize.durationSeconds > 0
+                                      ? (playerState.bufferedDuration.inMilliseconds /
+                                              (playerState.bufferSize.durationSeconds * 1000))
+                                          .clamp(0.0, 1.0)
+                                      : 0.0,
+                                  backgroundColor: Colors.white24,
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    // Reconnecting indicator (auto-retry in progress)
+                    else if (playerState.isReconnecting)
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CircularProgressIndicator(
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                l10n.reconnecting,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                l10n.retryAttempt(playerState.retryAttempt, playerState.maxRetries),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    // Regular buffering indicator (during playback)
+                    else if (playerState.isBuffering)
+                      const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                        ),
+                      ),
+
+                    // Error message (only shown when not reconnecting)
+                    if (playerState.error != null && !playerState.isReconnecting)
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.8),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.error_outline,
+                                color: Colors.white,
+                                size: 48,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                l10n.playbackError,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(color: Colors.white),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                playerState.error!,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton(
+                                onPressed: () {
+                                  playerController.playChannel(currentChannel);
+                                },
+                                child: Text(l10n.retry),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // Controls overlay
+                    const Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: VideoPlayerControls(),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Overlay shown when casting to a Chromecast device.
+class _CastOverlay extends StatelessWidget {
+  final String deviceName;
+  final CastPlaybackState playbackState;
+  final VoidCallback onStop;
+
+  const _CastOverlay({
+    required this.deviceName,
+    required this.playbackState,
+    required this.onStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cast_connected,
+              color: Colors.blue,
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              l10n.castingToDevice(deviceName),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _playbackLabel(playbackState),
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: onStop,
+              icon: const Icon(Icons.stop),
+              label: Text(l10n.stopCasting),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _playbackLabel(CastPlaybackState state) {
+    switch (state) {
+      case CastPlaybackState.playing:
+        return 'Playing';
+      case CastPlaybackState.buffering:
+        return 'Buffering...';
+      case CastPlaybackState.loading:
+        return 'Loading...';
+      case CastPlaybackState.paused:
+        return 'Paused';
+      case CastPlaybackState.stopped:
+        return 'Stopped';
+      case CastPlaybackState.idle:
+        return '';
+    }
   }
 }

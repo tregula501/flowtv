@@ -38,6 +38,12 @@ class CastService implements ICastService {
   Timer? _discoveryDebounce;
   Set<String> _lastDeviceKeys = {};
 
+  // Auto-retry state for stream errors
+  CastMediaInfo? _lastMedia;
+  int _retryCount = 0;
+  static const _maxRetries = 3;
+  Timer? _retryTimer;
+
   // Session state
   final _sessionController = StreamController<CastSessionState>.broadcast();
   @override
@@ -149,6 +155,8 @@ class CastService implements ICastService {
           switch (status.playerState) {
             case CastMediaPlayerState.playing:
               playbackState = CastPlaybackState.playing;
+              // Stream is playing — reset retry counter
+              _retryCount = 0;
             case CastMediaPlayerState.paused:
               playbackState = CastPlaybackState.paused;
             case CastMediaPlayerState.buffering:
@@ -158,6 +166,12 @@ class CastService implements ICastService {
             case CastMediaPlayerState.idle:
             case CastMediaPlayerState.unknown:
               playbackState = CastPlaybackState.idle;
+              // Auto-retry on stream error (IPTV streams often drop after ~10 min)
+              if (status.idleReason == GoogleCastMediaIdleReason.error &&
+                  _lastMedia != null &&
+                  _sessionState.isConnected) {
+                _scheduleRetry();
+              }
           }
 
           _sessionState = _sessionState.copyWith(
@@ -283,6 +297,9 @@ class CastService implements ICastService {
   @override
   Future<void> disconnect() async {
     try {
+      _retryTimer?.cancel();
+      _lastMedia = null;
+      _retryCount = 0;
       await GoogleCastSessionManager.instance.endSessionAndStopCasting();
       _sessionState = const CastSessionState();
       _sessionController.add(_sessionState);
@@ -349,6 +366,37 @@ class CastService implements ICastService {
     return defaultType;
   }
 
+  /// Schedule an auto-retry after a stream error.
+  /// Guards against duplicate callbacks from the native Cast SDK,
+  /// which fires idleReason:ERROR twice in rapid succession.
+  void _scheduleRetry() {
+    // Already have a retry scheduled — ignore duplicate callback
+    if (_retryTimer?.isActive ?? false) return;
+
+    if (_retryCount >= _maxRetries) {
+      AppLogger.error(
+        'Cast: Stream error — max retries ($_maxRetries) reached, giving up',
+      );
+      _lastMedia = null;
+      _retryCount = 0;
+      return;
+    }
+
+    _retryCount++;
+    final delay = Duration(seconds: 2 * _retryCount); // 2s, 4s, 6s backoff
+    AppLogger.info(
+      'Cast: Stream error — retrying in ${delay.inSeconds}s '
+      '(attempt $_retryCount/$_maxRetries)',
+    );
+
+    _retryTimer = Timer(delay, () async {
+      final media = _lastMedia;
+      if (media == null || !_sessionState.isConnected) return;
+      AppLogger.info('Cast: Auto-retrying "${media.title}"...');
+      await castMedia(media);
+    });
+  }
+
   @override
   Future<bool> castMedia(CastMediaInfo media) async {
     await _initCompleter.future;
@@ -356,6 +404,9 @@ class CastService implements ICastService {
       AppLogger.error('Cast: Not connected to any device');
       return false;
     }
+
+    // Store for auto-retry on stream errors
+    _lastMedia = media;
 
     try {
       final castUrl = _prepareCastUrl(media.url);
@@ -459,6 +510,7 @@ class CastService implements ICastService {
 
   @override
   void dispose() {
+    _retryTimer?.cancel();
     _discoveryDebounce?.cancel();
     _deviceSubscription?.cancel();
     _sessionSubscription?.cancel();
