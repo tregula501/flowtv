@@ -139,7 +139,7 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
   }
 
   Future<void> _closeWindow() async {
-    _player.dispose();
+    await _player.stop();
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       await windowManager.close();
     }
