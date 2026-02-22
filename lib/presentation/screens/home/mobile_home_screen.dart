@@ -736,6 +736,11 @@ class _CastDeviceSheet extends ConsumerWidget {
 
                         final success = await castNotifier.connect(device);
                         if (success && context.mounted) {
+                          // Stop local playback to avoid duplicate audio
+                          ref
+                              .read(playerControllerProvider.notifier)
+                              .pause();
+
                           // After connecting, cast the current channel
                           final castSuccess = await castNotifier.castMedia(
                             url: channel.streamUrl,

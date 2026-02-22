@@ -141,18 +141,22 @@ class CastService {
   StreamSubscription? _mediaStatusSubscription;
   StreamSubscription? _positionSubscription;
 
-  void _init() {
+  Future<void> _init() async {
     if (_initialized) return;
     _initialized = true;
 
     try {
-      // Initialize with default options
-      GoogleCastContext.instance.setSharedInstanceWithOptions(
-        GoogleCastOptions(
-          physicalVolumeButtonsWillControlDeviceVolume: true,
-          disableDiscoveryAutostart: false,
+      // Initialize with the Default Media Receiver app ID
+      // The base GoogleCastOptions class does NOT include appId in toMap(),
+      // which causes a TypeCastException in the native Kotlin code.
+      // GoogleCastOptionsAndroid includes appId and is required for sessions to work.
+      final initResult =
+          await GoogleCastContext.instance.setSharedInstanceWithOptions(
+        GoogleCastOptionsAndroid(
+          appId: GoogleCastDiscoveryCriteria.kDefaultApplicationId,
         ),
       );
+      AppLogger.info('Cast: Context initialized, result=$initResult');
 
       // Listen to device discovery
       _deviceSubscription =
@@ -188,10 +192,19 @@ class CastService {
       _sessionSubscription =
           GoogleCastSessionManager.instance.currentSessionStream.listen(
         (session) {
+          final connectionState =
+              GoogleCastSessionManager.instance.connectionState;
           final isConnected = session != null &&
-              GoogleCastSessionManager.instance.connectionState ==
-                  GoogleCastConnectState.connected;
+              connectionState == GoogleCastConnectState.connected;
           final device = session?.device;
+
+          AppLogger.info(
+            'Cast session event: session=${session != null}, '
+            'connectionState=$connectionState, '
+            'isConnected=$isConnected, '
+            'device=${device?.friendlyName}, '
+            'sessionId=${session?.sessionID}',
+          );
 
           _sessionState = _sessionState.copyWith(
             isConnected: isConnected,
@@ -206,9 +219,6 @@ class CastService {
             clearDevice: device == null,
           );
           _sessionController.add(_sessionState);
-
-          AppLogger.info(
-              'Cast session: connected=$isConnected, device=${device?.friendlyName}',);
         },
         onError: (e) {
           AppLogger.error('Cast session error: $e');
@@ -287,8 +297,20 @@ class CastService {
     }
   }
 
-  /// Connect to a Cast device
+  /// Connect to a Cast device with automatic retry
   Future<bool> connect(CastDeviceInfo deviceInfo) async {
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      final result = await _tryConnect(deviceInfo, attempt);
+      if (result) return true;
+      if (attempt < 2) {
+        AppLogger.info('Cast: Retrying connection (attempt ${attempt + 1})...');
+        await Future.delayed(const Duration(seconds: 1));
+      }
+    }
+    return false;
+  }
+
+  Future<bool> _tryConnect(CastDeviceInfo deviceInfo, int attempt) async {
     try {
       final device = deviceInfo.device;
       if (device == null) {
@@ -296,32 +318,41 @@ class CastService {
         return false;
       }
 
-      AppLogger.info('Cast: Connecting to ${device.friendlyName}');
+      AppLogger.info(
+          'Cast: Connecting to ${device.friendlyName} (attempt $attempt)',);
+      AppLogger.info(
+          'Cast: connectionState before start: '
+          '${GoogleCastSessionManager.instance.connectionState}');
+
       final started = await GoogleCastSessionManager.instance
           .startSessionWithDevice(device);
 
+      AppLogger.info('Cast: startSessionWithDevice returned: $started');
+      AppLogger.info(
+          'Cast: connectionState after start: '
+          '${GoogleCastSessionManager.instance.connectionState}');
+
       if (!started) {
-        AppLogger.error('Cast: Failed to start session');
+        AppLogger.error('Cast: Failed to start session (attempt $attempt)');
         return false;
       }
 
-      // Wait for the connection to actually be established
-      // The session stream will update _sessionState.isConnected
+      // Wait for connection via session stream instead of polling
       AppLogger.info('Cast: Session started, waiting for connection...');
 
-      // Wait up to 10 seconds for connection
-      for (int i = 0; i < 100; i++) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (_sessionState.isConnected) {
-          AppLogger.info('Cast: Connected successfully');
-          return true;
-        }
+      try {
+        await sessionStream
+            .where((state) => state.isConnected)
+            .first
+            .timeout(const Duration(seconds: 15));
+        AppLogger.info('Cast: Connected successfully');
+        return true;
+      } on TimeoutException {
+        AppLogger.error('Cast: Connection timeout (attempt $attempt)');
+        return false;
       }
-
-      AppLogger.error('Cast: Connection timeout');
-      return false;
     } catch (e) {
-      AppLogger.error('Cast: Connection failed - $e');
+      AppLogger.error('Cast: Connection failed (attempt $attempt) - $e');
       return false;
     }
   }
@@ -336,6 +367,43 @@ class CastService {
     } catch (e) {
       AppLogger.error('Cast: Disconnect failed - $e');
     }
+  }
+
+  /// Prepare a stream URL for Chromecast playback.
+  /// Xtream Codes URLs serve raw MPEG-TS by default, but the Default Media
+  /// Receiver needs an HLS manifest. Appending .m3u8 tells the server to
+  /// return HLS format instead.
+  /// Also downgrades HTTPS to HTTP for IPTV streams because many servers
+  /// redirect HLS segments from HTTPS to plain HTTP (different IP), which
+  /// causes mixed-content blocking in the Chromecast's Chrome-based receiver.
+  String _prepareCastUrl(String url) {
+    var castUrl = url;
+
+    // Already has a streaming extension - skip format conversion
+    final lowerUrl = castUrl.toLowerCase();
+    final needsM3u8 = !lowerUrl.contains('.m3u8') &&
+        !lowerUrl.contains('.mpd') &&
+        !lowerUrl.endsWith('.mp4') &&
+        !lowerUrl.endsWith('.ts');
+
+    if (needsM3u8) {
+      // Xtream Codes pattern: /username/password/stream_id
+      final xtreamPattern = RegExp(r'/[^/]+/[^/]+/\d+$');
+      if (xtreamPattern.hasMatch(castUrl) || RegExp(r'/\d+$').hasMatch(castUrl)) {
+        AppLogger.info('Cast: Appending .m3u8 for HLS format');
+        castUrl = '$castUrl.m3u8';
+      }
+    }
+
+    // Downgrade HTTPS to HTTP for IPTV streams to avoid mixed-content issues.
+    // IPTV servers often redirect HLS segment requests from HTTPS to HTTP
+    // (different backend IP), which the Chromecast receiver blocks.
+    if (castUrl.startsWith('https://')) {
+      castUrl = castUrl.replaceFirst('https://', 'http://');
+      AppLogger.info('Cast: Using HTTP to avoid mixed-content redirect issues');
+    }
+
+    return castUrl;
   }
 
   /// Detect content type from URL patterns
@@ -393,21 +461,26 @@ class CastService {
     }
 
     try {
-      // Determine content type based on URL
-      final contentType = _detectContentType(media.url, media.contentType);
+      // Prepare the URL for Chromecast compatibility
+      final castUrl = _prepareCastUrl(media.url);
+      final contentType = _detectContentType(castUrl, media.contentType);
 
       AppLogger.info('Cast: Loading media:');
       AppLogger.info('  Title: ${media.title}');
-      AppLogger.info('  URL: ${media.url}');
+      AppLogger.info('  Original URL: ${media.url}');
+      AppLogger.info('  Cast URL: $castUrl');
       AppLogger.info('  ContentType: $contentType');
       AppLogger.info('  Connected device: ${_sessionState.connectedDevice?.name}');
 
       final mediaInfo = GoogleCastMediaInformation(
-        contentId: media.url,
-        contentUrl: Uri.parse(media.url),
+        contentId: castUrl,
+        contentUrl: Uri.parse(castUrl),
         contentType: contentType,
         streamType: CastMediaStreamType.live, // IPTV is typically live
-        metadata: GoogleCastMovieMediaMetadata(
+        // Use GenericMediaMetadata instead of MovieMediaMetadata because
+        // MovieMediaMetadata.toMap() doesn't filter null values, causing a
+        // kotlin.Long cast crash in the native code when releaseDate is null.
+        metadata: GoogleCastGenericMediaMetadata(
           title: media.title,
           subtitle: media.subtitle,
           images: media.imageUrl != null
