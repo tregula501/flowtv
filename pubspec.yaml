@@ -62,6 +62,9 @@ dependencies:
   # Chromecast support (Android/iOS)
   flutter_chrome_cast: ^1.2.8
 
+  # Secure credential storage
+  flutter_secure_storage: ^9.2.4
+
   # Note: Recording uses FFmpeg via Process (Windows/Desktop).
   # FFmpeg must be installed and available in PATH or app directory.
 

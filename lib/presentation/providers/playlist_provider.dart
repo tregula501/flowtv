@@ -6,6 +6,7 @@ import '../../data/datasources/local/drift/app_database.dart';
 import '../../data/datasources/remote/m3u_parser.dart';
 import '../../data/datasources/remote/xtream_api_client.dart';
 import '../../core/utils/logger.dart';
+import '../../core/utils/secure_storage.dart';
 import 'epg_provider.dart' show ProgressState;
 
 /// Progress callback for tracking import progress
@@ -194,20 +195,21 @@ class PlaylistManager {
     final existingCount = await _db.playlists.count().getSingle();
     final isActive = existingCount == 0;
 
-    // Save playlist with Xtream credentials
+    // Save playlist (credentials stored securely, not in database)
     final playlistId = await _db.into(_db.playlists).insert(
       PlaylistsCompanion.insert(
         name: name,
         url: serverUrl,
         type: PlaylistType.xtream,
         createdAt: DateTime.now(),
-        username: Value(username),
-        password: Value(password),
         isActive: Value(isActive),
         channelCount: Value(total),
         lastRefresh: Value(DateTime.now()),
       ),
     );
+
+    // Store credentials in encrypted secure storage
+    await SecureStorage.storeCredentials(playlistId, username, password);
 
     // Batch insert channels in chunks
     const batchSize = 500;
@@ -284,6 +286,9 @@ class PlaylistManager {
 
     // Delete playlist
     await (_db.delete(_db.playlists)..where((t) => t.id.equals(playlistId))).go();
+
+    // Clean up any stored credentials
+    await SecureStorage.deleteCredentials(playlistId);
 
     AppLogger.info('Deleted playlist: $playlistId');
   }
@@ -369,18 +374,25 @@ class PlaylistManager {
     Playlist playlist, {
     PlaylistProgressCallback? onProgress,
   }) async {
-    if (playlist.username == null || playlist.password == null) {
-      throw Exception('Xtream playlist missing credentials');
-    }
-
     _ref.read(playlistProgressProvider.notifier).startLoading('Connecting to server...');
     onProgress?.call(0, 100, 'Connecting to server...');
     _updateProgress(0, 100, 'Connecting to server...');
 
+    // Read credentials from secure storage (fall back to database for backward compat)
+    final (secureUsername, securePassword) =
+        await SecureStorage.getCredentials(playlist.id);
+    final username = secureUsername ?? playlist.username;
+    final password = securePassword ?? playlist.password;
+
+    if (username == null || password == null) {
+      _ref.read(playlistProgressProvider.notifier).stopLoading();
+      throw Exception('Xtream playlist missing credentials');
+    }
+
     final client = XtreamApiClient(
       serverUrl: playlist.url,
-      username: playlist.username!,
-      password: playlist.password!,
+      username: username,
+      password: password,
     );
 
     // Authenticate
