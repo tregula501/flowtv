@@ -81,15 +81,16 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
   }
 
   Widget _buildHomeScreen() {
-    // Use width-based breakpoint so foldables/tablets get the richer
-    // desktop-style layout when unfolded, while phones stay with the
-    // mobile bottom-nav UI.  Desktop platforms always get HomeScreen.
+    // Desktop platforms always get the sidebar+grid layout.
     if (!Platform.isAndroid && !Platform.isIOS) {
       return const HomeScreen();
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= 600) {
+    // On mobile, use shortestSide so phones always stay on the mobile UI
+    // (even in landscape) while tablets/foldables get the desktop layout.
+    return Builder(
+      builder: (context) {
+        final shortestSide = MediaQuery.of(context).size.shortestSide;
+        if (shortestSide >= 600) {
           return const HomeScreen();
         }
         return const MobileHomeScreen();
