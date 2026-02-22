@@ -347,8 +347,8 @@ class CastService implements ICastService {
 
       AppLogger.info('Cast: Loading media:');
       AppLogger.info('  Title: ${media.title}');
-      AppLogger.info('  Original URL: ${media.url}');
-      AppLogger.info('  Cast URL: $castUrl');
+      AppLogger.info('  Original URL: ${AppLogger.redactUrl(media.url)}');
+      AppLogger.info('  Cast URL: ${AppLogger.redactUrl(castUrl)}');
       AppLogger.info('  ContentType: $contentType');
       AppLogger.info('  Connected device: ${_sessionState.connectedDevice?.name}');
 

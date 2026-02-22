@@ -672,7 +672,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       // Enhanced logging for debugging
       AppLogger.info('=== PLAY CHANNEL START ===');
       AppLogger.info('Channel: ${channel.name}');
-      AppLogger.info('Stream URL: ${channel.streamUrl}');
+      AppLogger.info('Stream URL: ${AppLogger.redactUrl(channel.streamUrl)}');
       AppLogger.info('Buffer size: ${_currentBufferSize.displayName}');
       AppLogger.info('Platform: ${Platform.operatingSystem}');
 
