@@ -103,6 +103,8 @@ class CastDeviceSheet extends ConsumerWidget {
                   ElevatedButton(
                     onPressed: () async {
                       try {
+                        // Stop local player to free the connection for Chromecast
+                        ref.read(playerControllerProvider.notifier).stop();
                         final success = await castNotifier.castMedia(
                           url: channel.streamUrl,
                           title: channel.name,
@@ -208,9 +210,10 @@ class CastDeviceSheet extends ConsumerWidget {
 
                           final success = await castNotifier.connect(device);
                           if (success && context.mounted) {
+                            // Stop local player to free the connection for Chromecast
                             ref
                                 .read(playerControllerProvider.notifier)
-                                .pause();
+                                .stop();
 
                             final castSuccess = await castNotifier.castMedia(
                               url: channel.streamUrl,
