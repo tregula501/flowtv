@@ -142,16 +142,16 @@ class AppDatabase extends _$AppDatabase {
 
   // Bump this when you change the schema. Add a migration step below.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
-        // Create index for faster EPG lookups (also added in v1->v2 migration)
+        // Unique index enables differential upsert and fast EPG lookups
         await customStatement(
-          'CREATE INDEX IF NOT EXISTS idx_epg_channel_start '
+          'CREATE UNIQUE INDEX IF NOT EXISTS idx_epg_channel_start '
           'ON epg_programs (channel_id, start_time)',
         );
         // Create default settings
@@ -178,6 +178,14 @@ class AppDatabase extends _$AppDatabase {
           // v1 -> v2: Add index on EPG programs for faster channel lookups.
           await customStatement(
             'CREATE INDEX IF NOT EXISTS idx_epg_channel_start '
+            'ON epg_programs (channel_id, start_time)',
+          );
+        }
+        if (from < 3) {
+          // v2 -> v3: Upgrade to UNIQUE index for differential upsert support.
+          await customStatement('DROP INDEX IF EXISTS idx_epg_channel_start');
+          await customStatement(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_epg_channel_start '
             'ON epg_programs (channel_id, start_time)',
           );
         }

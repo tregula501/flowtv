@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../widgets/video_player_controls.dart';
@@ -32,6 +33,7 @@ class PlayerScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final playerState = ref.watch(playerControllerProvider);
     final playerController = ref.watch(playerControllerProvider.notifier);
     final currentChannel = ref.watch(currentChannelProvider);
@@ -39,10 +41,10 @@ class PlayerScreen extends ConsumerWidget {
     if (currentChannel == null) {
       return Container(
         color: Colors.black,
-        child: const Center(
+        child: Center(
           child: Text(
-            'Select a channel to start watching',
-            style: TextStyle(color: Colors.white54),
+            l10n.selectChannel,
+            style: const TextStyle(color: Colors.white54),
           ),
         ),
       );
@@ -89,35 +91,35 @@ class PlayerScreen extends ConsumerWidget {
                     color: Colors.white70,
                     size: 20,
                   ),
-                  tooltip: playerState.isExpanded ? 'Exit expanded' : 'Expand player',
+                  tooltip: playerState.isExpanded ? l10n.exitExpanded : l10n.expandPlayer,
                   onPressed: () => playerController.toggleExpanded(),
                 ),
 
                 // PiP button
                 IconButton(
                   icon: const Icon(Icons.picture_in_picture, color: Colors.white70, size: 20),
-                  tooltip: 'Picture-in-Picture',
+                  tooltip: l10n.pictureInPicture,
                   onPressed: () => playerController.togglePiPMode(),
                 ),
 
                 // Fullscreen button
                 IconButton(
                   icon: const Icon(Icons.fullscreen, color: Colors.white70, size: 20),
-                  tooltip: 'Fullscreen',
+                  tooltip: l10n.fullscreen,
                   onPressed: () => playerController.toggleFullscreen(),
                 ),
 
                 // Open in new window button (feature not yet available)
                 IconButton(
                   icon: const Icon(Icons.open_in_new_rounded, color: Colors.white38, size: 20),
-                  tooltip: 'Open in New Window (Coming Soon)',
+                  tooltip: l10n.openNewWindow,
                   onPressed: () async {
                     final success = await playerController.openInNewWindow();
                     if (!success && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Multi-window coming soon! Use external player (VLC) for now.'),
-                          duration: Duration(seconds: 3),
+                        SnackBar(
+                          content: Text(l10n.multiWindowComingSoon),
+                          duration: const Duration(seconds: 3),
                         ),
                       );
                     }
@@ -127,14 +129,14 @@ class PlayerScreen extends ConsumerWidget {
                 // Open in external player button (VLC)
                 IconButton(
                   icon: const Icon(Icons.launch, color: Colors.white70, size: 20),
-                  tooltip: 'Open in VLC/External Player',
+                  tooltip: l10n.openExternalPlayer,
                   onPressed: () async {
                     final success = await playerController.openInExternalPlayer();
                     if (!success && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Could not open in external player. Make sure VLC is installed.'),
-                          duration: Duration(seconds: 3),
+                        SnackBar(
+                          content: Text(l10n.externalPlayerError),
+                          duration: const Duration(seconds: 3),
                         ),
                       );
                     }
@@ -144,7 +146,7 @@ class PlayerScreen extends ConsumerWidget {
                 // Close button
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white70),
-                  tooltip: 'Close player',
+                  tooltip: l10n.closePlayer,
                   onPressed: () {
                     ref.read(currentChannelProvider.notifier).select(null);
                     playerController.stop();
@@ -182,9 +184,9 @@ class PlayerScreen extends ConsumerWidget {
                             color: Colors.white,
                           ),
                           const SizedBox(height: 16),
-                          const Text(
-                            'Prebuffering...',
-                            style: TextStyle(
+                          Text(
+                            l10n.prebuffering,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -231,9 +233,9 @@ class PlayerScreen extends ConsumerWidget {
                             color: Colors.orange,
                           ),
                           const SizedBox(height: 16),
-                          const Text(
-                            'Reconnecting...',
-                            style: TextStyle(
+                          Text(
+                            l10n.reconnecting,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
@@ -241,7 +243,7 @@ class PlayerScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Attempt ${playerState.retryAttempt} of ${playerState.maxRetries}',
+                            l10n.retryAttempt(playerState.retryAttempt, playerState.maxRetries),
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
@@ -279,7 +281,7 @@ class PlayerScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Playback Error',
+                            l10n.playbackError,
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
@@ -299,7 +301,7 @@ class PlayerScreen extends ConsumerWidget {
                             onPressed: () {
                               playerController.playChannel(currentChannel);
                             },
-                            child: const Text('Retry'),
+                            child: Text(l10n.retry),
                           ),
                         ],
                       ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -570,11 +571,13 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       return;
     }
 
-    // Calculate delay with exponential backoff: 1s, 2s, 4s
-    final delaySeconds = 1 << _retryAttempt; // 2^retryAttempt
+    // Calculate delay with exponential backoff + jitter: ~1s, ~2s, ~4s
+    final baseDelayMs = (1 << _retryAttempt) * 1000; // 2^retryAttempt seconds
+    final jitter = (baseDelayMs * 0.25 * (2 * Random().nextDouble() - 1)).toInt();
+    final delayMs = baseDelayMs + jitter;
     _retryAttempt++;
 
-    AppLogger.info('Stream error, retry attempt $_retryAttempt/$_maxRetries in ${delaySeconds}s');
+    AppLogger.info('Stream error, retry attempt $_retryAttempt/$_maxRetries in ${delayMs}ms');
 
     state = state.copyWith(
       isReconnecting: true,
@@ -583,7 +586,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     );
 
     _retryTimer?.cancel();
-    _retryTimer = Timer(Duration(seconds: delaySeconds), () {
+    _retryTimer = Timer(Duration(milliseconds: delayMs), () {
       _attemptReconnect();
     });
   }

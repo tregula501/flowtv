@@ -16,6 +16,7 @@ import '../multiview/multiview_screen.dart';
 import '../recordings/recordings_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../l10n/app_localizations.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -104,6 +105,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final playlistsAsync = ref.watch(playlistsProvider);
     final activePlaylist = ref.watch(activePlaylistProvider);
     final currentChannel = ref.watch(currentChannelProvider);
@@ -146,8 +148,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Scaffold(
         body: playlistsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => const Center(
-            child: Text('Failed to load playlists. Please restart the app.'),
+          error: (_, _) => Center(
+            child: Text(l10n.failedToLoadPlaylists),
           ),
           data: (playlists) {
             if (playlists.isEmpty) {
@@ -170,7 +172,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: Column(
                     children: [
                       // App bar
-                      _buildAppBar(context, activePlaylist?.name ?? 'FlowTV'),
+                      _buildAppBar(context, activePlaylist?.name ?? l10n.appTitle),
 
                       // Channel grid
                       const Expanded(
@@ -225,6 +227,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildAppBar(BuildContext context, String title) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -254,7 +257,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               controller: _searchController,
               focusNode: _focusNode,
               decoration: InputDecoration(
-                hintText: 'Search channels... (Ctrl+F)',
+                hintText: l10n.searchChannelsCtrlF,
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -279,7 +282,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Multi-view button
           IconButton(
             icon: const Icon(Icons.grid_view),
-            tooltip: 'Multi-View (4 channels)',
+            tooltip: l10n.multiViewChannels,
             onPressed: () {
               Navigator.push(
                 context,
@@ -291,7 +294,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // EPG Guide button
           IconButton(
             icon: const Icon(Icons.schedule),
-            tooltip: 'TV Guide',
+            tooltip: l10n.tvGuide,
             onPressed: () {
               Navigator.push(
                 context,
@@ -303,7 +306,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Recordings button
           IconButton(
             icon: const Icon(Icons.video_library),
-            tooltip: 'Recordings',
+            tooltip: l10n.recordings,
             onPressed: () {
               Navigator.push(
                 context,
@@ -315,7 +318,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Settings button
           IconButton(
             icon: const Icon(Icons.settings),
-            tooltip: 'Settings',
+            tooltip: l10n.settings,
             onPressed: () {
               Navigator.push(
                 context,
@@ -329,6 +332,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -340,12 +344,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Welcome to FlowTV',
+            l10n.welcomeTitle,
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            'Add a playlist to get started',
+            l10n.welcomeSubtitle,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
@@ -354,7 +358,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ElevatedButton.icon(
             onPressed: () => _showAddPlaylistDialog(context),
             icon: const Icon(Icons.add),
-            label: const Text('Add Playlist'),
+            label: Text(l10n.addPlaylist),
           ),
         ],
       ),
@@ -390,6 +394,7 @@ class _PiPPlayerView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currentChannel = ref.watch(currentChannelProvider);
     final playerNotifier = ref.read(playerControllerProvider.notifier);
 
@@ -417,7 +422,7 @@ class _PiPPlayerView extends ConsumerWidget {
                   // Exit PiP button
                   _PiPIconButton(
                     icon: Icons.close_fullscreen,
-                    tooltip: 'Exit PiP (double-click)',
+                    tooltip: l10n.exitPipDoubleClick,
                     onTap: () => playerNotifier.setPiPMode(false),
                   ),
                 ],

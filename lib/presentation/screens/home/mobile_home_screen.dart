@@ -10,6 +10,7 @@ import '../../providers/cast_provider.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../settings/settings_screen.dart';
 import '../epg_guide/epg_guide_screen.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Mobile-optimized home screen for Android/iOS
 class MobileHomeScreen extends ConsumerStatefulWidget {
@@ -31,6 +32,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final playlistsAsync = ref.watch(playlistsProvider);
     final currentChannel = ref.watch(currentChannelProvider);
     final playerState = ref.watch(playerControllerProvider);
@@ -48,7 +50,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('FlowTV'),
+        title: Text(l10n.appTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
@@ -58,8 +60,8 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
       ),
       body: playlistsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(
-          child: Text('Failed to load playlists. Please restart the app.'),
+        error: (_, _) => Center(
+          child: Text(l10n.failedToLoadPlaylists),
         ),
         data: (playlists) => _buildBody(playlists.isEmpty),
       ),
@@ -67,22 +69,22 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
         currentIndex: _currentIndex,
         type: BottomNavigationBarType.fixed,
         onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.live_tv),
-            label: 'Channels',
+            icon: const Icon(Icons.live_tv),
+            label: l10n.channels,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.star),
-            label: 'Favorites',
+            icon: const Icon(Icons.star),
+            label: l10n.favorites,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.schedule),
-            label: 'Guide',
+            icon: const Icon(Icons.schedule),
+            label: l10n.guide,
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
+            icon: const Icon(Icons.settings),
+            label: l10n.settings,
           ),
         ],
       ),
@@ -90,6 +92,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   }
 
   Widget _buildBody(bool noPlaylists) {
+    final l10n = AppLocalizations.of(context)!;
     switch (_currentIndex) {
       case 0:
         return noPlaylists
@@ -100,7 +103,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             ? _buildNoPlaylistTab(
                 context,
                 icon: Icons.star_border,
-                message: 'Add a playlist to see favorites',
+                message: l10n.addPlaylistForFavorites,
               )
             : const _MobileChannelList(showFavoritesOnly: true);
       case 2:
@@ -108,7 +111,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             ? _buildNoPlaylistTab(
                 context,
                 icon: Icons.schedule,
-                message: 'Add a playlist to view the TV guide',
+                message: l10n.addPlaylistForGuide,
               )
             : const EpgGuideScreen();
       case 3:
@@ -121,6 +124,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -134,13 +138,13 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Welcome to FlowTV',
+              l10n.welcomeTitle,
               style: Theme.of(context).textTheme.headlineMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Add a playlist to get started',
+              l10n.welcomeSubtitle,
               style: Theme.of(context).textTheme.bodyLarge,
               textAlign: TextAlign.center,
             ),
@@ -148,7 +152,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             ElevatedButton.icon(
               onPressed: () => _showAddPlaylistDialog(context),
               icon: const Icon(Icons.add),
-              label: const Text('Add Playlist'),
+              label: Text(l10n.addPlaylist),
             ),
           ],
         ),
@@ -161,6 +165,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     required IconData icon,
     required String message,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -182,7 +187,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             OutlinedButton.icon(
               onPressed: () => _showAddPlaylistDialog(context),
               icon: const Icon(Icons.add),
-              label: const Text('Add Playlist'),
+              label: Text(l10n.addPlaylist),
             ),
           ],
         ),
@@ -220,6 +225,7 @@ class _MobileChannelList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final channels = showFavoritesOnly
         ? ref.watch(favoriteChannelsProvider)
         : ref.watch(searchedChannelsProvider);
@@ -238,14 +244,14 @@ class _MobileChannelList extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              showFavoritesOnly ? 'No favorites yet' : 'No channels found',
+              showFavoritesOnly ? l10n.noFavorites : l10n.noChannels,
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (showFavoritesOnly)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  'Tap the star on a channel to add it',
+                  l10n.tapStarToFavorite,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -267,7 +273,7 @@ class _MobileChannelList extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                   child: FilterChip(
-                    label: const Text('All'),
+                    label: Text(l10n.all),
                     selected: selectedGroup == null,
                     onSelected: (_) {
                       ref.read(selectedGroupProvider.notifier).select(null);
@@ -395,6 +401,7 @@ class _MobilePlayerScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final playerState = ref.watch(playerControllerProvider);
     final playerNotifier = ref.read(playerControllerProvider.notifier);
     final castState = ref.watch(castControllerProvider);
@@ -441,7 +448,7 @@ class _MobilePlayerScreen extends ConsumerWidget {
                       const Icon(Icons.error_outline, color: Colors.red, size: 48),
                       const SizedBox(height: 16),
                       Text(
-                        'Playback Error',
+                        l10n.playbackError,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: Colors.white,
                         ),
@@ -455,7 +462,7 @@ class _MobilePlayerScreen extends ConsumerWidget {
                       const SizedBox(height: 16),
                       ElevatedButton(
                         onPressed: () => playerNotifier.playChannel(channel),
-                        child: const Text('Retry'),
+                        child: Text(l10n.retry),
                       ),
                     ],
                   ),
@@ -609,6 +616,7 @@ class _CastDeviceSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final castState = ref.watch(castControllerProvider);
     final castNotifier = ref.read(castControllerProvider.notifier);
 
@@ -623,10 +631,10 @@ class _CastDeviceSheet extends ConsumerWidget {
             children: [
               const Icon(Icons.cast, color: Colors.white),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'Cast to',
-                  style: TextStyle(
+                  l10n.castTo,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -669,14 +677,14 @@ class _CastDeviceSheet extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Connected to ${castState.connectedDevice!.name}',
+                          'Connected to ${castState.connectedDevice!.name}', // TODO: l10n
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
-                          'Tap to cast "${channel.name}"',
+                          'Tap to cast "${channel.name}"', // TODO: l10n
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
@@ -699,7 +707,7 @@ class _CastDeviceSheet extends ConsumerWidget {
                         if (success && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Casting "${channel.name}"'),
+                              content: Text(l10n.castingTo(channel.name, castState.connectedDevice!.name)),
                               backgroundColor: Colors.green,
                             ),
                           );
@@ -709,14 +717,14 @@ class _CastDeviceSheet extends ConsumerWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Cast failed: $e'),
+                              content: Text(l10n.castFailed(e.toString())),
                               backgroundColor: Colors.red,
                             ),
                           );
                         }
                       }
                     },
-                    child: const Text('Cast'),
+                    child: Text(l10n.cast),
                   ),
                   const SizedBox(width: 8),
                   // Disconnect button
@@ -724,7 +732,7 @@ class _CastDeviceSheet extends ConsumerWidget {
                     onPressed: () async {
                       await castNotifier.disconnect();
                     },
-                    child: const Text('Disconnect'),
+                    child: Text(l10n.disconnect),
                   ),
                 ],
               ),
@@ -732,15 +740,12 @@ class _CastDeviceSheet extends ConsumerWidget {
 
           // Device list
           if (castState.devices.isEmpty && !castState.isDiscovering)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
               child: Center(
                 child: Text(
-                  'No Cast devices found.\n\n'
-                  'Make sure your device is on the same network.\n\n'
-                  'Note: Audio-only devices (Google Home, Nest Mini)\n'
-                  'are hidden as they cannot display video.',
-                  style: TextStyle(color: Colors.white70),
+                  l10n.noCastDevices,
+                  style: const TextStyle(color: Colors.white70),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -787,7 +792,7 @@ class _CastDeviceSheet extends ConsumerWidget {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Connecting to ${device.name}...'),
+                                content: Text(l10n.connectingTo(device.name)),
                                 duration: const Duration(seconds: 2),
                               ),
                             );
@@ -814,8 +819,8 @@ class _CastDeviceSheet extends ConsumerWidget {
                                 SnackBar(
                                   content: Text(
                                     castSuccess
-                                        ? 'Casting "${channel.name}" to ${device.name}'
-                                        : 'Connected but failed to start playback',
+                                        ? l10n.castingTo(channel.name, device.name)
+                                        : l10n.connectedButPlaybackFailed,
                                   ),
                                   backgroundColor:
                                       castSuccess ? Colors.green : Colors.orange,
@@ -829,7 +834,7 @@ class _CastDeviceSheet extends ConsumerWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    'Failed to connect to ${device.name}',),
+                                    l10n.failedToConnect(device.name),),
                                 backgroundColor: Colors.red,
                               ),
                             );
@@ -839,7 +844,7 @@ class _CastDeviceSheet extends ConsumerWidget {
                             ScaffoldMessenger.of(context).hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Cast error: $e'),
+                                content: Text(l10n.castError(e.toString())),
                                 backgroundColor: Colors.red,
                               ),
                             );
@@ -871,13 +876,14 @@ class _SearchDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      title: const Text('Search Channels'),
+      title: Text(l10n.searchChannelsDialog),
       content: TextField(
         controller: controller,
-        decoration: const InputDecoration(
-          hintText: 'Enter channel name...',
-          prefixIcon: Icon(Icons.search),
+        decoration: InputDecoration(
+          hintText: l10n.enterChannelName,
+          prefixIcon: const Icon(Icons.search),
         ),
         autofocus: true,
         onSubmitted: onSearch,
@@ -888,15 +894,15 @@ class _SearchDialog extends StatelessWidget {
             controller.clear();
             onSearch('');
           },
-          child: const Text('Clear'),
+          child: Text(l10n.clear),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
         ElevatedButton(
           onPressed: () => onSearch(controller.text),
-          child: const Text('Search'),
+          child: Text(l10n.search),
         ),
       ],
     );

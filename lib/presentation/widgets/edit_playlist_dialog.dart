@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/playlist_provider.dart';
 import '../../data/datasources/local/drift/app_database.dart' show Playlist;
 import '../../core/extensions/string_extensions.dart';
+import '../../l10n/app_localizations.dart';
 
 class EditPlaylistDialog extends ConsumerStatefulWidget {
   final Playlist playlist;
@@ -40,6 +41,7 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Dialog(
       child: Container(
         width: 500,
@@ -62,7 +64,7 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
                   const Icon(Icons.edit),
                   const SizedBox(width: 12),
                   Text(
-                    'Edit Playlist',
+                    l10n.editPlaylist,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const Spacer(),
@@ -83,31 +85,31 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
                   children: [
                     TextField(
                       controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Playlist Name',
-                        hintText: 'My IPTV',
+                      decoration: InputDecoration(
+                        labelText: l10n.playlistName,
+                        hintText: l10n.playlistNameHint,
                       ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _urlController,
-                      decoration: const InputDecoration(
-                        labelText: 'M3U URL',
-                        hintText: 'https://example.com/playlist.m3u',
+                      decoration: InputDecoration(
+                        labelText: l10n.m3uUrl,
+                        hintText: l10n.m3uUrlHint,
                       ),
                       maxLines: 2,
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _epgUrlController,
-                      decoration: const InputDecoration(
-                        labelText: 'EPG URL (Optional)',
-                        hintText: 'https://example.com/epg.xml',
+                      decoration: InputDecoration(
+                        labelText: l10n.epgUrlOptional,
+                        hintText: l10n.epgUrlHint,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Note: Changing the URL will require a refresh to update channels.',
+                      l10n.editPlaylistUrlNote,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
@@ -155,7 +157,7 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
                 children: [
                   TextButton(
                     onPressed: _isSaving ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                    child: Text(l10n.cancel),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
@@ -166,7 +168,7 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Save'),
+                        : Text(l10n.save),
                   ),
                 ],
               ),
@@ -178,6 +180,7 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _error = null;
       _isSaving = true;
@@ -189,10 +192,10 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
       final epgUrl = _epgUrlController.text.trim();
 
       if (name.isEmpty) {
-        throw Exception('Please enter a playlist name');
+        throw Exception(l10n.validationPlaylistName);
       }
       if (url.isEmpty || !url.isValidUrl) {
-        throw Exception('Please enter a valid M3U URL');
+        throw Exception(l10n.validationM3uUrl);
       }
 
       await ref.read(playlistManagerProvider).updatePlaylist(

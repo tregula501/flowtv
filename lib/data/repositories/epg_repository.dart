@@ -29,15 +29,11 @@ class EpgRepository {
     final programs = result.programs;
     final total = programs.length;
 
-    AppLogger.info('Parsed $total EPG programs, starting database insert...');
-    onProgress?.call(0, total, 'Clearing old data...');
+    AppLogger.info('Parsed $total EPG programs, starting differential upsert...');
+    onProgress?.call(0, total, 'Updating programs...');
 
-    // Phase 2: Clear old EPG data
-    // TODO: Replace full-table DELETE with differential upsert to avoid
-    // data loss during refresh and reduce I/O on large EPG datasets.
-    await _db.delete(_db.epgPrograms).go();
-
-    // Phase 3: Batch insert new programs in chunks for progress tracking
+    // Phase 2: Differential upsert — INSERT OR REPLACE keyed on (channel_id, start_time).
+    // Unchanged rows get replaced in-place; new rows are inserted; stale rows cleaned up after.
     const batchSize = 1000;
     int processed = 0;
 
@@ -45,7 +41,6 @@ class EpgRepository {
       final end = (i + batchSize > programs.length) ? programs.length : i + batchSize;
       final chunk = programs.sublist(i, end);
 
-      // Use Drift batch for efficient bulk insert
       await _db.batch((batch) {
         for (final program in chunk) {
           batch.insert(
@@ -60,15 +55,25 @@ class EpgRepository {
               episode: Value(program.episode),
               iconUrl: Value(program.iconUrl),
             ),
+            mode: InsertMode.insertOrReplace,
           );
         }
       });
 
       processed = end;
-      onProgress?.call(processed, total, 'Storing programs...');
+      onProgress?.call(processed, total, 'Updating programs...');
     }
 
-    AppLogger.info('Stored $total EPG programs using batch inserts');
+    // Phase 3: Clean up stale programs that ended more than 6 hours ago
+    final staleThreshold = DateTime.now().subtract(const Duration(hours: 6));
+    final deleted = await (_db.delete(_db.epgPrograms)
+          ..where((t) => t.endTime.isSmallerThanValue(staleThreshold)))
+        .go();
+    if (deleted > 0) {
+      AppLogger.info('EPG: Cleaned up $deleted stale programs');
+    }
+
+    AppLogger.info('EPG: Upserted $total programs');
     return total;
   }
 

@@ -1,20 +1,237 @@
 {
   "@@locale": "en",
+
   "appTitle": "FlowTV",
+
+  "channels": "Channels",
   "allChannels": "All Channels",
   "favorites": "Favorites",
   "settings": "Settings",
+  "guide": "Guide",
+
   "addPlaylist": "Add Playlist",
+  "editPlaylist": "Edit Playlist",
   "searchChannels": "Search channels...",
+  "searchChannelsCtrlF": "Search channels... (Ctrl+F)",
+  "enterChannelName": "Enter channel name...",
   "noChannels": "No channels found",
+  "noFavorites": "No favorites yet",
+  "tapStarToFavorite": "Tap the star on a channel to add it",
+
+  "welcomeTitle": "Welcome to FlowTV",
+  "welcomeSubtitle": "Add a playlist to get started",
+  "addPlaylistForFavorites": "Add a playlist to see favorites",
+  "addPlaylistForGuide": "Add a playlist to view the TV guide",
+
   "playlistName": "Playlist Name",
+  "playlistNameHint": "My IPTV",
   "playlistUrl": "Playlist URL",
+  "m3uUrl": "M3U URL",
+  "m3uUrlHint": "https://example.com/playlist.m3u",
+  "xtreamCodes": "Xtream Codes",
+  "serverUrl": "Server URL",
+  "serverUrlHint": "http://example.com:8080",
+  "username": "Username",
+  "password": "Password",
   "epgUrl": "EPG URL",
+  "epgUrlOptional": "EPG URL (Optional)",
+  "epgUrlHint": "https://example.com/epg.xml",
+  "epgAutoDetectHint": "EPG URL will be auto-detected from playlist if available",
+  "editPlaylistUrlNote": "Note: Changing the URL will require a refresh to update channels.",
+
+  "validationPlaylistName": "Please enter a playlist name",
+  "validationM3uUrl": "Please enter a valid M3U URL",
+  "validationServerUrl": "Please enter a server URL",
+  "validationUsername": "Please enter a username",
+  "validationPassword": "Please enter a password",
+
   "cancel": "Cancel",
   "save": "Save",
   "delete": "Delete",
   "refresh": "Refresh",
   "loading": "Loading...",
   "error": "Error",
-  "retry": "Retry"
+  "retry": "Retry",
+  "ok": "OK",
+  "clear": "Clear",
+  "search": "Search",
+  "stop": "Stop",
+  "edit": "Edit",
+  "close": "Close",
+
+  "setActive": "Set Active",
+
+  "appearance": "Appearance",
+  "theme": "Theme",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+
+  "playlists": "Playlists",
+  "failedToLoadPlaylists": "Failed to load playlists. Please restart the app.",
+  "failedToLoadPlaylistsShort": "Failed to load playlists",
+
+  "tvGuideEpg": "TV Guide (EPG)",
+  "tvGuide": "TV Guide",
+  "refreshEpg": "Refresh EPG",
+  "goToNow": "Go to Now",
+  "notLoaded": "Not loaded",
+  "failedToLoadChannels": "Failed to load channels.",
+  "failedToLoadGuide": "Failed to load TV guide data.",
+  "watchNow": "Watch Now",
+  "epgAutoRefreshInterval": "Auto-refresh interval",
+  "epgDisabled": "Disabled",
+  "epgEveryHour": "Every {hours} hour",
+  "@epgEveryHour": {
+    "placeholders": {
+      "hours": {"type": "int"}
+    }
+  },
+  "epgRefreshOff": "Off",
+  "epgRefresh1Hour": "1 hour",
+  "epgRefresh3Hours": "3 hours",
+  "epgRefresh6Hours": "6 hours",
+  "epgRefresh12Hours": "12 hours",
+  "epgRefresh24Hours": "24 hours",
+
+  "about": "About",
+  "aboutDescription": "A cross-platform IPTV streaming application with EPG, DVR, and multi-view support.",
+  "gplLicense": "GPL v3 License",
+
+  "selectChannel": "Select a channel to start watching",
+  "exitExpanded": "Exit expanded",
+  "expandPlayer": "Expand player",
+  "pictureInPicture": "Picture-in-Picture",
+  "exitPipDoubleClick": "Exit PiP (double-click)",
+  "fullscreen": "Fullscreen",
+  "openNewWindow": "Open in New Window (Coming Soon)",
+  "multiWindowComingSoon": "Multi-window coming soon! Use external player (VLC) for now.",
+  "openExternalPlayer": "Open in VLC/External Player",
+  "externalPlayerError": "Could not open in external player. Make sure VLC is installed.",
+  "closePlayer": "Close player",
+  "prebuffering": "Prebuffering...",
+  "reconnecting": "Reconnecting...",
+  "retryAttempt": "Attempt {current} of {max}",
+  "@retryAttempt": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "max": {"type": "int"}
+    }
+  },
+  "playbackError": "Playback Error",
+
+  "multiView": "Multi-View",
+  "multiViewChannels": "Multi-View (4 channels)",
+  "keyboardShortcuts": "Keyboard shortcuts",
+  "multiViewControls": "Multi-View Controls",
+  "slot": "Slot {number}",
+  "@slot": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "addChannel": "Add Channel",
+  "setAudioActive": "Set Audio Active",
+  "changeChannel": "Change Channel",
+  "removeChannel": "Remove Channel",
+  "audio": "Audio: ",
+
+  "recordings": "Recordings",
+  "all": "All",
+  "recording": "Recording",
+  "scheduled": "Scheduled",
+  "noRecordingsYet": "No recordings yet",
+  "noActiveRecordings": "No active recordings",
+  "noScheduledRecordings": "No scheduled recordings",
+  "failedToLoadRecordings": "Failed to load recordings.",
+  "playComingSoon": "Play (coming soon)",
+  "stopRecording": "Stop Recording",
+  "startRecording": "Start Recording",
+  "deleteRecording": "Delete Recording",
+  "stopRecordingConfirm": "Are you sure you want to stop recording \"{title}\"?",
+  "@stopRecordingConfirm": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "deleteRecordingConfirm": "Are you sure you want to delete \"{title}\"?",
+  "@deleteRecordingConfirm": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "recordingPlaybackNotImplemented": "Recording playback is not yet implemented",
+  "statusScheduled": "Scheduled",
+  "statusRecording": "Recording",
+  "statusCompleted": "Completed",
+  "statusFailed": "Failed",
+  "statusCancelled": "Cancelled",
+  "started": "Started: ",
+  "scheduledAt": "Scheduled: ",
+
+  "qualitySettings": "Quality & Settings",
+  "audioSection": "AUDIO",
+  "videoQualitySection": "VIDEO QUALITY",
+  "subtitlesSection": "SUBTITLES",
+  "subtitleOff": "Off",
+  "aspectRatioSection": "ASPECT RATIO",
+  "playbackSpeedSection": "PLAYBACK SPEED",
+  "bufferSizeSection": "BUFFER SIZE",
+  "refreshStream": "Refresh Stream",
+  "refreshingChannel": "Refreshing {name}...",
+  "@refreshingChannel": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "stoppedRecordingChannel": "Stopped recording {name}",
+  "@stoppedRecordingChannel": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "startedRecordingChannel": "Started recording {name}",
+  "@startedRecordingChannel": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "castTo": "Cast to",
+  "cast": "Cast",
+  "disconnect": "Disconnect",
+  "castingTo": "Casting \"{title}\" to {device}",
+  "@castingTo": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "device": {"type": "String"}
+    }
+  },
+  "castFailed": "Cast failed: {error}",
+  "@castFailed": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "castError": "Cast error: {error}",
+  "@castError": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "connectingTo": "Connecting to {device}...",
+  "@connectingTo": {
+    "placeholders": {
+      "device": {"type": "String"}
+    }
+  },
+  "connectedButPlaybackFailed": "Connected but failed to start playback",
+  "failedToConnect": "Failed to connect to {device}",
+  "@failedToConnect": {
+    "placeholders": {
+      "device": {"type": "String"}
+    }
+  },
+  "noCastDevices": "No Cast devices found.\n\nMake sure your device is on the same network.\n\nNote: Audio-only devices (Google Home, Nest Mini)\nare hidden as they cannot display video.",
+  "searchChannelsDialog": "Search Channels"
 }

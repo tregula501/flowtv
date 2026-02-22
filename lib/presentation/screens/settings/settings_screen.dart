@@ -8,42 +8,45 @@ import '../../widgets/add_playlist_dialog.dart';
 import '../../widgets/edit_playlist_dialog.dart';
 import '../../../core/extensions/datetime_extensions.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../l10n/app_localizations.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(l10n.settings),
       ),
       body: ListView(
         children: [
           _buildSection(
             context,
-            'Appearance',
+            l10n.appearance,
             [
               _buildThemeTile(context, ref),
             ],
           ),
           _buildSection(
             context,
-            'Playlists',
+            l10n.playlists,
             [
               _buildPlaylistsTile(context, ref),
             ],
           ),
           _buildSection(
             context,
-            'EPG',
+            l10n.tvGuideEpg,
             [
               _buildEpgTile(context, ref),
             ],
           ),
           _buildSection(
             context,
-            'About',
+            l10n.about,
             [
               _buildAboutTile(context),
             ],
@@ -80,6 +83,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Widget _buildThemeTile(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final themeMode = ref.watch(themeModeProvider);
 
     final icon = switch (themeMode) {
@@ -89,22 +93,22 @@ class SettingsScreen extends ConsumerWidget {
     };
 
     final label = switch (themeMode) {
-      ThemeMode.system => 'System',
-      ThemeMode.light => 'Light',
-      ThemeMode.dark => 'Dark',
+      ThemeMode.system => l10n.themeSystem,
+      ThemeMode.light => l10n.themeLight,
+      ThemeMode.dark => l10n.themeDark,
     };
 
     return ListTile(
       leading: Icon(icon),
-      title: const Text('Theme'),
+      title: Text(l10n.theme),
       subtitle: Text(label),
       trailing: DropdownButton<ThemeMode>(
         value: themeMode,
         underline: const SizedBox(),
-        items: const [
-          DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
-          DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
-          DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+        items: [
+          DropdownMenuItem(value: ThemeMode.system, child: Text(l10n.themeSystem)),
+          DropdownMenuItem(value: ThemeMode.light, child: Text(l10n.themeLight)),
+          DropdownMenuItem(value: ThemeMode.dark, child: Text(l10n.themeDark)),
         ],
         onChanged: (value) {
           if (value != null) {
@@ -116,19 +120,20 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Widget _buildPlaylistsTile(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final playlistsAsync = ref.watch(playlistsProvider);
     final progressState = ref.watch(playlistProgressProvider);
 
     return playlistsAsync.when(
-      loading: () => const ListTile(
-        leading: Icon(Icons.playlist_play),
-        title: Text('Playlists'),
-        subtitle: Text('Loading...'),
+      loading: () => ListTile(
+        leading: const Icon(Icons.playlist_play),
+        title: Text(l10n.playlists),
+        subtitle: Text(l10n.loading),
       ),
-      error: (_, _) => const ListTile(
-        leading: Icon(Icons.playlist_play),
-        title: Text('Playlists'),
-        subtitle: Text('Failed to load playlists'),
+      error: (_, _) => ListTile(
+        leading: const Icon(Icons.playlist_play),
+        title: Text(l10n.playlists),
+        subtitle: Text(l10n.failedToLoadPlaylistsShort),
       ),
       data: (playlists) => Column(
         children: [
@@ -182,24 +187,27 @@ class SettingsScreen extends ConsumerWidget {
                   '${playlist.channelCount} channels${playlist.lastRefresh != null ? ' - Updated ${playlist.lastRefresh!.relativeTime}' : ''}',
                 ),
                 trailing: PopupMenuButton(
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'activate',
-                      child: Text('Set Active'),
-                    ),
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Text('Edit'),
-                    ),
-                    const PopupMenuItem(
-                      value: 'refresh',
-                      child: Text('Refresh'),
-                    ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Delete'),
-                    ),
-                  ],
+                  itemBuilder: (context) {
+                    final l10n = AppLocalizations.of(context)!;
+                    return [
+                      PopupMenuItem(
+                        value: 'activate',
+                        child: Text(l10n.setActive),
+                      ),
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text(l10n.edit),
+                      ),
+                      PopupMenuItem(
+                        value: 'refresh',
+                        child: Text(l10n.refresh),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(l10n.delete),
+                      ),
+                    ];
+                  },
                   onSelected: (value) async {
                     final manager = ref.read(playlistManagerProvider);
                     switch (value) {
@@ -226,7 +234,7 @@ class SettingsScreen extends ConsumerWidget {
               ),),
           ListTile(
             leading: const Icon(Icons.add),
-            title: const Text('Add Playlist'),
+            title: Text(l10n.addPlaylist),
             onTap: () {
               showDialog(
                 context: context,
@@ -240,6 +248,7 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Widget _buildEpgTile(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final progressState = ref.watch(epgProgressProvider);
     final lastUpdate = ref.watch(epgLastUpdateProvider);
     final refreshInterval = ref.watch(epgRefreshIntervalProvider);
@@ -248,13 +257,13 @@ class SettingsScreen extends ConsumerWidget {
       children: [
         ListTile(
           leading: const Icon(Icons.schedule),
-          title: const Text('TV Guide (EPG)'),
+          title: Text(l10n.tvGuideEpg),
           subtitle: progressState.isLoading
               ? _buildProgressSubtitle(progressState)
               : Text(
                   lastUpdate != null
                       ? 'Last updated: ${lastUpdate.relativeTime}'
-                      : 'Not loaded',
+                      : l10n.notLoaded,
                 ),
           trailing: progressState.isLoading
               ? const SizedBox(
@@ -288,22 +297,22 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ListTile(
           leading: const Icon(Icons.timer),
-          title: const Text('Auto-refresh interval'),
+          title: Text(l10n.epgAutoRefreshInterval),
           subtitle: Text(
             refreshInterval == 0
-                ? 'Disabled'
-                : 'Every $refreshInterval ${refreshInterval == 1 ? "hour" : "hours"}',
+                ? l10n.epgDisabled
+                : l10n.epgEveryHour(refreshInterval),
           ),
           trailing: DropdownButton<int>(
             value: refreshInterval,
             underline: const SizedBox(),
-            items: const [
-              DropdownMenuItem(value: 0, child: Text('Off')),
-              DropdownMenuItem(value: 1, child: Text('1 hour')),
-              DropdownMenuItem(value: 3, child: Text('3 hours')),
-              DropdownMenuItem(value: 6, child: Text('6 hours')),
-              DropdownMenuItem(value: 12, child: Text('12 hours')),
-              DropdownMenuItem(value: 24, child: Text('24 hours')),
+            items: [
+              DropdownMenuItem(value: 0, child: Text(l10n.epgRefreshOff)),
+              DropdownMenuItem(value: 1, child: Text(l10n.epgRefresh1Hour)),
+              DropdownMenuItem(value: 3, child: Text(l10n.epgRefresh3Hours)),
+              DropdownMenuItem(value: 6, child: Text(l10n.epgRefresh6Hours)),
+              DropdownMenuItem(value: 12, child: Text(l10n.epgRefresh12Hours)),
+              DropdownMenuItem(value: 24, child: Text(l10n.epgRefresh24Hours)),
             ],
             onChanged: (value) {
               if (value != null) {
@@ -319,6 +328,8 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Widget _buildAboutTile(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return ListTile(
       leading: const Icon(Icons.info_outline),
       title: const Text(AppConstants.appName),
@@ -328,11 +339,11 @@ class SettingsScreen extends ConsumerWidget {
           context: context,
           applicationName: AppConstants.appName,
           applicationVersion: AppConstants.appVersion,
-          applicationLegalese: 'GPL v3 License',
+          applicationLegalese: l10n.gplLicense,
           children: [
             const SizedBox(height: 16),
-            const Text(
-              'A cross-platform IPTV streaming application with EPG, DVR, and multi-view support.',
+            Text(
+              l10n.aboutDescription,
             ),
           ],
         );

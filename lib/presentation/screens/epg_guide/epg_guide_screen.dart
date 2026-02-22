@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/datasources/local/drift/app_database.dart' show Channel, EpgProgram;
 import '../../providers/channel_provider.dart';
@@ -98,12 +99,13 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final channelsAsync = ref.watch(channelsProvider);
     final isLoading = ref.watch(epgLoadingProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TV Guide'),
+        title: Text(l10n.tvGuide),
         actions: [
           if (isLoading)
             const Padding(
@@ -118,24 +120,25 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
             IconButton(
               icon: const Icon(Icons.refresh),
               onPressed: () => ref.read(epgManagerProvider).fetchEpg(),
-              tooltip: 'Refresh EPG',
+              tooltip: l10n.refreshEpg,
             ),
           IconButton(
             icon: const Icon(Icons.today),
             onPressed: _scrollToNow,
-            tooltip: 'Go to Now',
+            tooltip: l10n.goToNow,
           ),
         ],
       ),
       body: channelsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => const Center(child: Text('Failed to load channels.')),
+        error: (_, _) => Center(child: Text(l10n.failedToLoadChannels)),
         data: (channels) => _buildEpgGrid(context, channels),
       ),
     );
   }
 
   Widget _buildEpgGrid(BuildContext context, List<Channel> channels) {
+    final l10n = AppLocalizations.of(context)!;
     final endTime = _startTime.add(const Duration(hours: _hoursToShow));
     final epgDataAsync = ref.watch(
       epgGridDataProvider((from: _startTime, to: endTime)),
@@ -143,7 +146,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
 
     return epgDataAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, _) => const Center(child: Text('Failed to load TV guide data.')),
+      error: (_, _) => Center(child: Text(l10n.failedToLoadGuide)),
       data: (epgData) => Column(
         children: [
           // Time header
@@ -372,6 +375,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   }
 
   void _onProgramTap(Channel channel, EpgProgram program) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -392,7 +396,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(l10n.close),
           ),
           if (program.isLive)
             ElevatedButton(
@@ -401,7 +405,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
                 ref.read(currentChannelProvider.notifier).select(channel);
                 ref.read(playerControllerProvider.notifier).playChannel(channel);
               },
-              child: const Text('Watch Now'),
+              child: Text(l10n.watchNow),
             ),
         ],
       ),

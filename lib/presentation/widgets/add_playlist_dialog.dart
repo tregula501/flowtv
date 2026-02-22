@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/playlist_provider.dart';
 import '../../core/extensions/string_extensions.dart';
+import '../../l10n/app_localizations.dart';
 
 class AddPlaylistDialog extends ConsumerStatefulWidget {
   const AddPlaylistDialog({super.key});
@@ -50,6 +51,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Dialog(
       child: Container(
         width: 500,
@@ -72,7 +74,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
                   const Icon(Icons.playlist_add),
                   const SizedBox(width: 12),
                   Text(
-                    'Add Playlist',
+                    l10n.addPlaylist,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const Spacer(),
@@ -87,9 +89,9 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
             // Tabs
             TabBar(
               controller: _tabController,
-              tabs: const [
-                Tab(text: 'M3U URL'),
-                Tab(text: 'Xtream Codes'),
+              tabs: [
+                Tab(text: l10n.m3uUrl),
+                Tab(text: l10n.xtreamCodes),
               ],
             ),
 
@@ -144,7 +146,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
                 children: [
                   TextButton(
                     onPressed: _isLoading ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                    child: Text(l10n.cancel),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
@@ -155,7 +157,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Add Playlist'),
+                        : Text(l10n.addPlaylist),
                   ),
                 ],
               ),
@@ -167,6 +169,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
   }
 
   Widget _buildM3uForm() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -174,31 +177,31 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
         children: [
           TextField(
             controller: _m3uNameController,
-            decoration: const InputDecoration(
-              labelText: 'Playlist Name',
-              hintText: 'My IPTV',
+            decoration: InputDecoration(
+              labelText: l10n.playlistName,
+              hintText: l10n.playlistNameHint,
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _m3uUrlController,
-            decoration: const InputDecoration(
-              labelText: 'M3U URL',
-              hintText: 'https://example.com/playlist.m3u',
+            decoration: InputDecoration(
+              labelText: l10n.m3uUrl,
+              hintText: l10n.m3uUrlHint,
             ),
             maxLines: 2,
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _epgUrlController,
-            decoration: const InputDecoration(
-              labelText: 'EPG URL (Optional)',
-              hintText: 'https://example.com/epg.xml',
+            decoration: InputDecoration(
+              labelText: l10n.epgUrlOptional,
+              hintText: l10n.epgUrlHint,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'EPG URL will be auto-detected from playlist if available',
+            l10n.epgAutoDetectHint,
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -207,6 +210,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
   }
 
   Widget _buildXtreamForm() {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -214,31 +218,31 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
         children: [
           TextField(
             controller: _xtreamNameController,
-            decoration: const InputDecoration(
-              labelText: 'Playlist Name',
-              hintText: 'My IPTV',
+            decoration: InputDecoration(
+              labelText: l10n.playlistName,
+              hintText: l10n.playlistNameHint,
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _xtreamServerController,
-            decoration: const InputDecoration(
-              labelText: 'Server URL',
-              hintText: 'http://example.com:8080',
+            decoration: InputDecoration(
+              labelText: l10n.serverUrl,
+              hintText: l10n.serverUrlHint,
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _xtreamUsernameController,
-            decoration: const InputDecoration(
-              labelText: 'Username',
+            decoration: InputDecoration(
+              labelText: l10n.username,
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: _xtreamPasswordController,
-            decoration: const InputDecoration(
-              labelText: 'Password',
+            decoration: InputDecoration(
+              labelText: l10n.password,
             ),
             obscureText: true,
           ),
@@ -248,6 +252,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
   }
 
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _error = null;
       _isLoading = true;
@@ -261,10 +266,10 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
         final epgUrl = _epgUrlController.text.trim();
 
         if (name.isEmpty) {
-          throw Exception('Please enter a playlist name');
+          throw Exception(l10n.validationPlaylistName);
         }
         if (url.isEmpty || !url.isValidUrl) {
-          throw Exception('Please enter a valid M3U URL');
+          throw Exception(l10n.validationM3uUrl);
         }
 
         await ref.read(playlistManagerProvider).addM3uPlaylist(
@@ -280,16 +285,16 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
         final password = _xtreamPasswordController.text.trim();
 
         if (name.isEmpty) {
-          throw Exception('Please enter a playlist name');
+          throw Exception(l10n.validationPlaylistName);
         }
         if (serverUrl.isEmpty) {
-          throw Exception('Please enter a server URL');
+          throw Exception(l10n.validationServerUrl);
         }
         if (username.isEmpty) {
-          throw Exception('Please enter a username');
+          throw Exception(l10n.validationUsername);
         }
         if (password.isEmpty) {
-          throw Exception('Please enter a password');
+          throw Exception(l10n.validationPassword);
         }
 
         await ref.read(playlistManagerProvider).addXtreamPlaylist(

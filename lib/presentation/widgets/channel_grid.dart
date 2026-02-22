@@ -5,12 +5,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../providers/channel_provider.dart';
 import '../providers/player_provider.dart';
+import '../../l10n/app_localizations.dart';
 
 class ChannelGrid extends ConsumerWidget {
   const ChannelGrid({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final channels = ref.watch(searchedChannelsProvider);
     final currentChannel = ref.watch(currentChannelProvider);
 
@@ -26,7 +28,7 @@ class ChannelGrid extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'No channels found',
+              l10n.noChannels,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                   ),

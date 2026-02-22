@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/themes/app_theme.dart';
 import 'core/utils/logger.dart';
+import 'l10n/app_localizations.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/providers/epg_provider.dart';
 import 'presentation/providers/player_provider.dart';
@@ -74,14 +74,8 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('en', ''),
-      ],
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: _buildHomeScreen(),
     );
   }
