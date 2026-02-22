@@ -140,8 +140,9 @@ class AppSettingsTable extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  // Bump this when you change the schema. Add a migration step below.
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration {
@@ -164,7 +165,17 @@ class AppDatabase extends _$AppDatabase {
         );
       },
       onUpgrade: (Migrator m, int from, int to) async {
-        // Handle future migrations here
+        // Migration pattern: use sequential if-checks so each step runs in order.
+        // Example:
+        //   if (from < 3) { await m.addColumn(channels, channels.newCol); }
+        //   if (from < 4) { ... }
+        if (from < 2) {
+          // v1 -> v2: Add index on EPG programs for faster channel lookups.
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_epg_channel_start '
+            'ON epg_programs (channel_id, start_time)',
+          );
+        }
       },
     );
   }

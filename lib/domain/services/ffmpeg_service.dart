@@ -12,6 +12,7 @@ class RecordingSession {
   final String outputPath;
   final DateTime startTime;
   Process? _process;
+  StreamSubscription? _stderrSubscription;
   bool _isStopped = false;
 
   RecordingSession({
@@ -34,22 +35,26 @@ class FFmpegService {
 
   final Map<int, RecordingSession> _sessions = {};
   String? _ffmpegPath;
-  bool _initialized = false;
+  Completer<bool>? _initCompleter;
 
-  /// Initialize the service and find FFmpeg
+  /// Initialize the service and find FFmpeg.
+  /// Safe to call concurrently — uses a Completer guard.
   Future<bool> initialize() async {
-    if (_initialized) return _ffmpegPath != null;
+    if (_initCompleter != null) return _initCompleter!.future;
+
+    _initCompleter = Completer<bool>();
 
     _ffmpegPath = await _findFFmpeg();
-    _initialized = true;
 
     if (_ffmpegPath != null) {
       AppLogger.info('FFmpeg found at: $_ffmpegPath');
-      return true;
+      _initCompleter!.complete(true);
     } else {
       AppLogger.warning('FFmpeg not found. Recording will not work.');
-      return false;
+      _initCompleter!.complete(false);
     }
+
+    return _initCompleter!.future;
   }
 
   /// Check if FFmpeg is available
@@ -121,7 +126,7 @@ class FFmpegService {
     required String outputPath,
     Duration? maxDuration,
   }) async {
-    if (!_initialized) {
+    if (_initCompleter == null) {
       await initialize();
     }
 
@@ -178,9 +183,10 @@ class FFmpegService {
       session._process = process;
       _sessions[recordingId] = session;
 
-      // Log FFmpeg output
-      process.stderr.transform(const SystemEncoding().decoder).listen((data) {
-        // FFmpeg outputs to stderr even for normal operation
+      // Log FFmpeg output (store subscription for cleanup)
+      session._stderrSubscription = process.stderr
+          .transform(const SystemEncoding().decoder)
+          .listen((data) {
         if (data.contains('Error') || data.contains('error')) {
           AppLogger.error('FFmpeg error: $data');
         } else {
@@ -190,7 +196,16 @@ class FFmpegService {
 
       // Handle process exit
       process.exitCode.then((exitCode) {
-        AppLogger.info('FFmpeg recording $recordingId ended with code $exitCode');
+        if (exitCode != 0 && !session._isStopped) {
+          AppLogger.error(
+            'FFmpeg recording $recordingId failed with exit code $exitCode',
+          );
+        } else {
+          AppLogger.info(
+            'FFmpeg recording $recordingId ended with code $exitCode',
+          );
+        }
+        session._stderrSubscription?.cancel();
         _sessions.remove(recordingId);
       });
 
@@ -210,8 +225,17 @@ class FFmpegService {
       return false;
     }
 
+    // Guard against double-stop
+    if (session._isStopped) {
+      AppLogger.debug('Recording $recordingId already stopping');
+      return true;
+    }
+
     try {
       session._isStopped = true;
+
+      // Cancel stderr subscription
+      session._stderrSubscription?.cancel();
 
       // Send 'q' to FFmpeg to gracefully stop
       if (session._process != null) {
