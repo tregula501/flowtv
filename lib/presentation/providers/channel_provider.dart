@@ -94,6 +94,22 @@ final currentChannelProvider = NotifierProvider<CurrentChannelNotifier, Channel?
   CurrentChannelNotifier.new,
 );
 
+/// Recently watched channels (last 10, most recent first)
+final recentlyWatchedChannelsProvider = Provider<List<Channel>>((ref) {
+  final channelsAsync = ref.watch(channelsProvider);
+
+  return channelsAsync.whenOrNull(
+        data: (channels) {
+          final watched = channels
+              .where((c) => c.lastWatched != null)
+              .toList()
+            ..sort((a, b) => b.lastWatched!.compareTo(a.lastWatched!));
+          return watched.take(10).toList();
+        },
+      ) ??
+      [];
+});
+
 /// Search query notifier - migrated to Riverpod 3.x
 class ChannelSearchQueryNotifier extends Notifier<String> {
   @override

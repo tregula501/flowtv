@@ -258,5 +258,21 @@
     "placeholders": {
       "channel": {"type": "String"}
     }
-  }
+  },
+
+  "recentlyWatched": "Recently Watched",
+  "addToFavorites": "Add to Favorites",
+  "removeFromFavorites": "Remove from Favorites",
+  "castToDeviceAction": "Cast to Device",
+  "channelInfo": "Channel Info",
+  "channelGroup": "Group: {group}",
+  "@channelGroup": {
+    "placeholders": {
+      "group": {"type": "String"}
+    }
+  },
+  "bufferSize": "Buffer Size",
+  "noNetworkConnection": "No network connection",
+  "offlineMode": "You are offline. Cached data is shown.",
+  "networkRestored": "Network connection restored"
 }

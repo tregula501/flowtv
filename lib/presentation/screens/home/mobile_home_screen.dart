@@ -295,23 +295,79 @@ class _MobileChannelList extends ConsumerWidget {
             ),
           ),
 
-        // Channel list
+        // Channel list with optional recently watched header
         Expanded(
-          child: ListView.builder(
-            itemCount: channels.length,
-            itemBuilder: (context, index) {
-              final channel = channels[index];
-              return _MobileChannelTile(
-                channel: channel,
-                onTap: () => _playChannel(context, ref, channel),
-                onFavoriteToggle: () {
-                  ref.read(channelManagerProvider).toggleFavorite(channel.id);
-                },
-              );
-            },
-          ),
+          child: _buildChannelListView(context, ref, channels),
         ),
       ],
+    );
+  }
+
+  Widget _buildChannelListView(BuildContext context, WidgetRef ref, List<Channel> channels) {
+    final l10n = AppLocalizations.of(context)!;
+    final recentlyWatched = ref.watch(recentlyWatchedChannelsProvider);
+    final showRecent = !showFavoritesOnly && recentlyWatched.isNotEmpty;
+
+    return ListView.builder(
+      itemCount: channels.length + (showRecent ? 1 : 0),
+      itemBuilder: (context, index) {
+        // Recently watched horizontal row as first item
+        if (showRecent && index == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: Text(
+                  l10n.recentlyWatched,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+              ),
+              SizedBox(
+                height: 56,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: recentlyWatched.length,
+                  itemBuilder: (context, i) {
+                    final channel = recentlyWatched[i];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ActionChip(
+                        avatar: channel.logoUrl != null && channel.logoUrl!.isNotEmpty
+                            ? CircleAvatar(
+                                backgroundImage: NetworkImage(channel.logoUrl!),
+                                backgroundColor: Colors.grey.shade800,
+                              )
+                            : const CircleAvatar(child: Icon(Icons.tv, size: 16)),
+                        label: Text(
+                          channel.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onPressed: () => _playChannel(context, ref, channel),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const Divider(height: 1),
+            ],
+          );
+        }
+
+        final channelIndex = showRecent ? index - 1 : index;
+        final channel = channels[channelIndex];
+        return _MobileChannelTile(
+          channel: channel,
+          onTap: () => _playChannel(context, ref, channel),
+          onFavoriteToggle: () {
+            ref.read(channelManagerProvider).toggleFavorite(channel.id);
+          },
+        );
+      },
     );
   }
 
