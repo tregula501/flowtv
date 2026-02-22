@@ -8,8 +8,8 @@ class AppLogger {
   static bool _initialized = false;
   static LogLevel _minLevel = LogLevel.debug;
 
-  /// Pattern that matches username/password in Xtream-style URLs:
-  ///   http://host:port/<username>/<password>/...
+  // Pattern that matches username/password in Xtream-style URLs:
+  //   http://host:port/<username>/<password>/...
   static final _credentialPattern = RegExp(
     r'(https?://[^/]+/)[^/]+/[^/]+(/)',
   );

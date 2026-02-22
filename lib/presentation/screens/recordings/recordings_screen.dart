@@ -19,9 +19,9 @@ class RecordingsScreen extends ConsumerWidget {
           title: const Text('Recordings'),
           bottom: const TabBar(
             tabs: [
-              const Tab(text: 'All'),
-              const Tab(text: 'Recording'),
-              const Tab(text: 'Scheduled'),
+              Tab(text: 'All'),
+              Tab(text: 'Recording'),
+              Tab(text: 'Scheduled'),
             ],
           ),
         ),

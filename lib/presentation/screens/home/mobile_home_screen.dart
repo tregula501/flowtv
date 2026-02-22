@@ -770,7 +770,7 @@ class _CastDeviceSheet extends ConsumerWidget {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                  'Failed to connect to ${device.name}'),
+                                  'Failed to connect to ${device.name}',),
                               backgroundColor: Colors.red,
                             ),
                           );
