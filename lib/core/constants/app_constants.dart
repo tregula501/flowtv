@@ -15,6 +15,16 @@ class AppConstants {
   static const double channelTileHeight = 80.0;
   static const double epgRowHeight = 60.0;
 
+  // EPG grid dimensions
+  static const double epgTimeSlotWidth = 200.0;
+  static const double epgChannelColumnWidth = 160.0;
+  static const double epgGridRowHeight = 52.0;
+
+  // Player panel dimensions
+  static const double minPlayerWidth = 320.0;
+  static const double maxPlayerWidth = 800.0;
+  static const double defaultPlayerPanelWidth = 480.0;
+
   // Player constants
   static const double defaultVolume = 1.0;
   static const int seekDuration = 10; // seconds
@@ -22,4 +32,13 @@ class AppConstants {
   // Cache settings
   static const int maxCachedImages = 500;
   static const int imageCacheDays = 7;
+
+  // Network timeouts
+  static const int castConnectionTimeoutSecs = 15;
+  static const int m3uFetchTimeoutSecs = 60;
+  static const int epgFetchTimeoutSecs = 120;
+
+  // Database batch sizes
+  static const int epgBatchSize = 1000;
+  static const int channelBatchSize = 500;
 }
