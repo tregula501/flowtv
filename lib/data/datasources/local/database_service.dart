@@ -59,7 +59,8 @@ List<int> parseIntList(String json) {
   try {
     final list = jsonDecode(json) as List;
     return list.cast<int>();
-  } catch (_) {
+  } catch (e) {
+    AppLogger.warning('Failed to parse JSON int list: $e');
     return [];
   }
 }
@@ -68,7 +69,8 @@ List<String> parseStringList(String json) {
   try {
     final list = jsonDecode(json) as List;
     return list.cast<String>();
-  } catch (_) {
+  } catch (e) {
+    AppLogger.warning('Failed to parse JSON string list: $e');
     return [];
   }
 }
