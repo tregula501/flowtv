@@ -686,21 +686,32 @@ class _CastDeviceSheet extends ConsumerWidget {
                   // Cast current channel button
                   ElevatedButton(
                     onPressed: () async {
-                      final success = await castNotifier.castMedia(
-                        url: channel.streamUrl,
-                        title: channel.name,
-                        subtitle: channel.group,
-                        imageUrl: channel.logoUrl,
-                        contentType: 'video/mp4',
-                      );
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Casting "${channel.name}"'),
-                            backgroundColor: Colors.green,
-                          ),
+                      try {
+                        final success = await castNotifier.castMedia(
+                          url: channel.streamUrl,
+                          title: channel.name,
+                          subtitle: channel.group,
+                          imageUrl: channel.logoUrl,
+                          contentType: 'video/mp4',
                         );
-                        onClose();
+                        if (success && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Casting "${channel.name}"'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          onClose();
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Cast failed: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     },
                     child: const Text('Cast'),
@@ -769,56 +780,68 @@ class _CastDeviceSheet extends ConsumerWidget {
                         : null,
                     onTap: () async {
                       if (!isConnected) {
-                        // Show connecting feedback
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Connecting to ${device.name}...'),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        }
-
-                        final success = await castNotifier.connect(device);
-                        if (success && context.mounted) {
-                          // Stop local playback to avoid duplicate audio
-                          ref
-                              .read(playerControllerProvider.notifier)
-                              .pause();
-
-                          // After connecting, cast the current channel
-                          final castSuccess = await castNotifier.castMedia(
-                            url: channel.streamUrl,
-                            title: channel.name,
-                            subtitle: channel.group,
-                            imageUrl: channel.logoUrl,
-                            contentType: 'video/mp4',
-                          );
+                        try {
+                          // Show connecting feedback
                           if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Connecting to ${device.name}...'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+
+                          final success = await castNotifier.connect(device);
+                          if (success && context.mounted) {
+                            // Stop local playback to avoid duplicate audio
+                            ref
+                                .read(playerControllerProvider.notifier)
+                                .pause();
+
+                            // After connecting, cast the current channel
+                            final castSuccess = await castNotifier.castMedia(
+                              url: channel.streamUrl,
+                              title: channel.name,
+                              subtitle: channel.group,
+                              imageUrl: channel.logoUrl,
+                              contentType: 'video/mp4',
+                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    castSuccess
+                                        ? 'Casting "${channel.name}" to ${device.name}'
+                                        : 'Connected but failed to start playback',
+                                  ),
+                                  backgroundColor:
+                                      castSuccess ? Colors.green : Colors.orange,
+                                ),
+                              );
+                              onClose();
+                            }
+                          } else if (context.mounted) {
+                            // Connection failed
                             ScaffoldMessenger.of(context).hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  castSuccess
-                                      ? 'Casting "${channel.name}" to ${device.name}'
-                                      : 'Connected but failed to start playback',
-                                ),
-                                backgroundColor:
-                                    castSuccess ? Colors.green : Colors.orange,
+                                    'Failed to connect to ${device.name}',),
+                                backgroundColor: Colors.red,
                               ),
                             );
-                            onClose();
                           }
-                        } else if (context.mounted) {
-                          // Connection failed
-                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Failed to connect to ${device.name}',),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Cast error: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
                         }
                       }
                     },

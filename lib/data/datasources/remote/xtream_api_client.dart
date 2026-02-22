@@ -267,6 +267,7 @@ class XtreamApiClient {
     }
 
     return (response as List)
+        .whereType<Map<String, dynamic>>()
         .map((e) => XtreamCategory.fromJson(e))
         .toList();
   }
@@ -284,6 +285,7 @@ class XtreamApiClient {
     }
 
     return (response as List)
+        .whereType<Map<String, dynamic>>()
         .map((e) => XtreamChannel.fromJson(e))
         .toList();
   }
@@ -300,6 +302,7 @@ class XtreamApiClient {
     }
 
     return (response as List)
+        .whereType<Map<String, dynamic>>()
         .map((e) => XtreamCategory.fromJson(e))
         .toList();
   }
@@ -317,6 +320,7 @@ class XtreamApiClient {
     }
 
     return (response as List)
+        .whereType<Map<String, dynamic>>()
         .map((e) => XtreamVodItem.fromJson(e))
         .toList();
   }
@@ -333,6 +337,7 @@ class XtreamApiClient {
     }
 
     return (response as List)
+        .whereType<Map<String, dynamic>>()
         .map((e) => XtreamCategory.fromJson(e))
         .toList();
   }
@@ -350,6 +355,7 @@ class XtreamApiClient {
     }
 
     return (response as List)
+        .whereType<Map<String, dynamic>>()
         .map((e) => XtreamSeries.fromJson(e))
         .toList();
   }

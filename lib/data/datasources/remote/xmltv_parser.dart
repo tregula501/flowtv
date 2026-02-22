@@ -93,7 +93,11 @@ class XmltvParser {
   XmltvParseResult parseContent(String content) {
     try {
       final document = XmlDocument.parse(content);
-      final tv = document.findElements('tv').first;
+      final tvElements = document.findElements('tv');
+      if (tvElements.isEmpty) {
+        throw const EpgParseException('Invalid EPG: missing <tv> root element');
+      }
+      final tv = tvElements.first;
 
       final programs = <XmltvProgram>[];
       final channelIds = <String>{};

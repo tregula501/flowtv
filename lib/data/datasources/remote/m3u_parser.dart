@@ -47,6 +47,9 @@ class M3uParser {
   final Dio _dio;
   final bool _ownsDio;
 
+  // Cache compiled RegExp per attribute name to avoid recompilation on every line
+  static final _attrPatternCache = <String, List<RegExp>>{};
+
   M3uParser({Dio? dio})
       : _dio = dio ?? Dio(),
         _ownsDio = dio == null;
@@ -206,11 +209,11 @@ class M3uParser {
 
   /// Extract attribute value from M3U line
   String? _extractAttribute(String line, String attribute) {
-    // Match both: attribute="value" and attribute='value'
-    final patterns = [
+    // Use cached RegExp patterns — avoids recompilation per line per attribute
+    final patterns = _attrPatternCache.putIfAbsent(attribute, () => [
       RegExp('$attribute="([^"]*)"'),
       RegExp("$attribute='([^']*)'"),
-    ];
+    ]);
 
     for (final pattern in patterns) {
       final match = pattern.firstMatch(line);

@@ -177,6 +177,11 @@ class CastService implements ICastService {
       AppLogger.info('Cast: Service initialized');
     } catch (e) {
       AppLogger.error('Cast: Failed to initialize - $e');
+      // Clean up any subscriptions created before the error
+      _deviceSubscription?.cancel();
+      _sessionSubscription?.cancel();
+      _mediaStatusSubscription?.cancel();
+      _positionSubscription?.cancel();
     } finally {
       _initCompleter.complete();
     }

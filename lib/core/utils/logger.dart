@@ -8,10 +8,17 @@ class AppLogger {
   static bool _initialized = false;
   static LogLevel _minLevel = LogLevel.debug;
 
-  // Pattern that matches username/password in Xtream-style URLs:
+  // Patterns that match credentials in Xtream-style URLs:
   //   http://host:port/<username>/<password>/...
-  static final _credentialPattern = RegExp(
-    r'(https?://[^/]+/)[^/]+/[^/]+(/)',
+  //   http://host:port/movie/<username>/<password>/...
+  //   http://host:port/series/<username>/<password>/...
+  //   http://host:port/player_api.php?username=X&password=Y
+  static final _credentialPathPattern = RegExp(
+    r'(https?://[^/]+/)(?:movie/|series/)?[^/]+/[^/]+(/)',
+  );
+  static final _credentialQueryPattern = RegExp(
+    r'((?:username|password|token|api_key)=)[^&\s]+',
+    caseSensitive: false,
   );
 
   static void init() {
@@ -23,9 +30,11 @@ class AppLogger {
     _minLevel = level;
   }
 
-  /// Strip credentials from URLs before logging.
+  /// Strip credentials from URLs and common secret patterns before logging.
   static String redactUrl(String message) {
-    return message.replaceAll(_credentialPattern, r'$1***/***/');
+    var redacted = message.replaceAll(_credentialPathPattern, r'$1***/***/');
+    redacted = redacted.replaceAll(_credentialQueryPattern, r'$1***');
+    return redacted;
   }
 
   static void _log(
@@ -46,11 +55,11 @@ class AppLogger {
       print(logMessage);
       if (error != null) {
         // ignore: avoid_print
-        print('Error: $error');
+        print('Error: ${redactUrl(error.toString())}');
       }
       if (stackTrace != null) {
         // ignore: avoid_print
-        print('StackTrace: $stackTrace');
+        print('StackTrace: ${redactUrl(stackTrace.toString())}');
       }
     }
   }

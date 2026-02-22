@@ -118,9 +118,8 @@ class _RecordingTile extends ConsumerWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
-        onTap: recording.status == RecordingStatus.completed
-            ? () => _playRecording(context, ref)
-            : null,
+        onTap: null, // Playback not yet implemented
+
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -187,13 +186,13 @@ class _RecordingTile extends ConsumerWidget {
               PopupMenuButton<String>(
                 itemBuilder: (context) => [
                   if (recording.status == RecordingStatus.completed)
-                    const PopupMenuItem(
-                      value: 'play',
+                    PopupMenuItem(
+                      enabled: false,
                       child: Row(
                         children: [
-                          Icon(Icons.play_arrow),
-                          SizedBox(width: 8),
-                          Text('Play'),
+                          Icon(Icons.play_arrow, color: Colors.grey.shade600),
+                          const SizedBox(width: 8),
+                          Text('Play (coming soon)', style: TextStyle(color: Colors.grey.shade600)),
                         ],
                       ),
                     ),
