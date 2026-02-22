@@ -142,7 +142,7 @@ class AppDatabase extends _$AppDatabase {
 
   // Bump this when you change the schema. Add a migration step below.
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -153,6 +153,16 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           'CREATE UNIQUE INDEX IF NOT EXISTS idx_epg_channel_start '
           'ON epg_programs (channel_id, start_time)',
+        );
+        // Index on channels.playlistId for fast playlist-scoped queries
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_channels_playlist '
+          'ON channels (playlist_id)',
+        );
+        // Index on channels.epgId for fast EPG lookups
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_channels_epg_id '
+          'ON channels (epg_id)',
         );
         // Create default settings
         await into(appSettingsTable).insert(
@@ -189,6 +199,17 @@ class AppDatabase extends _$AppDatabase {
             'ON epg_programs (channel_id, start_time)',
           );
         }
+        if (from < 4) {
+          // v3 -> v4: Add indexes on channels for faster queries.
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_channels_playlist '
+            'ON channels (playlist_id)',
+          );
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_channels_epg_id '
+            'ON channels (epg_id)',
+          );
+        }
       },
     );
   }
@@ -202,6 +223,12 @@ LazyDatabase _openConnection() {
     // Ensure directory exists
     await file.parent.create(recursive: true);
 
-    return NativeDatabase.createInBackground(file);
+    return NativeDatabase.createInBackground(
+      file,
+      setup: (db) {
+        // Enable foreign key enforcement
+        db.execute('PRAGMA foreign_keys = ON');
+      },
+    );
   });
 }

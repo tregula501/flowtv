@@ -962,6 +962,9 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   }
 
   /// Open current stream in external player (VLC, mpv, etc.)
+  ///
+  /// Uses direct process invocation (no shell) to prevent command injection
+  /// from malicious stream URLs in untrusted M3U playlists.
   Future<bool> openInExternalPlayer() async {
     if (_currentChannel == null) {
       AppLogger.warning('No channel to open in external player');
@@ -970,34 +973,54 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
     final streamUrl = _currentChannel!.streamUrl;
 
+    // Validate URL scheme to prevent file:// or other dangerous URIs
+    final uri = Uri.tryParse(streamUrl);
+    if (uri == null || !['http', 'https', 'rtsp', 'rtmp'].contains(uri.scheme)) {
+      AppLogger.warning('Refusing to open non-network URL in external player');
+      return false;
+    }
+
     try {
       if (Platform.isWindows) {
-        // Try to find and open with common players
-        // First try VLC
-        final vlcResult = await Process.run(
-          'cmd',
-          ['/c', 'start', 'vlc', streamUrl],
-          runInShell: true,
-        );
-
-        if (vlcResult.exitCode == 0) {
-          AppLogger.info('Opened stream in VLC');
-          return true;
+        // Try VLC directly (no shell, URL passed as argument)
+        try {
+          final vlcResult = await Process.run('vlc', [streamUrl]);
+          if (vlcResult.exitCode == 0) {
+            AppLogger.info('Opened stream in VLC');
+            return true;
+          }
+        } catch (_) {
+          // VLC not in PATH, try common install locations
         }
 
-        // Fallback: open URL with system default handler
-        final result = await Process.run(
-          'cmd',
-          ['/c', 'start', '', streamUrl],
-          runInShell: true,
-        );
+        // Try VLC from default install path
+        const vlcPaths = [
+          r'C:\Program Files\VideoLAN\VLC\vlc.exe',
+          r'C:\Program Files (x86)\VideoLAN\VLC\vlc.exe',
+        ];
+        for (final vlcPath in vlcPaths) {
+          try {
+            final result = await Process.run(vlcPath, [streamUrl]);
+            if (result.exitCode == 0) {
+              AppLogger.info('Opened stream in VLC');
+              return true;
+            }
+          } catch (_) {
+            continue;
+          }
+        }
 
+        // Fallback: use PowerShell Start-Process (safe, no shell injection)
+        final result = await Process.run(
+          'powershell',
+          ['-NoProfile', '-Command', 'Start-Process', streamUrl],
+        );
         if (result.exitCode == 0) {
           AppLogger.info('Opened stream with system default player');
           return true;
         }
       } else if (Platform.isMacOS) {
-        // Try VLC first
+        // Try VLC first (no shell)
         final result = await Process.run(
           'open',
           ['-a', 'VLC', streamUrl],
@@ -1008,11 +1031,11 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
           return true;
         }
 
-        // Fallback to default handler
+        // Fallback to default handler (no shell)
         await Process.run('open', [streamUrl]);
         return true;
       } else if (Platform.isLinux) {
-        // Try common players in order
+        // Try common players in order (no shell)
         for (final player in ['vlc', 'mpv', 'celluloid', 'xdg-open']) {
           try {
             final result = await Process.run(player, [streamUrl]);

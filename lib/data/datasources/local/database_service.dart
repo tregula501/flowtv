@@ -41,16 +41,22 @@ class DatabaseService {
   }
 
   /// Clear all data (for testing or reset)
+  /// Deletes in FK-safe order: children before parents.
   static Future<void> clearAll() async {
     if (_database == null) return;
 
-    await _database!.delete(_database!.playlists).go();
-    await _database!.delete(_database!.channels).go();
-    await _database!.delete(_database!.epgPrograms).go();
-    await _database!.delete(_database!.favorites).go();
-    await _database!.delete(_database!.recordings).go();
-    await _database!.delete(_database!.userProfiles).go();
-    await _database!.delete(_database!.appSettingsTable).go();
+    await _database!.transaction(() async {
+      // Children first (reference channels / playlists)
+      await _database!.delete(_database!.recordings).go();
+      await _database!.delete(_database!.favorites).go();
+      await _database!.delete(_database!.epgPrograms).go();
+      // Then channels (references playlists)
+      await _database!.delete(_database!.channels).go();
+      // Then parents
+      await _database!.delete(_database!.playlists).go();
+      await _database!.delete(_database!.userProfiles).go();
+      await _database!.delete(_database!.appSettingsTable).go();
+    });
   }
 }
 
