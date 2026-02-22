@@ -35,6 +35,8 @@ class CastService implements ICastService {
   List<CastDeviceInfo> _devices = [];
   @override
   List<CastDeviceInfo> get devices => _devices;
+  Timer? _discoveryDebounce;
+  Set<String> _lastDeviceKeys = {};
 
   // Session state
   final _sessionController = StreamController<CastSessionState>.broadcast();
@@ -63,28 +65,37 @@ class CastService implements ICastService {
       );
       AppLogger.info('Cast: Context initialized, result=$initResult');
 
-      // Listen to device discovery
+      // Listen to device discovery (debounced to avoid noisy repeated callbacks)
       _deviceSubscription =
           GoogleCastDiscoveryManager.instance.devicesStream.listen(
         (devices) {
-          final allDevices = devices
-              .map((d) => CastDeviceInfo(
-                    id: d.deviceID,
-                    name: d.friendlyName,
-                    modelName: d.modelName,
-                    nativeDevice: d,
-                  ),)
-              .toList();
+          _discoveryDebounce?.cancel();
+          _discoveryDebounce = Timer(const Duration(milliseconds: 300), () {
+            final allDevices = devices
+                .map((d) => CastDeviceInfo(
+                      id: d.deviceID,
+                      name: d.friendlyName,
+                      modelName: d.modelName,
+                      nativeDevice: d,
+                    ),)
+                .toList();
 
-          _devices = allDevices.where((d) => d.isVideoCapable).toList();
-          _devicesController.add(_devices);
+            _devices = allDevices.where((d) => d.isVideoCapable).toList();
+            _devicesController.add(_devices);
 
-          AppLogger.info(
-              'Cast: Found ${allDevices.length} devices, ${_devices.length} video-capable',);
-          for (final d in allDevices) {
-            AppLogger.info(
-                'Cast device: ${d.name} (${d.modelName}) - video=${d.isVideoCapable}',);
-          }
+            // Only log when device list actually changes
+            final currentKeys = allDevices.map((d) => '${d.name}_${d.modelName}').toSet();
+            if (currentKeys.length != _lastDeviceKeys.length ||
+                !currentKeys.containsAll(_lastDeviceKeys)) {
+              _lastDeviceKeys = currentKeys;
+              AppLogger.info(
+                  'Cast: Found ${allDevices.length} devices, ${_devices.length} video-capable',);
+              for (final d in allDevices) {
+                AppLogger.info(
+                    'Cast device: ${d.name} (${d.modelName}) - video=${d.isVideoCapable}',);
+              }
+            }
+          });
         },
         onError: (e) {
           AppLogger.error('Cast discovery error: $e');
@@ -448,6 +459,7 @@ class CastService implements ICastService {
 
   @override
   void dispose() {
+    _discoveryDebounce?.cancel();
     _deviceSubscription?.cancel();
     _sessionSubscription?.cancel();
     _mediaStatusSubscription?.cancel();
