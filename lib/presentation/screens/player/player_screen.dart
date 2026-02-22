@@ -92,14 +92,15 @@ class PlayerScreen extends ConsumerWidget {
                 // Chromecast button (only shown when supported, i.e. Android)
                 Consumer(
                   builder: (context, ref, _) {
-                    final castState = ref.watch(castControllerProvider);
-                    if (!castState.isSupported) return const SizedBox.shrink();
+                    final isSupported = ref.watch(castControllerProvider.select((s) => s.isSupported));
+                    final isConnected = ref.watch(castControllerProvider.select((s) => s.isConnected));
+                    if (!isSupported) return const SizedBox.shrink();
                     return IconButton(
                       icon: Icon(
-                        castState.isConnected
+                        isConnected
                             ? Icons.cast_connected
                             : Icons.cast,
-                        color: castState.isConnected
+                        color: isConnected
                             ? Colors.blue
                             : Colors.white70,
                         size: 20,
@@ -383,7 +384,7 @@ class _CastOverlay extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              _playbackLabel(playbackState),
+              _playbackLabel(l10n, playbackState),
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 14,
@@ -407,18 +408,18 @@ class _CastOverlay extends StatelessWidget {
     );
   }
 
-  String _playbackLabel(CastPlaybackState state) {
+  String _playbackLabel(AppLocalizations l10n, CastPlaybackState state) {
     switch (state) {
       case CastPlaybackState.playing:
-        return 'Playing';
+        return l10n.castPlaying;
       case CastPlaybackState.buffering:
-        return 'Buffering...';
+        return l10n.castBuffering;
       case CastPlaybackState.loading:
-        return 'Loading...';
+        return l10n.castLoading;
       case CastPlaybackState.paused:
-        return 'Paused';
+        return l10n.castPaused;
       case CastPlaybackState.stopped:
-        return 'Stopped';
+        return l10n.castStopped;
       case CastPlaybackState.idle:
         return '';
     }

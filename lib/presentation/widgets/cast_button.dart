@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../providers/cast_provider.dart';
 import '../providers/channel_provider.dart';
 import 'cast_device_sheet.dart';
@@ -20,6 +21,7 @@ class CastButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final castState = ref.watch(castControllerProvider);
 
     // Don't show on unsupported platforms
@@ -27,10 +29,12 @@ class CastButton extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
+    final connectedLabel = castState.isConnected
+        ? l10n.castConnectedTo(castState.connectedDevice?.name ?? '')
+        : l10n.castToDevice;
+
     return Semantics(
-      label: castState.isConnected
-          ? 'Cast connected to ${castState.connectedDevice?.name}'
-          : 'Cast to device',
+      label: connectedLabel,
       button: true,
       child: IconButton(
         icon: Icon(
@@ -38,9 +42,7 @@ class CastButton extends ConsumerWidget {
           color: iconColor ?? (castState.isConnected ? Colors.blue : null),
           size: iconSize,
         ),
-        tooltip: castState.isConnected
-            ? 'Connected to ${castState.connectedDevice?.name}'
-            : 'Cast to device',
+        tooltip: connectedLabel,
         onPressed: () {
           final channel = ref.read(currentChannelProvider);
           if (channel != null) {

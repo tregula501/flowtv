@@ -405,8 +405,8 @@ class CastService implements ICastService {
       return false;
     }
 
-    // Store for auto-retry on stream errors
-    _lastMedia = media;
+    // Cancel any pending retry for previous media
+    _retryTimer?.cancel();
 
     try {
       final castUrl = _prepareCastUrl(media.url);
@@ -439,11 +439,16 @@ class CastService implements ICastService {
         autoPlay: true,
       );
 
+      // Store for auto-retry only after successful load request
+      _lastMedia = media;
+      _retryCount = 0;
+
       AppLogger.info('Cast: Media load request sent successfully');
       return true;
     } catch (e, stackTrace) {
       AppLogger.error('Cast: Load media failed - $e');
       AppLogger.error('Cast: Stack trace - $stackTrace');
+      _lastMedia = null;
       return false;
     }
   }
@@ -511,6 +516,8 @@ class CastService implements ICastService {
   @override
   void dispose() {
     _retryTimer?.cancel();
+    _lastMedia = null;
+    _retryCount = 0;
     _discoveryDebounce?.cancel();
     _deviceSubscription?.cancel();
     _sessionSubscription?.cancel();
@@ -518,5 +525,6 @@ class CastService implements ICastService {
     _positionSubscription?.cancel();
     _devicesController.close();
     _sessionController.close();
+    _syncInstance = null;
   }
 }

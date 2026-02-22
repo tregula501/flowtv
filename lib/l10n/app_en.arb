@@ -239,5 +239,24 @@
       "device": {"type": "String"}
     }
   },
-  "stopCasting": "Stop Casting"
+  "stopCasting": "Stop Casting",
+
+  "castPlaying": "Playing",
+  "castBuffering": "Buffering...",
+  "castLoading": "Loading...",
+  "castPaused": "Paused",
+  "castStopped": "Stopped",
+  "castConnectedTo": "Connected to {device}",
+  "@castConnectedTo": {
+    "placeholders": {
+      "device": {"type": "String"}
+    }
+  },
+  "castToDevice": "Cast to device",
+  "tapToCast": "Tap to cast \"{channel}\"",
+  "@tapToCast": {
+    "placeholders": {
+      "channel": {"type": "String"}
+    }
+  }
 }

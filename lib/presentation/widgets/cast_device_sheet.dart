@@ -83,14 +83,14 @@ class CastDeviceSheet extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Connected to ${castState.connectedDevice!.name}',
+                          l10n.castConnectedTo(castState.connectedDevice!.name),
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         Text(
-                          'Tap to cast "${channel.name}"',
+                          l10n.tapToCast(channel.name),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12,
