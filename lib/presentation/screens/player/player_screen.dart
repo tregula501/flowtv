@@ -37,7 +37,7 @@ class PlayerScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final playerState = ref.watch(playerControllerProvider);
-    final playerController = ref.watch(playerControllerProvider.notifier);
+    final playerController = ref.read(playerControllerProvider.notifier);
     final currentChannel = ref.watch(currentChannelProvider);
 
     if (currentChannel == null) {

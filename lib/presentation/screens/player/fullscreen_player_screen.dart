@@ -22,7 +22,7 @@ class _FullscreenPlayerScreenState
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerControllerProvider);
-    final playerController = ref.watch(playerControllerProvider.notifier);
+    final playerController = ref.read(playerControllerProvider.notifier);
     final currentChannel = ref.watch(currentChannelProvider);
 
     if (currentChannel == null) {
@@ -48,7 +48,9 @@ class _FullscreenPlayerScreenState
           _isHovering = false;
           if (playerState.isPlaying) {
             Future.delayed(const Duration(seconds: 3), () {
-              if (mounted && !_isHovering && playerState.isPlaying) {
+              // Read fresh state to avoid stale closure
+              if (mounted && !_isHovering &&
+                  ref.read(playerControllerProvider).isPlaying) {
                 setState(() => _showControls = false);
               }
             });

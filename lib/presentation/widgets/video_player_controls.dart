@@ -46,7 +46,7 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerControllerProvider);
-    final playerController = ref.watch(playerControllerProvider.notifier);
+    final playerController = ref.read(playerControllerProvider.notifier);
 
     return MouseRegion(
       onEnter: (_) {

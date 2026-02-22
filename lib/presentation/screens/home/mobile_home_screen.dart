@@ -36,10 +36,11 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     final l10n = AppLocalizations.of(context)!;
     final playlistsAsync = ref.watch(playlistsProvider);
     final currentChannel = ref.watch(currentChannelProvider);
-    final playerState = ref.watch(playerControllerProvider);
+    // Only watch isPlaying to avoid rebuilds on every player tick
+    final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
 
     // Show fullscreen player when a channel is playing
-    if (currentChannel != null && playerState.isPlaying) {
+    if (currentChannel != null && isPlaying) {
       return _MobilePlayerScreen(
         channel: currentChannel,
         onBack: () {

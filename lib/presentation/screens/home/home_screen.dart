@@ -109,10 +109,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final playlistsAsync = ref.watch(playlistsProvider);
     final activePlaylist = ref.watch(activePlaylistProvider);
     final currentChannel = ref.watch(currentChannelProvider);
-    final playerState = ref.watch(playerControllerProvider);
+    // Only watch the display-mode fields to avoid rebuilds on every player tick
+    final isFullscreen = ref.watch(playerControllerProvider.select((s) => s.isFullscreen));
+    final isPiPMode = ref.watch(playerControllerProvider.select((s) => s.isPiPMode));
+    final isExpanded = ref.watch(playerControllerProvider.select((s) => s.isExpanded));
 
     // Show fullscreen player if in OS fullscreen mode
-    if (playerState.isFullscreen && currentChannel != null) {
+    if (isFullscreen && currentChannel != null) {
       return KeyboardListener(
         focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,
@@ -122,7 +125,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     // Show minimal PiP player if in PiP mode
-    if (playerState.isPiPMode && currentChannel != null) {
+    if (isPiPMode && currentChannel != null) {
       return KeyboardListener(
         focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,
@@ -132,7 +135,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     // Show expanded player (fills app window but not OS fullscreen)
-    if (playerState.isExpanded && currentChannel != null) {
+    if (isExpanded && currentChannel != null) {
       return KeyboardListener(
         focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,

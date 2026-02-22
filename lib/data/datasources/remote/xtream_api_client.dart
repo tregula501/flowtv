@@ -248,6 +248,56 @@ class XtreamApiClient {
     }
   }
 
+  /// Request that returns a List (for category/stream list endpoints)
+  Future<List<dynamic>> _requestList(
+    String action, [
+    Map<String, String>? extraParams,
+  ]) async {
+    return withRetry(
+      () => _doRequestList(action, extraParams),
+      label: 'Xtream $action',
+    );
+  }
+
+  Future<List<dynamic>> _doRequestList(
+    String action, [
+    Map<String, String>? extraParams,
+  ]) async {
+    try {
+      final params = {
+        ..._authParams,
+        'action': action,
+        ...?extraParams,
+      };
+
+      final response = await _dio.get<dynamic>(
+        _baseUrl,
+        queryParameters: params,
+      );
+
+      if (response.data == null) {
+        throw const ApiException('Empty response from server');
+      }
+
+      if (response.data is List) {
+        return response.data as List<dynamic>;
+      }
+
+      // Some servers wrap list responses in a map — return empty
+      AppLogger.warning(
+        'Xtream: $action returned ${response.data.runtimeType} instead of List',
+      );
+      return [];
+    } on DioException catch (e) {
+      AppLogger.error('Xtream API error', e);
+      throw ApiException(
+        'API request failed: ${e.message}',
+        statusCode: e.response?.statusCode,
+        originalError: e,
+      );
+    }
+  }
+
   /// Authenticate and get user info
   Future<XtreamUserInfo> authenticate() async {
     final response = await _request('get_user_info');
@@ -261,16 +311,8 @@ class XtreamApiClient {
 
   /// Get live TV categories
   Future<List<XtreamCategory>> getLiveCategories() async {
-    final response = await _request('get_live_categories');
-
-    if (response is! List) {
-      AppLogger.warning(
-        'Xtream: get_live_categories returned ${response.runtimeType} instead of List',
-      );
-      return [];
-    }
-
-    return (response as List)
+    final response = await _requestList('get_live_categories');
+    return response
         .whereType<Map<String, dynamic>>()
         .map((e) => XtreamCategory.fromJson(e))
         .toList();
@@ -279,16 +321,8 @@ class XtreamApiClient {
   /// Get live TV channels
   Future<List<XtreamChannel>> getLiveStreams([String? categoryId]) async {
     final params = categoryId != null ? {'category_id': categoryId} : null;
-    final response = await _request('get_live_streams', params);
-
-    if (response is! List) {
-      AppLogger.warning(
-        'Xtream: get_live_streams returned ${response.runtimeType} instead of List',
-      );
-      return [];
-    }
-
-    return (response as List)
+    final response = await _requestList('get_live_streams', params);
+    return response
         .whereType<Map<String, dynamic>>()
         .map((e) => XtreamChannel.fromJson(e))
         .toList();
@@ -296,16 +330,8 @@ class XtreamApiClient {
 
   /// Get VOD categories
   Future<List<XtreamCategory>> getVodCategories() async {
-    final response = await _request('get_vod_categories');
-
-    if (response is! List) {
-      AppLogger.warning(
-        'Xtream: get_vod_categories returned ${response.runtimeType} instead of List',
-      );
-      return [];
-    }
-
-    return (response as List)
+    final response = await _requestList('get_vod_categories');
+    return response
         .whereType<Map<String, dynamic>>()
         .map((e) => XtreamCategory.fromJson(e))
         .toList();
@@ -314,16 +340,8 @@ class XtreamApiClient {
   /// Get VOD streams
   Future<List<XtreamVodItem>> getVodStreams([String? categoryId]) async {
     final params = categoryId != null ? {'category_id': categoryId} : null;
-    final response = await _request('get_vod_streams', params);
-
-    if (response is! List) {
-      AppLogger.warning(
-        'Xtream: get_vod_streams returned ${response.runtimeType} instead of List',
-      );
-      return [];
-    }
-
-    return (response as List)
+    final response = await _requestList('get_vod_streams', params);
+    return response
         .whereType<Map<String, dynamic>>()
         .map((e) => XtreamVodItem.fromJson(e))
         .toList();
@@ -331,16 +349,8 @@ class XtreamApiClient {
 
   /// Get series categories
   Future<List<XtreamCategory>> getSeriesCategories() async {
-    final response = await _request('get_series_categories');
-
-    if (response is! List) {
-      AppLogger.warning(
-        'Xtream: get_series_categories returned ${response.runtimeType} instead of List',
-      );
-      return [];
-    }
-
-    return (response as List)
+    final response = await _requestList('get_series_categories');
+    return response
         .whereType<Map<String, dynamic>>()
         .map((e) => XtreamCategory.fromJson(e))
         .toList();
@@ -349,16 +359,8 @@ class XtreamApiClient {
   /// Get series list
   Future<List<XtreamSeries>> getSeries([String? categoryId]) async {
     final params = categoryId != null ? {'category_id': categoryId} : null;
-    final response = await _request('get_series', params);
-
-    if (response is! List) {
-      AppLogger.warning(
-        'Xtream: get_series returned ${response.runtimeType} instead of List',
-      );
-      return [];
-    }
-
-    return (response as List)
+    final response = await _requestList('get_series', params);
+    return response
         .whereType<Map<String, dynamic>>()
         .map((e) => XtreamSeries.fromJson(e))
         .toList();
