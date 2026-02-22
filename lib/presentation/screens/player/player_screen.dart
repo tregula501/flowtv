@@ -153,22 +153,23 @@ class PlayerScreen extends ConsumerWidget {
                   },
                 ),
 
-                // Open in external player button (VLC)
-                IconButton(
-                  icon: const Icon(Icons.launch, color: Colors.white70, size: 20),
-                  tooltip: l10n.openExternalPlayer,
-                  onPressed: () async {
-                    final success = await playerController.openInExternalPlayer();
-                    if (!success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(l10n.externalPlayerError),
-                          duration: const Duration(seconds: 3),
-                        ),
-                      );
-                    }
-                  },
-                ),
+                // Open in external player button (VLC) — desktop only
+                if (!Platform.isAndroid && !Platform.isIOS)
+                  IconButton(
+                    icon: const Icon(Icons.launch, color: Colors.white70, size: 20),
+                    tooltip: l10n.openExternalPlayer,
+                    onPressed: () async {
+                      final success = await playerController.openInExternalPlayer();
+                      if (!success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.externalPlayerError),
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                  ),
 
                 // Close button
                 IconButton(
