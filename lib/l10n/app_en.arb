@@ -233,5 +233,7 @@
     }
   },
   "noCastDevices": "No Cast devices found.\n\nMake sure your device is on the same network.\n\nNote: Audio-only devices (Google Home, Nest Mini)\nare hidden as they cannot display video.",
-  "searchChannelsDialog": "Search Channels"
+  "searchChannelsDialog": "Search Channels",
+
+  "escToExitFullscreen": "ESC to exit fullscreen"
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -168,24 +170,25 @@ class _FullscreenPlayerScreenState
                         ],
                       ),
                       const Spacer(),
-                      // Exit fullscreen hint
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'ESC to exit fullscreen',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
+                      // Exit fullscreen hint (desktop only — has ESC key)
+                      if (!Platform.isAndroid && !Platform.isIOS)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            l10n.escToExitFullscreen,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
