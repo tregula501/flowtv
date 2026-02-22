@@ -125,10 +125,10 @@ class SettingsScreen extends ConsumerWidget {
         title: Text('Playlists'),
         subtitle: Text('Loading...'),
       ),
-      error: (e, _) => ListTile(
-        leading: const Icon(Icons.playlist_play),
-        title: const Text('Playlists'),
-        subtitle: Text('Error: $e'),
+      error: (_, _) => const ListTile(
+        leading: Icon(Icons.playlist_play),
+        title: Text('Playlists'),
+        subtitle: Text('Failed to load playlists'),
       ),
       data: (playlists) => Column(
         children: [

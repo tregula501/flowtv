@@ -527,7 +527,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
         Expanded(
           child: channelsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Error: $e')),
+            error: (_, _) => const Center(child: Text('Failed to load channels.')),
             data: (channels) {
               final filteredChannels = _filterChannels(channels);
               if (filteredChannels.isEmpty) {

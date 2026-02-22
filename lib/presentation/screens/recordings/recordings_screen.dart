@@ -27,7 +27,7 @@ class RecordingsScreen extends ConsumerWidget {
         ),
         body: recordingsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
+          error: (_, _) => const Center(child: Text('Failed to load recordings.')),
           data: (recordings) {
             final active = recordings
                 .where((r) => r.status == RecordingStatus.recording)

@@ -129,7 +129,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
       ),
       body: channelsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (_, _) => const Center(child: Text('Failed to load channels.')),
         data: (channels) => _buildEpgGrid(context, channels),
       ),
     );
@@ -143,7 +143,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
 
     return epgDataAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error loading EPG: $e')),
+      error: (_, _) => const Center(child: Text('Failed to load TV guide data.')),
       data: (epgData) => Column(
         children: [
           // Time header

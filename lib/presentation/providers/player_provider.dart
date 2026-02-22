@@ -811,6 +811,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   /// Set video track
   Future<void> setVideoTrack(String trackId) async {
     final tracks = _player!.state.tracks.video;
+    if (tracks.isEmpty) return;
     final track = tracks.firstWhere(
       (t) => t.id == trackId,
       orElse: () => tracks.first,
@@ -822,6 +823,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   /// Set audio track
   Future<void> setAudioTrack(String trackId) async {
     final tracks = _player!.state.tracks.audio;
+    if (tracks.isEmpty) return;
     final track = tracks.firstWhere(
       (t) => t.id == trackId,
       orElse: () => tracks.first,

@@ -146,7 +146,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Scaffold(
         body: playlistsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => Center(child: Text('Error: $err')),
+          error: (_, _) => const Center(
+            child: Text('Failed to load playlists. Please restart the app.'),
+          ),
           data: (playlists) {
             if (playlists.isEmpty) {
               return _buildEmptyState(context);
