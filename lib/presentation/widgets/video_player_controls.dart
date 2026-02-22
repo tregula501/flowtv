@@ -101,15 +101,6 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
                   onPressed: () => playerController.playPause(),
                 ),
 
-                // Stop button
-                IconButton(
-                  icon: const Icon(
-                    Icons.stop,
-                    color: Colors.white70,
-                  ),
-                  onPressed: () => playerController.stop(),
-                ),
-
                 // Refresh button (for frozen streams)
                 _RefreshButton(),
 
