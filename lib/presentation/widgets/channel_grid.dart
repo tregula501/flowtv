@@ -156,25 +156,26 @@ class _ChannelTileState extends State<ChannelTile> {
                 ),
               ),
 
-              // Favorite button
-              if (_isHovered || widget.channel.isFavorite)
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: IconButton(
-                    icon: Icon(
-                      widget.channel.isFavorite ? Icons.star : Icons.star_border,
-                      color: widget.channel.isFavorite ? Colors.amber : null,
-                      size: 20,
-                    ),
-                    onPressed: widget.onFavoriteToggle,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
+              // Favorite button (always visible for touch devices)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: IconButton(
+                  icon: Icon(
+                    widget.channel.isFavorite ? Icons.star : Icons.star_border,
+                    color: widget.channel.isFavorite
+                        ? Colors.amber
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                    size: 20,
+                  ),
+                  onPressed: widget.onFavoriteToggle,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
                   ),
                 ),
+              ),
 
               // Playing indicator
               if (widget.isPlaying)
