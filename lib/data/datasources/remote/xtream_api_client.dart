@@ -354,21 +354,27 @@ class XtreamApiClient {
         .toList();
   }
 
-  /// Build stream URL for live TV
+  /// Build stream URL for live TV.
+  ///
+  /// Note: Xtream Codes protocol requires credentials in the URL path.
+  /// This is inherent to the API standard and cannot be avoided.
+  /// The [AppLogger] redacts credentials from logged URLs automatically.
   String getLiveStreamUrl(int streamId, {String format = 'm3u8'}) {
     var url = serverUrl;
     if (!url.endsWith('/')) url += '/';
     return '$url$username/$password/$streamId.$format';
   }
 
-  /// Build stream URL for VOD
+  /// Build stream URL for VOD.
+  /// See [getLiveStreamUrl] for credential handling notes.
   String getVodStreamUrl(int streamId, {String format = 'm3u8'}) {
     var url = serverUrl;
     if (!url.endsWith('/')) url += '/';
     return '${url}movie/$username/$password/$streamId.$format';
   }
 
-  /// Build stream URL for series episode
+  /// Build stream URL for series episode.
+  /// See [getLiveStreamUrl] for credential handling notes.
   String getSeriesStreamUrl(int streamId, {String format = 'm3u8'}) {
     var url = serverUrl;
     if (!url.endsWith('/')) url += '/';
