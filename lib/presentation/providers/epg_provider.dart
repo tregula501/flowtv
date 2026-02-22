@@ -145,8 +145,8 @@ class EpgManager {
 
   /// Fetch EPG for active playlist
   Future<void> fetchEpg() async {
-    final activePlaylist = _ref.read(activePlaylistProvider);
-    if (activePlaylist?.epgUrl == null) {
+    final epgUrl = _ref.read(activePlaylistProvider)?.epgUrl;
+    if (epgUrl == null) {
       AppLogger.warning('No EPG URL configured');
       return;
     }
@@ -157,7 +157,7 @@ class EpgManager {
     try {
       final repo = _ref.read(epgRepositoryProvider);
       final count = await repo.fetchAndStoreEpg(
-        activePlaylist!.epgUrl!,
+        epgUrl,
         onProgress: (current, total, phase) {
           _ref.read(epgProgressProvider.notifier).updateProgress(current, total, phase);
         },

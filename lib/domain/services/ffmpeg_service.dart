@@ -142,6 +142,14 @@ class FFmpegService {
     }
 
     try {
+      // Validate stream URL to prevent shell injection (especially on Windows
+      // where runInShell=true passes args through cmd.exe)
+      final uri = Uri.tryParse(streamUrl);
+      if (uri == null || !uri.hasScheme || (!uri.isScheme('http') && !uri.isScheme('https') && !uri.isScheme('rtsp') && !uri.isScheme('rtmp'))) {
+        AppLogger.error('Invalid stream URL scheme for recording: $streamUrl');
+        return false;
+      }
+
       // Ensure output directory exists
       final outputDir = Directory(p.dirname(outputPath));
       if (!await outputDir.exists()) {

@@ -184,7 +184,11 @@ class XtreamApiClient {
     required this.username,
     required this.password,
     Dio? dio,
-  })  : _dio = dio ?? Dio(),
+  })  : _dio = dio ?? Dio(BaseOptions(
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 15),
+        )),
         _ownsDio = dio == null;
 
   /// Close the internal Dio client if it was created by this client.

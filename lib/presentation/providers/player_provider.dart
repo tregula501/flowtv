@@ -814,7 +814,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     if (tracks.isEmpty) return;
     final track = tracks.firstWhere(
       (t) => t.id == trackId,
-      orElse: () => tracks.first,
+      orElse: () => tracks[0],
     );
     await _player!.setVideoTrack(track);
     AppLogger.info('Video track set: $trackId');
@@ -826,7 +826,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     if (tracks.isEmpty) return;
     final track = tracks.firstWhere(
       (t) => t.id == trackId,
-      orElse: () => tracks.first,
+      orElse: () => tracks[0],
     );
     await _player!.setAudioTrack(track);
     AppLogger.info('Audio track set: $trackId');
