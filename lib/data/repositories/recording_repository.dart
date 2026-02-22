@@ -113,18 +113,22 @@ class RecordingRepository {
     final recording = await (_db.select(_db.recordings)..where((t) => t.id.equals(recordingId))).getSingleOrNull();
     if (recording == null) return;
 
-    final file = File(recording.filePath);
-    if (await file.exists()) {
-      final fileSize = await file.length();
-      final durationSeconds = recording.actualStart != null
-          ? DateTime.now().difference(recording.actualStart!).inSeconds
-          : 0;
+    try {
+      final file = File(recording.filePath);
+      if (await file.exists()) {
+        final fileSize = await file.length();
+        final durationSeconds = recording.actualStart != null
+            ? DateTime.now().difference(recording.actualStart!).inSeconds
+            : 0;
 
-      await (_db.update(_db.recordings)..where((t) => t.id.equals(recordingId)))
-          .write(RecordingsCompanion(
-        fileSize: Value(fileSize),
-        durationSeconds: Value(durationSeconds),
-      ),);
+        await (_db.update(_db.recordings)..where((t) => t.id.equals(recordingId)))
+            .write(RecordingsCompanion(
+          fileSize: Value(fileSize),
+          durationSeconds: Value(durationSeconds),
+        ),);
+      }
+    } catch (e) {
+      AppLogger.warning('Could not update file size for recording $recordingId: $e');
     }
   }
 
