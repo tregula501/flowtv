@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../providers/player_provider.dart';
 import '../providers/channel_provider.dart';
 import '../providers/recording_provider.dart';
@@ -174,6 +175,7 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
 class _RecordButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currentChannel = ref.watch(currentChannelProvider);
     final activeRecordings = ref.watch(activeRecordingsProvider);
 
@@ -188,21 +190,21 @@ class _RecordButton extends ConsumerWidget {
         Icons.fiber_manual_record,
         color: isRecording ? Colors.red : Colors.white70,
       ),
-      tooltip: isRecording ? 'Stop Recording' : 'Start Recording',
+      tooltip: isRecording ? l10n.stopRecording : l10n.startRecording,
       onPressed: () async {
         final manager = ref.read(recordingManagerProvider);
         if (isRecording) {
           await manager.stopRecording(currentChannel.id);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Stopped recording ${currentChannel.name}')),
+              SnackBar(content: Text(l10n.stoppedRecordingChannel(currentChannel.name))),
             );
           }
         } else {
           await manager.startRecording(currentChannel);
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Started recording ${currentChannel.name}')),
+              SnackBar(content: Text(l10n.startedRecordingChannel(currentChannel.name))),
             );
           }
         }
@@ -214,6 +216,7 @@ class _RecordButton extends ConsumerWidget {
 class _QualitySettingsButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final playerState = ref.watch(playerControllerProvider);
     final hasMultipleTracks = playerState.audioTracks.length > 1 ||
         playerState.videoTracks.length > 1 ||
@@ -224,7 +227,7 @@ class _QualitySettingsButton extends ConsumerWidget {
         Icons.settings,
         color: hasMultipleTracks ? Colors.white : Colors.white70,
       ),
-      tooltip: 'Quality & Settings',
+      tooltip: l10n.qualitySettings,
       color: Colors.grey.shade900,
       itemBuilder: (context) => [
         // Audio tracks section
@@ -327,7 +330,7 @@ class _QualitySettingsButton extends ConsumerWidget {
                       : Colors.grey,
                 ),
                 const SizedBox(width: 8),
-                const Text('Off'),
+                Text(l10n.subtitleOff),
               ],
             ),
           ),
@@ -480,6 +483,7 @@ class _QualitySettingsButton extends ConsumerWidget {
 class _RefreshButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final currentChannel = ref.watch(currentChannelProvider);
     final playerState = ref.watch(playerControllerProvider);
 
@@ -492,7 +496,7 @@ class _RefreshButton extends ConsumerWidget {
         Icons.refresh,
         color: playerState.isBuffering ? Colors.orange : Colors.white70,
       ),
-      tooltip: 'Refresh Stream',
+      tooltip: l10n.refreshStream,
       onPressed: playerState.isBuffering
           ? null
           : () async {
@@ -501,7 +505,7 @@ class _RefreshButton extends ConsumerWidget {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Refreshing ${currentChannel.name}...'),
+                    content: Text(l10n.refreshingChannel(currentChannel.name)),
                     duration: const Duration(seconds: 1),
                   ),
                 );

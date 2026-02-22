@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../providers/channel_provider.dart';
 import '../providers/playlist_provider.dart';
 import 'add_playlist_dialog.dart';
@@ -10,6 +11,7 @@ class CategorySidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final groups = ref.watch(channelGroupsProvider);
     final selectedGroup = ref.watch(selectedGroupProvider);
     final activePlaylist = ref.watch(activePlaylistProvider);
@@ -41,7 +43,7 @@ class CategorySidebar extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    activePlaylist?.name ?? 'FlowTV',
+                    activePlaylist?.name ?? l10n.appTitle,
                     style: Theme.of(context).textTheme.titleMedium,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -58,7 +60,7 @@ class CategorySidebar extends ConsumerWidget {
                 // All channels
                 _CategoryTile(
                   icon: Icons.grid_view,
-                  label: 'All Channels',
+                  label: l10n.allChannels,
                   isSelected: selectedGroup == null,
                   onTap: () {
                     ref.read(selectedGroupProvider.notifier).select(null);
@@ -69,7 +71,7 @@ class CategorySidebar extends ConsumerWidget {
                 if (favoriteChannels.isNotEmpty)
                   _CategoryTile(
                     icon: Icons.star,
-                    label: 'Favorites',
+                    label: l10n.favorites,
                     count: favoriteChannels.length,
                     isSelected: selectedGroup == favoritesFilterKey,
                     iconColor: Colors.amber,
@@ -109,7 +111,7 @@ class CategorySidebar extends ConsumerWidget {
                   );
                 },
                 icon: const Icon(Icons.add),
-                label: const Text('Add Playlist'),
+                label: Text(l10n.addPlaylist),
               ),
             ),
           ),

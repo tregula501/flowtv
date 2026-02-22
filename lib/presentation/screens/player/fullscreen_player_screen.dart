@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../widgets/video_player_controls.dart';
@@ -21,17 +22,18 @@ class _FullscreenPlayerScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final playerState = ref.watch(playerControllerProvider);
     final playerController = ref.read(playerControllerProvider.notifier);
     final currentChannel = ref.watch(currentChannelProvider);
 
     if (currentChannel == null) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: Colors.black,
         body: Center(
           child: Text(
-            'No channel selected',
-            style: TextStyle(color: Colors.white54),
+            l10n.selectChannel,
+            style: const TextStyle(color: Colors.white54),
           ),
         ),
       );
@@ -97,7 +99,7 @@ class _FullscreenPlayerScreenState
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Playback Error',
+                          l10n.playbackError,
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
@@ -117,7 +119,7 @@ class _FullscreenPlayerScreenState
                           onPressed: () {
                             playerController.playChannel(currentChannel);
                           },
-                          child: const Text('Retry'),
+                          child: Text(l10n.retry),
                         ),
                       ],
                     ),

@@ -81,7 +81,7 @@
   "watchNow": "Watch Now",
   "epgAutoRefreshInterval": "Auto-refresh interval",
   "epgDisabled": "Disabled",
-  "epgEveryHour": "Every {hours} hour",
+  "epgEveryHour": "Every {hours, plural, =1{1 hour} other{{hours} hours}}",
   "@epgEveryHour": {
     "placeholders": {
       "hours": {"type": "int"}
