@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 0.3.1+2
 
 environment:
-  sdk: '>=3.2.0 <4.0.0'
+  sdk: '>=3.11.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -63,7 +63,7 @@ dependencies:
   flutter_chrome_cast: ^1.2.8
 
   # Secure credential storage
-  flutter_secure_storage: ^9.2.4
+  flutter_secure_storage: ^10.0.0
 
   # Note: Recording uses FFmpeg via Process (Windows/Desktop).
   # FFmpeg must be installed and available in PATH or app directory.

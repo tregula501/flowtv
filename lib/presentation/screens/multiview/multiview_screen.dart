@@ -557,7 +557,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
                             width: 40,
                             height: 40,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
+                            errorBuilder: (_, _, _) =>
                                 const Icon(Icons.tv, size: 40),
                           )
                         : const Icon(Icons.tv, size: 40),

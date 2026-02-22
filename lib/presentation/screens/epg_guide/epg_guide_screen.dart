@@ -249,7 +249,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
                   width: 40,
                   height: 40,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(Icons.tv, size: 40),
+                  errorBuilder: (_, _, _) => const Icon(Icons.tv, size: 40),
                 )
               else
                 const Icon(Icons.tv, size: 40),
