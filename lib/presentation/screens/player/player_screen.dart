@@ -268,7 +268,7 @@ class PlayerScreen extends ConsumerWidget {
                       padding: const EdgeInsets.all(16),
                       margin: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.8),
+                        color: Colors.orange.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
