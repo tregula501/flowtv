@@ -917,11 +917,19 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
         // Configure PiP window: small, always on top, positioned in corner
         await windowManager.setAlwaysOnTop(true);
-        await windowManager.setSize(const Size(400, 250));
+        const pipSize = Size(400, 250);
+        await windowManager.setSize(pipSize);
 
-        // Position in bottom-right corner of primary screen
-        // (We can't easily get screen size, so just use a reasonable position)
-        await windowManager.setPosition(const Offset(1400, 700));
+        // Position in bottom-right area relative to the previous window bounds
+        const padding = 20.0;
+        final savedPos = _savedWindowPosition ?? Offset.zero;
+        final savedSize = _savedWindowSize ?? const Size(1280, 720);
+        final right = savedPos.dx + savedSize.width;
+        final bottom = savedPos.dy + savedSize.height;
+        await windowManager.setPosition(Offset(
+          right - pipSize.width - padding,
+          bottom - pipSize.height - padding,
+        ),);
 
         state = state.copyWith(
           isPiPMode: true,
