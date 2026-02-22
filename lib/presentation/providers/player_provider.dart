@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -274,15 +275,19 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   BufferSize _currentBufferSize = BufferSize.medium;
   bool _isPrebuffering = false;
   DateTime? _prebufferStartTime;
-  int _prebufferTimerId = 0;
+  Timer? _prebufferProgressTimer;
+  Timer? _prebufferCompleteTimer;
 
   // Auto-retry state
   Channel? _currentChannel;
   int _retryAttempt = 0;
   static const int _maxRetries = 3;
   bool _isRetrying = false;
-  int _retryTimerId = 0;
+  Timer? _retryTimer;
   bool _autoRetryEnabled = true;
+
+  // Stream subscriptions for cleanup
+  final List<StreamSubscription> _subscriptions = [];
 
   // Track if disposed
   bool _isDisposed = false;
@@ -294,6 +299,13 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     // Register disposal callback
     ref.onDispose(() {
       _isDisposed = true;
+      _prebufferProgressTimer?.cancel();
+      _prebufferCompleteTimer?.cancel();
+      _retryTimer?.cancel();
+      for (final sub in _subscriptions) {
+        sub.cancel();
+      }
+      _subscriptions.clear();
       _player?.dispose();
     });
 
@@ -337,95 +349,108 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     // Apply MPV-specific buffer settings (desktop only)
     _applyBufferSettings();
 
-    // Listen to player streams
-    _player!.stream.playing.listen((playing) {
-      if (!_isDisposed) state = state.copyWith(isPlaying: playing);
-    });
+    // Listen to player streams (store subscriptions for cleanup)
+    _subscriptions.add(
+      _player!.stream.playing.listen((playing) {
+        if (!_isDisposed) state = state.copyWith(isPlaying: playing);
+      }),
+    );
 
-    _player!.stream.buffering.listen((buffering) {
-      if (!_isDisposed) state = state.copyWith(isBuffering: buffering);
-    });
+    _subscriptions.add(
+      _player!.stream.buffering.listen((buffering) {
+        if (!_isDisposed) state = state.copyWith(isBuffering: buffering);
+      }),
+    );
 
-    // Listen to buffer position for display purposes
-    _player!.stream.buffer.listen((buffer) {
-      // For live streams, buffer is absolute position; for display we track elapsed prebuffer time
-      if (!_isDisposed) state = state.copyWith(bufferedDuration: buffer);
-    });
+    _subscriptions.add(
+      _player!.stream.buffer.listen((buffer) {
+        if (!_isDisposed) state = state.copyWith(bufferedDuration: buffer);
+      }),
+    );
 
-    _player!.stream.volume.listen((volume) {
-      if (!_isDisposed) state = state.copyWith(volume: volume / 100);
-    });
+    _subscriptions.add(
+      _player!.stream.volume.listen((volume) {
+        if (!_isDisposed) state = state.copyWith(volume: volume / 100);
+      }),
+    );
 
-    _player!.stream.position.listen((position) {
-      if (!_isDisposed) state = state.copyWith(position: position);
-    });
+    _subscriptions.add(
+      _player!.stream.position.listen((position) {
+        if (!_isDisposed) state = state.copyWith(position: position);
+      }),
+    );
 
-    _player!.stream.duration.listen((duration) {
-      if (!_isDisposed) state = state.copyWith(duration: duration);
-    });
+    _subscriptions.add(
+      _player!.stream.duration.listen((duration) {
+        if (!_isDisposed) state = state.copyWith(duration: duration);
+      }),
+    );
 
-    _player!.stream.error.listen((error) {
-      if (error.isNotEmpty && !_isDisposed) {
-        AppLogger.error('Player error: $error');
-        state = state.copyWith(error: error);
-        // Trigger auto-retry on error
-        _handleStreamError(error);
-      }
-    });
+    _subscriptions.add(
+      _player!.stream.error.listen((error) {
+        if (error.isNotEmpty && !_isDisposed) {
+          AppLogger.error('Player error: $error');
+          state = state.copyWith(error: error);
+          _handleStreamError(error);
+        }
+      }),
+    );
 
-    // Monitor for stream ending/disconnection
-    _player!.stream.completed.listen((completed) {
-      if (completed && _currentChannel != null && _autoRetryEnabled && !_isDisposed) {
-        // Stream ended unexpectedly - could be a disconnect
-        AppLogger.warning('Stream completed unexpectedly, attempting reconnect');
-        _handleStreamError('Stream ended');
-      }
-    });
+    _subscriptions.add(
+      _player!.stream.completed.listen((completed) {
+        if (completed && _currentChannel != null && _autoRetryEnabled && !_isDisposed) {
+          AppLogger.warning('Stream completed unexpectedly, attempting reconnect');
+          _handleStreamError('Stream ended');
+        }
+      }),
+    );
 
-    // Listen to track changes
-    _player!.stream.tracks.listen((tracks) {
-      if (_isDisposed) return;
+    _subscriptions.add(
+      _player!.stream.tracks.listen((tracks) {
+        if (_isDisposed) return;
 
-      final videoTracks = tracks.video.map((t) => TrackInfo(
-        id: t.id,
-        title: t.title,
-        language: t.language,
-        codec: null,
-        width: t.w,
-        height: t.h,
-      ),).toList();
+        final videoTracks = tracks.video.map((t) => TrackInfo(
+          id: t.id,
+          title: t.title,
+          language: t.language,
+          codec: null,
+          width: t.w,
+          height: t.h,
+        ),).toList();
 
-      final audioTracks = tracks.audio.map((t) => TrackInfo(
-        id: t.id,
-        title: t.title,
-        language: t.language,
-        codec: null,
-      ),).toList();
+        final audioTracks = tracks.audio.map((t) => TrackInfo(
+          id: t.id,
+          title: t.title,
+          language: t.language,
+          codec: null,
+        ),).toList();
 
-      final subtitleTracks = tracks.subtitle.map((t) => TrackInfo(
-        id: t.id,
-        title: t.title,
-        language: t.language,
-        codec: null,
-      ),).toList();
+        final subtitleTracks = tracks.subtitle.map((t) => TrackInfo(
+          id: t.id,
+          title: t.title,
+          language: t.language,
+          codec: null,
+        ),).toList();
 
-      state = state.copyWith(
-        videoTracks: videoTracks,
-        audioTracks: audioTracks,
-        subtitleTracks: subtitleTracks,
-      );
-    });
-
-    // Listen to track selection changes
-    _player!.stream.track.listen((track) {
-      if (!_isDisposed) {
         state = state.copyWith(
-          currentVideoTrack: track.video.id,
-          currentAudioTrack: track.audio.id,
-          currentSubtitleTrack: track.subtitle.id,
+          videoTracks: videoTracks,
+          audioTracks: audioTracks,
+          subtitleTracks: subtitleTracks,
         );
-      }
-    });
+      }),
+    );
+
+    _subscriptions.add(
+      _player!.stream.track.listen((track) {
+        if (!_isDisposed) {
+          state = state.copyWith(
+            currentVideoTrack: track.video.id,
+            currentAudioTrack: track.audio.id,
+            currentSubtitleTrack: track.subtitle.id,
+          );
+        }
+      }),
+    );
   }
 
   /// Apply MPV-specific buffer settings via NativePlayer
@@ -488,11 +513,14 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   }
 
   /// Complete prebuffering and start playback
-  void _completePrebuffering(int timerId) {
-    if (!_isPrebuffering || timerId != _prebufferTimerId || _isDisposed) return;
+  void _completePrebuffering() {
+    if (!_isPrebuffering || _isDisposed) return;
 
     _isPrebuffering = false;
     _prebufferStartTime = null;
+    _prebufferProgressTimer?.cancel();
+    _prebufferProgressTimer = null;
+    _prebufferCompleteTimer = null;
     state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
     _player!.play();
     AppLogger.info('Prebuffer complete, starting playback');
@@ -502,22 +530,28 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   void _cancelPrebuffering() {
     _isPrebuffering = false;
     _prebufferStartTime = null;
-    _prebufferTimerId++; // Invalidate any pending timers
+    _prebufferProgressTimer?.cancel();
+    _prebufferProgressTimer = null;
+    _prebufferCompleteTimer?.cancel();
+    _prebufferCompleteTimer = null;
     state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
   }
 
-  /// Update prebuffer progress display
-  void _updatePrebufferProgress(int timerId) {
-    if (!_isPrebuffering || timerId != _prebufferTimerId || _prebufferStartTime == null) return;
-    if (_isDisposed) return;
-
-    final elapsed = DateTime.now().difference(_prebufferStartTime!);
-    state = state.copyWith(bufferedDuration: elapsed);
-
-    // Schedule next update
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _updatePrebufferProgress(timerId);
-    });
+  /// Start periodic prebuffer progress updates
+  void _startPrebufferProgress() {
+    _prebufferProgressTimer?.cancel();
+    _prebufferProgressTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (_) {
+        if (!_isPrebuffering || _prebufferStartTime == null || _isDisposed) {
+          _prebufferProgressTimer?.cancel();
+          _prebufferProgressTimer = null;
+          return;
+        }
+        final elapsed = DateTime.now().difference(_prebufferStartTime!);
+        state = state.copyWith(bufferedDuration: elapsed);
+      },
+    );
   }
 
   /// Handle stream errors with auto-retry
@@ -539,8 +573,6 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     // Calculate delay with exponential backoff: 1s, 2s, 4s
     final delaySeconds = 1 << _retryAttempt; // 2^retryAttempt
     _retryAttempt++;
-    _retryTimerId++;
-    final currentTimerId = _retryTimerId;
 
     AppLogger.info('Stream error, retry attempt $_retryAttempt/$_maxRetries in ${delaySeconds}s');
 
@@ -550,15 +582,15 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       error: null, // Clear error during retry
     );
 
-    Future.delayed(Duration(seconds: delaySeconds), () {
-      _attemptReconnect(currentTimerId);
+    _retryTimer?.cancel();
+    _retryTimer = Timer(Duration(seconds: delaySeconds), () {
+      _attemptReconnect();
     });
   }
 
   /// Attempt to reconnect to the current channel
-  Future<void> _attemptReconnect(int timerId) async {
-    if (timerId != _retryTimerId || _currentChannel == null) return;
-    if (_isDisposed) return;
+  Future<void> _attemptReconnect() async {
+    if (_currentChannel == null || _isDisposed) return;
 
     _isRetrying = true;
     AppLogger.info('Attempting reconnect to ${_currentChannel!.name}...');
@@ -600,7 +632,8 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   void _resetRetryState() {
     _retryAttempt = 0;
     _isRetrying = false;
-    _retryTimerId++;
+    _retryTimer?.cancel();
+    _retryTimer = null;
   }
 
   /// Cancel any pending retry
@@ -657,16 +690,14 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       if (bufferSeconds > 1) {
         _isPrebuffering = true;
         _prebufferStartTime = DateTime.now();
-        _prebufferTimerId++;
-        final currentTimerId = _prebufferTimerId;
 
-        // Start progress updates
-        _updatePrebufferProgress(currentTimerId);
+        // Start periodic progress updates
+        _startPrebufferProgress();
 
-        // Wait for the buffer duration then start playback
+        // Schedule playback start after buffer duration
         AppLogger.info('Prebuffering for ${bufferSeconds}s...');
-        Future.delayed(Duration(seconds: bufferSeconds), () {
-          _completePrebuffering(currentTimerId);
+        _prebufferCompleteTimer = Timer(Duration(seconds: bufferSeconds), () {
+          _completePrebuffering();
         });
       }
     } catch (e, stack) {
