@@ -41,3 +41,6 @@ lib/l10n/*.dart
 
 # Test
 coverage/
+
+# Claude Code
+.claude/
