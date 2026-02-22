@@ -63,7 +63,9 @@ final completedRecordingsProvider = Provider<List<Recording>>((ref) {
 
 /// Recording manager provider
 final recordingManagerProvider = Provider<RecordingManager>((ref) {
-  return RecordingManager(ref);
+  final manager = RecordingManager(ref);
+  ref.onDispose(() => manager.dispose());
+  return manager;
 });
 
 /// Active recording state for a channel

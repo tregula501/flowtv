@@ -134,7 +134,9 @@ final channelProgramsProvider = FutureProvider.family<List<EpgProgram>, String>(
 
 /// EPG manager for fetching and refreshing
 final epgManagerProvider = Provider<EpgManager>((ref) {
-  return EpgManager(ref);
+  final manager = EpgManager(ref);
+  ref.onDispose(() => manager.stopAutoRefresh());
+  return manager;
 });
 
 class EpgManager {

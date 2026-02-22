@@ -73,22 +73,95 @@ class _FullscreenPlayerScreenState
                 ),
               ),
 
-              // Buffering indicator
-              if (playerState.isBuffering)
-                const Center(
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
+              // Prebuffering indicator with progress
+              if (playerState.isPrebuffering)
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: Colors.white),
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n.prebuffering,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${playerState.bufferedDuration.inSeconds}s / ${playerState.bufferSize.durationSeconds}s',
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 150,
+                          child: LinearProgressIndicator(
+                            value: playerState.bufferSize.durationSeconds > 0
+                                ? (playerState.bufferedDuration.inMilliseconds /
+                                        (playerState.bufferSize.durationSeconds * 1000))
+                                    .clamp(0.0, 1.0)
+                                : 0.0,
+                            backgroundColor: Colors.white24,
+                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                )
+              // Reconnecting indicator (auto-retry in progress)
+              else if (playerState.isReconnecting)
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: Colors.orange),
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n.reconnecting,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n.retryAttempt(playerState.retryAttempt, playerState.maxRetries),
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              // Regular buffering indicator
+              else if (playerState.isBuffering)
+                const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
                 ),
 
-              // Error message
-              if (playerState.error != null)
+              // Error message (only when not reconnecting)
+              if (playerState.error != null && !playerState.isReconnecting)
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.8),
+                      color: Colors.orange.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Column(

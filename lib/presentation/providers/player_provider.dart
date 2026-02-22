@@ -225,6 +225,7 @@ class PlayerState {
     Duration? duration,
     Duration? bufferedDuration,
     String? error,
+    bool clearError = false,
     List<TrackInfo>? videoTracks,
     List<TrackInfo>? audioTracks,
     List<TrackInfo>? subtitleTracks,
@@ -249,7 +250,7 @@ class PlayerState {
       position: position ?? this.position,
       duration: duration ?? this.duration,
       bufferedDuration: bufferedDuration ?? this.bufferedDuration,
-      error: error,
+      error: clearError ? null : (error ?? this.error),
       videoTracks: videoTracks ?? this.videoTracks,
       audioTracks: audioTracks ?? this.audioTracks,
       subtitleTracks: subtitleTracks ?? this.subtitleTracks,
@@ -282,6 +283,9 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   bool _isRetrying = false;
   Timer? _retryTimer;
   bool _autoRetryEnabled = true;
+
+  // Saved volume for mute/unmute (the stream listener overwrites state.volume)
+  double _preMuteVolume = 1.0;
 
   // Stream subscriptions for cleanup
   final List<StreamSubscription> _subscriptions = [];
@@ -367,7 +371,11 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
     _subscriptions.add(
       _player!.stream.volume.listen((volume) {
-        if (!_isDisposed) state = state.copyWith(volume: volume / 100);
+        if (_isDisposed) return;
+        // Don't overwrite volume state while muted (keep showing pre-mute volume)
+        if (!state.isMuted) {
+          state = state.copyWith(volume: volume / 100);
+        }
       }),
     );
 
@@ -578,7 +586,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     state = state.copyWith(
       isReconnecting: true,
       retryAttempt: _retryAttempt,
-      error: null, // Clear error during retry
+      clearError: true,
     );
 
     _retryTimer?.cancel();
@@ -612,7 +620,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
           state = state.copyWith(
             isReconnecting: false,
             retryAttempt: 0,
-            error: null,
+            clearError: true,
           );
         }
       } else {
@@ -638,7 +646,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   /// Cancel any pending retry
   void _cancelRetry() {
     _resetRetryState();
-    state = state.copyWith(isReconnecting: false, retryAttempt: 0);
+    state = state.copyWith(isReconnecting: false, retryAttempt: 0, clearError: true);
   }
 
   /// Enable or disable auto-retry
@@ -660,12 +668,15 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       final bufferSeconds = _currentBufferSize.durationSeconds;
 
       state = state.copyWith(
-        error: null,
+        clearError: true,
         isBuffering: true,
         isPrebuffering: bufferSeconds > 1,
         isReconnecting: false,
         bufferedDuration: Duration.zero,
         retryAttempt: 0,
+        videoTracks: const [],
+        audioTracks: const [],
+        subtitleTracks: const [],
       );
 
       // Enhanced logging for debugging
@@ -771,8 +782,11 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   /// Toggle mute
   void toggleMute() {
     if (state.isMuted) {
-      _player!.setVolume(state.volume * 100);
+      // Restore the saved volume
+      _player!.setVolume(_preMuteVolume * 100);
     } else {
+      // Save current volume before muting
+      _preMuteVolume = state.volume > 0 ? state.volume : 1.0;
       _player!.setVolume(0);
     }
     state = state.copyWith(isMuted: !state.isMuted);
@@ -962,67 +976,47 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
     try {
       if (Platform.isWindows) {
-        // Try VLC directly (no shell, URL passed as argument)
-        try {
-          final vlcResult = await Process.run('vlc', [streamUrl]);
-          if (vlcResult.exitCode == 0) {
-            AppLogger.info('Opened stream in VLC');
-            return true;
-          }
-        } catch (_) {
-          // VLC not in PATH, try common install locations
-        }
-
-        // Try VLC from default install path
-        const vlcPaths = [
+        // Try VLC directly — use Process.start (detached) so it doesn't block
+        for (final vlcPath in [
+          'vlc',
           r'C:\Program Files\VideoLAN\VLC\vlc.exe',
           r'C:\Program Files (x86)\VideoLAN\VLC\vlc.exe',
-        ];
-        for (final vlcPath in vlcPaths) {
+        ]) {
           try {
-            final result = await Process.run(vlcPath, [streamUrl]);
-            if (result.exitCode == 0) {
-              AppLogger.info('Opened stream in VLC');
-              return true;
-            }
+            await Process.start(vlcPath, [streamUrl], mode: ProcessStartMode.detached);
+            AppLogger.info('Opened stream in VLC');
+            return true;
           } catch (_) {
             continue;
           }
         }
 
         // Fallback: use PowerShell Start-Process (safe, no shell injection)
-        final result = await Process.run(
+        await Process.start(
           'powershell',
           ['-NoProfile', '-Command', 'Start-Process', streamUrl],
+          mode: ProcessStartMode.detached,
         );
-        if (result.exitCode == 0) {
-          AppLogger.info('Opened stream with system default player');
-          return true;
-        }
+        AppLogger.info('Opened stream with system default player');
+        return true;
       } else if (Platform.isMacOS) {
-        // Try VLC first (no shell)
-        final result = await Process.run(
-          'open',
-          ['-a', 'VLC', streamUrl],
-        );
-
-        if (result.exitCode == 0) {
+        // Try VLC first (no shell), detached
+        try {
+          await Process.start('open', ['-a', 'VLC', streamUrl], mode: ProcessStartMode.detached);
           AppLogger.info('Opened stream in VLC');
           return true;
+        } catch (_) {
+          // Fallback to default handler
+          await Process.start('open', [streamUrl], mode: ProcessStartMode.detached);
+          return true;
         }
-
-        // Fallback to default handler (no shell)
-        await Process.run('open', [streamUrl]);
-        return true;
       } else if (Platform.isLinux) {
-        // Try common players in order (no shell)
+        // Try common players in order (detached)
         for (final player in ['vlc', 'mpv', 'celluloid', 'xdg-open']) {
           try {
-            final result = await Process.run(player, [streamUrl]);
-            if (result.exitCode == 0) {
-              AppLogger.info('Opened stream in $player');
-              return true;
-            }
+            await Process.start(player, [streamUrl], mode: ProcessStartMode.detached);
+            AppLogger.info('Opened stream in $player');
+            return true;
           } catch (_) {
             continue;
           }

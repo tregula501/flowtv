@@ -36,11 +36,10 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     final l10n = AppLocalizations.of(context)!;
     final playlistsAsync = ref.watch(playlistsProvider);
     final currentChannel = ref.watch(currentChannelProvider);
-    // Only watch isPlaying to avoid rebuilds on every player tick
-    final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
 
-    // Show fullscreen player when a channel is playing
-    if (currentChannel != null && isPlaying) {
+    // Show fullscreen player when a channel is selected (not just playing —
+    // isPlaying is false during buffering, which would flicker the screen)
+    if (currentChannel != null) {
       return _MobilePlayerScreen(
         channel: currentChannel,
         onBack: () {
@@ -408,10 +407,7 @@ class _MobilePlayerScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final playerState = ref.watch(playerControllerProvider);
     final playerNotifier = ref.read(playerControllerProvider.notifier);
-    final castState = ref.watch(castControllerProvider);
-    final castNotifier = ref.read(castControllerProvider.notifier);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -432,48 +428,78 @@ class _MobilePlayerScreen extends ConsumerWidget {
               ),
             ),
 
-            // Loading indicator
-            if (playerState.isBuffering || playerState.isPrebuffering)
-              const Center(
-                child: CircularProgressIndicator(color: Colors.white),
-              ),
+            // Status overlays (use Consumer + .select to avoid full-state rebuilds)
+            Consumer(
+              builder: (context, ref, _) {
+                final isBuffering = ref.watch(playerControllerProvider.select((s) => s.isBuffering));
+                final isPrebuffering = ref.watch(playerControllerProvider.select((s) => s.isPrebuffering));
+                final isReconnecting = ref.watch(playerControllerProvider.select((s) => s.isReconnecting));
+                final error = ref.watch(playerControllerProvider.select((s) => s.error));
+                final retryAttempt = ref.watch(playerControllerProvider.select((s) => s.retryAttempt));
+                final maxRetries = ref.watch(playerControllerProvider.select((s) => s.maxRetries));
 
-            // Error message
-            if (playerState.error != null)
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.black87,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                      const SizedBox(height: 16),
-                      Text(
-                        l10n.playbackError,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.white,
+                return Stack(
+                  children: [
+                    // Prebuffering / reconnecting / buffering indicator
+                    if (isPrebuffering || isReconnecting || isBuffering)
+                      Center(
+                        child: CircularProgressIndicator(
+                          color: isReconnecting ? Colors.orange : Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        playerState.error!,
-                        style: const TextStyle(color: Colors.white70),
-                        textAlign: TextAlign.center,
+                    if (isReconnecting)
+                      Positioned(
+                        bottom: 80,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Text(
+                            l10n.retryAttempt(retryAttempt, maxRetries),
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => playerNotifier.playChannel(channel),
-                        child: Text(l10n.retry),
+
+                    // Error message (hidden during auto-reconnect)
+                    if (error != null && !isReconnecting)
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.orange, size: 48),
+                              const SizedBox(height: 16),
+                              Text(
+                                l10n.playbackError,
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                error,
+                                style: const TextStyle(color: Colors.white70),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () => ref.read(playerControllerProvider.notifier).playChannel(channel),
+                                child: Text(l10n.retry),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
+                  ],
+                );
+              },
+            ),
 
             // Top bar with back button, channel name, and cast button
             Positioned(
@@ -508,24 +534,20 @@ class _MobilePlayerScreen extends ConsumerWidget {
                       ),
                     ),
                     // Chromecast button
-                    if (castState.isSupported)
-                      IconButton(
-                        icon: Icon(
-                          castState.isConnected
-                              ? Icons.cast_connected
-                              : Icons.cast,
-                          color: castState.isConnected
-                              ? Colors.blue
-                              : Colors.white,
-                        ),
-                        onPressed: () => _showCastDialog(
-                          context,
-                          ref,
-                          castState,
-                          castNotifier,
-                          channel,
-                        ),
-                      ),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final isSupported = ref.watch(castControllerProvider.select((s) => s.isSupported));
+                        final isConnected = ref.watch(castControllerProvider.select((s) => s.isConnected));
+                        if (!isSupported) return const SizedBox.shrink();
+                        return IconButton(
+                          icon: Icon(
+                            isConnected ? Icons.cast_connected : Icons.cast,
+                            color: isConnected ? Colors.blue : Colors.white,
+                          ),
+                          onPressed: () => showCastSheet(context, ref, channel),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -545,34 +567,40 @@ class _MobilePlayerScreen extends ConsumerWidget {
                     colors: [Colors.black54, Colors.transparent],
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Play/Pause
-                    IconButton(
-                      icon: Icon(
-                        playerState.isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                      onPressed: () => playerNotifier.playPause(),
-                    ),
-                    const SizedBox(width: 24),
-                    // Volume
-                    IconButton(
-                      icon: Icon(
-                        playerState.isMuted ? Icons.volume_off : Icons.volume_up,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => playerNotifier.toggleMute(),
-                    ),
-                    const SizedBox(width: 24),
-                    // Refresh
-                    IconButton(
-                      icon: const Icon(Icons.refresh, color: Colors.white),
-                      onPressed: () => playerNotifier.refreshChannel(channel),
-                    ),
-                  ],
+                child: Consumer(
+                  builder: (context, ref, _) {
+                    final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
+                    final isMuted = ref.watch(playerControllerProvider.select((s) => s.isMuted));
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Play/Pause
+                        IconButton(
+                          icon: Icon(
+                            isPlaying ? Icons.pause : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                          onPressed: () => ref.read(playerControllerProvider.notifier).playPause(),
+                        ),
+                        const SizedBox(width: 24),
+                        // Volume
+                        IconButton(
+                          icon: Icon(
+                            isMuted ? Icons.volume_off : Icons.volume_up,
+                            color: Colors.white,
+                          ),
+                          onPressed: () => ref.read(playerControllerProvider.notifier).toggleMute(),
+                        ),
+                        const SizedBox(width: 24),
+                        // Refresh
+                        IconButton(
+                          icon: const Icon(Icons.refresh, color: Colors.white),
+                          onPressed: () => ref.read(playerControllerProvider.notifier).refreshChannel(channel),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -581,16 +609,6 @@ class _MobilePlayerScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  void _showCastDialog(
-    BuildContext context,
-    WidgetRef ref,
-    CastState castState,
-    CastControllerNotifier castNotifier,
-    Channel channel,
-  ) {
-    showCastSheet(context, ref, channel);
   }
 }
 

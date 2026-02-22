@@ -83,70 +83,73 @@ class PlaylistManager {
   }) async {
     _ref.read(playlistProgressProvider.notifier).startLoading('Downloading playlist...');
 
-    // Parse the playlist
-    onProgress?.call(0, 100, 'Downloading playlist...');
-    _updateProgress(0, 100, 'Downloading playlist...');
-    AppLogger.info('Parsing playlist: $name');
-    final result = await _parser.parseFromUrl(url);
+    try {
+      // Parse the playlist
+      onProgress?.call(0, 100, 'Downloading playlist...');
+      _updateProgress(0, 100, 'Downloading playlist...');
+      AppLogger.info('Parsing playlist: $name');
+      final result = await _parser.parseFromUrl(url);
 
-    final channels = result.channels;
-    final total = channels.length;
+      final channels = result.channels;
+      final total = channels.length;
 
-    onProgress?.call(0, total, 'Preparing database...');
-    _updateProgress(0, total, 'Preparing database...');
+      onProgress?.call(0, total, 'Preparing database...');
+      _updateProgress(0, total, 'Preparing database...');
 
-    // Check if this is the first playlist
-    final existingCount = await _db.playlists.count().getSingle();
-    final isActive = existingCount == 0;
+      // Check if this is the first playlist
+      final existingCount = await _db.playlists.count().getSingle();
+      final isActive = existingCount == 0;
 
-    // Save playlist
-    final playlistId = await _db.into(_db.playlists).insert(
-      PlaylistsCompanion.insert(
-        name: name,
-        url: url,
-        type: PlaylistType.m3u,
-        createdAt: DateTime.now(),
-        epgUrl: Value(epgUrl ?? result.epgUrl),
-        isActive: Value(isActive),
-        channelCount: Value(channels.length),
-        lastRefresh: Value(DateTime.now()),
-      ),
-    );
+      // Save playlist
+      final playlistId = await _db.into(_db.playlists).insert(
+        PlaylistsCompanion.insert(
+          name: name,
+          url: url,
+          type: PlaylistType.m3u,
+          createdAt: DateTime.now(),
+          epgUrl: Value(epgUrl ?? result.epgUrl),
+          isActive: Value(isActive),
+          channelCount: Value(channels.length),
+          lastRefresh: Value(DateTime.now()),
+        ),
+      );
 
-    // Batch insert channels in chunks
-    const batchSize = 500;
-    int processed = 0;
+      // Batch insert channels in chunks
+      const batchSize = 500;
+      int processed = 0;
 
-    for (int i = 0; i < channels.length; i += batchSize) {
-      final end = (i + batchSize > channels.length) ? channels.length : i + batchSize;
-      final chunk = channels.sublist(i, end);
+      for (int i = 0; i < channels.length; i += batchSize) {
+        final end = (i + batchSize > channels.length) ? channels.length : i + batchSize;
+        final chunk = channels.sublist(i, end);
 
-      await _db.batch((batch) {
-        for (final c in chunk) {
-          batch.insert(
-            _db.channels,
-            ChannelsCompanion.insert(
-              playlistId: playlistId,
-              name: c.name,
-              streamUrl: c.streamUrl,
-              logoUrl: Value(c.logoUrl),
-              epgId: Value(c.epgId),
-              group: Value(c.group),
-              channelNumber: Value(c.channelNumber),
-            ),
-          );
-        }
-      });
+        await _db.batch((batch) {
+          for (final c in chunk) {
+            batch.insert(
+              _db.channels,
+              ChannelsCompanion.insert(
+                playlistId: playlistId,
+                name: c.name,
+                streamUrl: c.streamUrl,
+                logoUrl: Value(c.logoUrl),
+                epgId: Value(c.epgId),
+                group: Value(c.group),
+                channelNumber: Value(c.channelNumber),
+              ),
+            );
+          }
+        });
 
-      processed = end;
-      onProgress?.call(processed, total, 'Adding channels...');
-      _updateProgress(processed, total, 'Adding channels...');
+        processed = end;
+        onProgress?.call(processed, total, 'Adding channels...');
+        _updateProgress(processed, total, 'Adding channels...');
+      }
+
+      final playlist = await (_db.select(_db.playlists)..where((t) => t.id.equals(playlistId))).getSingle();
+      AppLogger.info('Added playlist with $total channels using batch inserts');
+      return playlist;
+    } finally {
+      _ref.read(playlistProgressProvider.notifier).stopLoading();
     }
-
-    final playlist = await (_db.select(_db.playlists)..where((t) => t.id.equals(playlistId))).getSingle();
-    AppLogger.info('Added playlist with $total channels using batch inserts');
-    _ref.read(playlistProgressProvider.notifier).stopLoading();
-    return playlist;
   }
 
   /// Add a new Xtream Codes playlist
@@ -338,63 +341,66 @@ class PlaylistManager {
   }) async {
     _ref.read(playlistProgressProvider.notifier).startLoading('Downloading playlist...');
 
-    // Re-parse the playlist
-    onProgress?.call(0, 100, 'Downloading playlist...');
-    _updateProgress(0, 100, 'Downloading playlist...');
-    final result = await _parser.parseFromUrl(playlist.url);
+    try {
+      // Re-parse the playlist
+      onProgress?.call(0, 100, 'Downloading playlist...');
+      _updateProgress(0, 100, 'Downloading playlist...');
+      final result = await _parser.parseFromUrl(playlist.url);
 
-    final channels = result.channels;
-    final total = channels.length;
+      final channels = result.channels;
+      final total = channels.length;
 
-    onProgress?.call(0, total, 'Clearing old channels...');
-    _updateProgress(0, total, 'Clearing old channels...');
+      onProgress?.call(0, total, 'Clearing old channels...');
+      _updateProgress(0, total, 'Clearing old channels...');
 
-    // Atomic refresh: delete + re-insert in a single transaction
-    await _db.transaction(() async {
-      // Delete old channels
-      await (_db.delete(_db.channels)..where((t) => t.playlistId.equals(playlist.id))).go();
+      // Atomic refresh: delete + re-insert in a single transaction
+      await _db.transaction(() async {
+        // Delete old channels
+        await (_db.delete(_db.channels)..where((t) => t.playlistId.equals(playlist.id))).go();
 
-      // Batch insert new channels
-      const batchSize = 500;
-      int processed = 0;
+        // Batch insert new channels
+        const batchSize = 500;
+        int processed = 0;
 
-      for (int i = 0; i < channels.length; i += batchSize) {
-        final end = (i + batchSize > channels.length) ? channels.length : i + batchSize;
-        final chunk = channels.sublist(i, end);
+        for (int i = 0; i < channels.length; i += batchSize) {
+          final end = (i + batchSize > channels.length) ? channels.length : i + batchSize;
+          final chunk = channels.sublist(i, end);
 
-        await _db.batch((batch) {
-          for (final c in chunk) {
-            batch.insert(
-              _db.channels,
-              ChannelsCompanion.insert(
-                playlistId: playlist.id,
-                name: c.name,
-                streamUrl: c.streamUrl,
-                logoUrl: Value(c.logoUrl),
-                epgId: Value(c.epgId),
-                group: Value(c.group),
-                channelNumber: Value(c.channelNumber),
-              ),
-            );
-          }
-        });
+          await _db.batch((batch) {
+            for (final c in chunk) {
+              batch.insert(
+                _db.channels,
+                ChannelsCompanion.insert(
+                  playlistId: playlist.id,
+                  name: c.name,
+                  streamUrl: c.streamUrl,
+                  logoUrl: Value(c.logoUrl),
+                  epgId: Value(c.epgId),
+                  group: Value(c.group),
+                  channelNumber: Value(c.channelNumber),
+                ),
+              );
+            }
+          });
 
-        processed = end;
-        onProgress?.call(processed, total, 'Adding channels...');
-        _updateProgress(processed, total, 'Adding channels...');
-      }
+          processed = end;
+          onProgress?.call(processed, total, 'Adding channels...');
+          _updateProgress(processed, total, 'Adding channels...');
+        }
 
-      // Update playlist
-      await (_db.update(_db.playlists)..where((t) => t.id.equals(playlist.id)))
-          .write(PlaylistsCompanion(
-        channelCount: Value(total),
-        lastRefresh: Value(DateTime.now()),
-        epgUrl: result.epgUrl != null && playlist.epgUrl == null ? Value(result.epgUrl) : const Value.absent(),
-      ),);
-    });
+        // Update playlist
+        await (_db.update(_db.playlists)..where((t) => t.id.equals(playlist.id)))
+            .write(PlaylistsCompanion(
+          channelCount: Value(total),
+          lastRefresh: Value(DateTime.now()),
+          epgUrl: result.epgUrl != null && playlist.epgUrl == null ? Value(result.epgUrl) : const Value.absent(),
+        ),);
+      });
 
-    AppLogger.info('Refreshed M3U playlist with $total channels');
-    _ref.read(playlistProgressProvider.notifier).stopLoading();
+      AppLogger.info('Refreshed M3U playlist with $total channels');
+    } finally {
+      _ref.read(playlistProgressProvider.notifier).stopLoading();
+    }
   }
 
   Future<void> _refreshXtreamPlaylist(
@@ -488,8 +494,8 @@ class PlaylistManager {
     });
 
     AppLogger.info('Refreshed Xtream playlist with $total channels');
-    _ref.read(playlistProgressProvider.notifier).stopLoading();
     } finally {
+      _ref.read(playlistProgressProvider.notifier).stopLoading();
       client.close();
     }
   }

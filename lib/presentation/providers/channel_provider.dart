@@ -63,7 +63,7 @@ final filteredChannelsProvider = Provider<List<Channel>>((ref) {
           if (selectedGroup == favoritesFilterKey) {
             return channels.where((c) => c.isFavorite).toList();
           }
-          return channels.where((c) => c.group == selectedGroup).toList();
+          return channels.where((c) => (c.group ?? 'Uncategorized') == selectedGroup).toList();
         },
       ) ??
       [];

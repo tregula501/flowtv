@@ -54,55 +54,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _handleKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent) {
-      // Ctrl+F for search
-      if (HardwareKeyboard.instance.isControlPressed &&
-          event.logicalKey == LogicalKeyboardKey.keyF) {
-        _focusNode.requestFocus();
+    if (event is! KeyDownEvent) return;
+
+    final isCtrl = HardwareKeyboard.instance.isControlPressed;
+
+    // Ctrl+F: focus search bar (always active)
+    if (isCtrl && event.logicalKey == LogicalKeyboardKey.keyF) {
+      _focusNode.requestFocus();
+      return;
+    }
+
+    // ESC: exit fullscreen (always active)
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      final isFullscreen = ref.read(playerControllerProvider).isFullscreen;
+      if (isFullscreen) {
+        ref.read(playerControllerProvider.notifier).setFullscreen(false);
       }
-      // ESC to exit fullscreen
-      if (event.logicalKey == LogicalKeyboardKey.escape) {
-        final isFullscreen = ref.read(playerControllerProvider).isFullscreen;
-        if (isFullscreen) {
-          ref.read(playerControllerProvider.notifier).setFullscreen(false);
-        }
-      }
-      // F to toggle fullscreen when playing
-      if (event.logicalKey == LogicalKeyboardKey.keyF &&
-          !HardwareKeyboard.instance.isControlPressed) {
-        final currentChannel = ref.read(currentChannelProvider);
-        if (currentChannel != null) {
-          ref.read(playerControllerProvider.notifier).toggleFullscreen();
-        }
-      }
-      // Space to play/pause
-      if (event.logicalKey == LogicalKeyboardKey.space) {
-        final currentChannel = ref.read(currentChannelProvider);
-        if (currentChannel != null) {
-          ref.read(playerControllerProvider.notifier).playPause();
-        }
-      }
-      // A to cycle aspect ratio
-      if (event.logicalKey == LogicalKeyboardKey.keyA) {
-        final currentChannel = ref.read(currentChannelProvider);
-        if (currentChannel != null) {
-          ref.read(playerControllerProvider.notifier).cycleAspectRatio();
-        }
-      }
-      // M to toggle mute
-      if (event.logicalKey == LogicalKeyboardKey.keyM) {
-        final currentChannel = ref.read(currentChannelProvider);
-        if (currentChannel != null) {
-          ref.read(playerControllerProvider.notifier).toggleMute();
-        }
-      }
-      // P to toggle PiP mode
-      if (event.logicalKey == LogicalKeyboardKey.keyP) {
-        final currentChannel = ref.read(currentChannelProvider);
-        if (currentChannel != null) {
-          ref.read(playerControllerProvider.notifier).togglePiPMode();
-        }
-      }
+      return;
+    }
+
+    // Skip single-key shortcuts when search is focused or Ctrl is held
+    if (_focusNode.hasFocus || isCtrl) return;
+
+    final currentChannel = ref.read(currentChannelProvider);
+    if (currentChannel == null) return;
+
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.keyF:
+        ref.read(playerControllerProvider.notifier).toggleFullscreen();
+      case LogicalKeyboardKey.space:
+        ref.read(playerControllerProvider.notifier).playPause();
+      case LogicalKeyboardKey.keyA:
+        ref.read(playerControllerProvider.notifier).cycleAspectRatio();
+      case LogicalKeyboardKey.keyM:
+        ref.read(playerControllerProvider.notifier).toggleMute();
+      case LogicalKeyboardKey.keyP:
+        ref.read(playerControllerProvider.notifier).togglePiPMode();
+      default:
+        break;
     }
   }
 

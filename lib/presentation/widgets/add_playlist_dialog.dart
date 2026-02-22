@@ -54,8 +54,7 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
     final l10n = AppLocalizations.of(context)!;
     return Dialog(
       child: Container(
-        width: 500,
-        constraints: const BoxConstraints(maxHeight: 600),
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
