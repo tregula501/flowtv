@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/app_localizations.dart';
 import '../providers/player_provider.dart';
 import '../providers/channel_provider.dart';
-import '../providers/recording_provider.dart';
 import 'cast_button.dart';
 
 class VideoPlayerControls extends ConsumerStatefulWidget {
@@ -131,11 +130,6 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
 
                 const SizedBox(width: 16),
 
-                // Record button
-                _RecordButton(),
-
-                const SizedBox(width: 8),
-
                 // Cast button (only visible on Android)
                 const CastButton(iconColor: Colors.white70),
 
@@ -160,47 +154,6 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
         ),
         ),
       ),
-    );
-  }
-}
-
-class _RecordButton extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final currentChannel = ref.watch(currentChannelProvider);
-    final activeRecordings = ref.watch(activeRecordingsProvider);
-
-    if (currentChannel == null) {
-      return const SizedBox.shrink();
-    }
-
-    final isRecording = activeRecordings.any((r) => r.channelId == currentChannel.id);
-
-    return IconButton(
-      icon: Icon(
-        Icons.fiber_manual_record,
-        color: isRecording ? Colors.red : Colors.white70,
-      ),
-      tooltip: isRecording ? l10n.stopRecording : l10n.startRecording,
-      onPressed: () async {
-        final manager = ref.read(recordingManagerProvider);
-        if (isRecording) {
-          await manager.stopRecording(currentChannel.id);
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l10n.stoppedRecordingChannel(currentChannel.name))),
-            );
-          }
-        } else {
-          await manager.startRecording(currentChannel);
-          if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l10n.startedRecordingChannel(currentChannel.name))),
-            );
-          }
-        }
-      },
     );
   }
 }
