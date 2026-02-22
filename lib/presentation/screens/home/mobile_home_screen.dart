@@ -378,8 +378,8 @@ class _MobileChannelList extends ConsumerWidget {
   }
 }
 
-/// Mobile channel tile
-class _MobileChannelTile extends StatelessWidget {
+/// Mobile channel tile with long-press context menu
+class _MobileChannelTile extends ConsumerWidget {
   final Channel channel;
   final VoidCallback onTap;
   final VoidCallback onFavoriteToggle;
@@ -391,7 +391,7 @@ class _MobileChannelTile extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
       leading: _buildLogo(),
       title: Text(
@@ -414,6 +414,67 @@ class _MobileChannelTile extends StatelessWidget {
         onPressed: onFavoriteToggle,
       ),
       onTap: onTap,
+      onLongPress: () => _showContextMenu(context, ref),
+    );
+  }
+
+  void _showContextMenu(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final castState = ref.read(castControllerProvider);
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Channel header
+            ListTile(
+              leading: _buildLogo(),
+              title: Text(channel.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: channel.group != null ? Text(channel.group!) : null,
+            ),
+            const Divider(height: 1),
+            // Favorite toggle
+            ListTile(
+              leading: Icon(
+                channel.isFavorite ? Icons.star : Icons.star_border,
+                color: channel.isFavorite ? Colors.amber : null,
+              ),
+              title: Text(channel.isFavorite ? l10n.removeFromFavorites : l10n.addToFavorites),
+              onTap: () {
+                Navigator.pop(context);
+                ref.read(channelManagerProvider).toggleFavorite(channel.id);
+              },
+            ),
+            // Cast to device
+            if (castState.isSupported)
+              ListTile(
+                leading: const Icon(Icons.cast),
+                title: Text(l10n.castToDeviceAction),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Start playing the channel first, then show cast sheet
+                  ref.read(currentChannelProvider.notifier).select(channel);
+                  ref.read(playerControllerProvider.notifier).playChannel(channel);
+                  ref.read(channelManagerProvider).markAsWatched(channel.id);
+                  showCastSheet(context, ref, channel);
+                },
+              ),
+            // Channel info
+            if (channel.group != null || channel.channelNumber != null)
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(l10n.channelInfo),
+                subtitle: Text([
+                  if (channel.group != null) l10n.channelGroup(channel.group!),
+                  if (channel.channelNumber != null) '#${channel.channelNumber}',
+                ].join(' • ')),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
     );
   }
 
