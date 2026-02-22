@@ -9,6 +9,7 @@ import 'l10n/app_localizations.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/providers/epg_provider.dart';
 import 'presentation/providers/player_provider.dart';
+import 'presentation/providers/connectivity_provider.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/home/mobile_home_screen.dart';
 
@@ -77,6 +78,16 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: _buildHomeScreen(),
+      builder: (context, child) {
+        return Column(
+          children: [
+            // Offline banner
+            const _ConnectivityBanner(),
+            // Main content
+            Expanded(child: child ?? const SizedBox.shrink()),
+          ],
+        );
+      },
     );
   }
 
@@ -94,6 +105,47 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
           return const HomeScreen();
         }
         return const MobileHomeScreen();
+      },
+    );
+  }
+}
+
+/// Banner shown when device is offline
+class _ConnectivityBanner extends ConsumerWidget {
+  const _ConnectivityBanner();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final connectivityAsync = ref.watch(connectivityProvider);
+
+    return connectivityAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (isConnected) {
+        if (isConnected) return const SizedBox.shrink();
+        final l10n = AppLocalizations.of(context);
+        return Material(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.orange.shade800,
+            child: SafeArea(
+              bottom: false,
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n?.noNetworkConnection ?? 'No network connection',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
       },
     );
   }
