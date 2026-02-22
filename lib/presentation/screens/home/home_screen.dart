@@ -140,8 +140,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     return KeyboardListener(
-      focusNode: FocusNode(),
+      focusNode: _keyboardFocusNode,
       onKeyEvent: _handleKeyEvent,
+      autofocus: true,
       child: Scaffold(
         body: playlistsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
