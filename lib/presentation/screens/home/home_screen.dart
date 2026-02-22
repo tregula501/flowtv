@@ -30,9 +30,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _keyboardFocusNode = FocusNode();
 
   // Resizable player panel width
-  double _playerPanelWidth = 480.0;
-  static const double _minPlayerWidth = 320.0;
-  static const double _maxPlayerWidth = 800.0;
+  double _playerPanelWidth = AppConstants.defaultPlayerPanelWidth;
+  static const double _minPlayerWidth = AppConstants.minPlayerWidth;
+  static const double _maxPlayerWidth = AppConstants.maxPlayerWidth;
 
   @override
   void dispose() {
