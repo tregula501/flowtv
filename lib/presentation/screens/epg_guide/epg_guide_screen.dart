@@ -252,6 +252,20 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
                   width: 40,
                   height: 40,
                   fit: BoxFit.contain,
+                  loadingBuilder: (_, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    );
+                  },
                   errorBuilder: (_, _, _) => const Icon(Icons.tv, size: 40),
                 )
               else

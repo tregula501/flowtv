@@ -35,6 +35,7 @@ extension StringExtensions on String {
 
   /// Truncate string with ellipsis
   String truncate(int maxLength) {
+    if (maxLength <= 0) return '';
     if (length <= maxLength) return this;
     if (maxLength <= 3) return substring(0, maxLength);
     return '${substring(0, maxLength - 3)}...';

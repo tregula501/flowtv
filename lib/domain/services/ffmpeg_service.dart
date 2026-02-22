@@ -44,13 +44,18 @@ class FFmpegService {
 
     _initCompleter = Completer<bool>();
 
-    _ffmpegPath = await _findFFmpeg();
+    try {
+      _ffmpegPath = await _findFFmpeg();
 
-    if (_ffmpegPath != null) {
-      AppLogger.info('FFmpeg found at: $_ffmpegPath');
-      _initCompleter!.complete(true);
-    } else {
-      AppLogger.warning('FFmpeg not found. Recording will not work.');
+      if (_ffmpegPath != null) {
+        AppLogger.info('FFmpeg found at: $_ffmpegPath');
+        _initCompleter!.complete(true);
+      } else {
+        AppLogger.warning('FFmpeg not found. Recording will not work.');
+        _initCompleter!.complete(false);
+      }
+    } catch (e) {
+      AppLogger.error('FFmpeg initialization failed: $e');
       _initCompleter!.complete(false);
     }
 

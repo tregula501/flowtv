@@ -188,7 +188,6 @@ class PlaylistManager {
     final total = xtreamChannels.length;
 
     if (total == 0) {
-      _ref.read(playlistProgressProvider.notifier).stopLoading();
       throw Exception('No channels found on this server');
     }
 
@@ -250,9 +249,9 @@ class PlaylistManager {
 
     final playlist = await (_db.select(_db.playlists)..where((t) => t.id.equals(playlistId))).getSingle();
     AppLogger.info('Added Xtream playlist with $total channels');
-    _ref.read(playlistProgressProvider.notifier).stopLoading();
     return playlist;
     } finally {
+      _ref.read(playlistProgressProvider.notifier).stopLoading();
       client.close();
     }
   }

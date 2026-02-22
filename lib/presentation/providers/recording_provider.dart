@@ -207,7 +207,7 @@ class RecordingManager {
           final elapsed = ffmpeg.getRecordingDuration(recording.id);
           if (elapsed != null && elapsed >= duration) {
             AppLogger.info('Recording duration reached, stopping: ${channel.name}');
-            stopRecording(channel.id);
+            await stopRecording(channel.id);
           }
         },
       );

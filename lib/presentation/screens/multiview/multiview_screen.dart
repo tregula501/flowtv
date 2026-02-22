@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../data/datasources/local/drift/app_database.dart' show Channel;
+import '../../../l10n/app_localizations.dart';
 import '../../providers/multiview_provider.dart';
 import '../../providers/channel_provider.dart';
 
@@ -56,6 +57,7 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final multiViewState = ref.watch(multiViewControllerProvider);
 
     return KeyboardListener(
@@ -66,7 +68,7 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
         backgroundColor: Colors.black,
         appBar: AppBar(
           backgroundColor: Colors.black87,
-          title: const Text('Multi-View'),
+          title: Text(l10n.multiView),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () async {
@@ -87,7 +89,7 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
                   const Icon(Icons.volume_up, size: 18),
                   const SizedBox(width: 4),
                   Text(
-                    'Audio: ${multiViewState.activeAudioSlot + 1}',
+                    '${l10n.audio}${multiViewState.activeAudioSlot + 1}',
                     style: const TextStyle(fontSize: 14),
                   ),
                 ],
@@ -96,7 +98,7 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
             // Help button
             IconButton(
               icon: const Icon(Icons.help_outline),
-              tooltip: 'Keyboard shortcuts',
+              tooltip: l10n.keyboardShortcuts,
               onPressed: () => _showHelpDialog(),
             ),
           ],
@@ -196,10 +198,11 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
   }
 
   void _showHelpDialog() {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Multi-View Controls'),
+        title: Text(l10n.multiViewControls),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,7 +222,7 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(l10n.ok),
           ),
         ],
       ),
@@ -342,6 +345,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
   }
 
   Widget _buildEmptySlot() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       color: Colors.grey.shade900,
       child: Center(
@@ -355,7 +359,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Slot ${widget.slot.index + 1}',
+              l10n.slot(widget.slot.index + 1),
               style: TextStyle(
                 color: Colors.grey.shade600,
                 fontSize: 16,
@@ -368,6 +372,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
   }
 
   Widget _buildErrorOverlay() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       color: Colors.black54,
       child: Center(
@@ -377,7 +382,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
             const Icon(Icons.error_outline, color: Colors.red, size: 32),
             const SizedBox(height: 8),
             Text(
-              'Playback Error',
+              l10n.playbackError,
               style: TextStyle(color: Colors.red.shade300),
             ),
           ],
@@ -387,6 +392,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
   }
 
   Widget _buildControlsOverlay() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       color: Colors.black38,
       child: Center(
@@ -399,7 +405,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
                 icon: const Icon(Icons.add_circle_outline, size: 48),
                 color: Colors.white,
                 onPressed: widget.onAddChannel,
-                tooltip: 'Add Channel',
+                tooltip: l10n.addChannel,
               )
             else ...[
               // Set audio active button
@@ -410,7 +416,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
                 ),
                 color: widget.slot.isAudioActive ? Colors.amber : Colors.white,
                 onPressed: widget.onSetAudioActive,
-                tooltip: 'Set Audio Active',
+                tooltip: l10n.setAudioActive,
               ),
               const SizedBox(width: 16),
               // Change channel button
@@ -418,7 +424,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
                 icon: const Icon(Icons.swap_horiz, size: 32),
                 color: Colors.white,
                 onPressed: widget.onAddChannel,
-                tooltip: 'Change Channel',
+                tooltip: l10n.changeChannel,
               ),
               const SizedBox(width: 16),
               // Remove channel button
@@ -426,7 +432,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
                 icon: const Icon(Icons.close, size: 32),
                 color: Colors.red.shade300,
                 onPressed: widget.onRemoveChannel,
-                tooltip: 'Remove Channel',
+                tooltip: l10n.removeChannel,
               ),
             ],
           ],
@@ -470,6 +476,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final channelsAsync = ref.watch(channelsProvider);
 
     return Column(
@@ -489,7 +496,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
         Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'Select Channel',
+            l10n.selectChannelTitle,
             style: Theme.of(context).textTheme.titleLarge,
           ),
         ),
@@ -500,7 +507,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Search channels...',
+              hintText: l10n.searchChannels,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
@@ -527,7 +534,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
         Expanded(
           child: channelsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, _) => const Center(child: Text('Failed to load channels.')),
+            error: (_, _) => Center(child: Text(l10n.failedToLoadChannels)),
             data: (channels) {
               final filteredChannels = _filterChannels(channels);
               if (filteredChannels.isEmpty) {
@@ -538,7 +545,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
                       Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
                       const SizedBox(height: 8),
                       Text(
-                        'No channels found',
+                        l10n.noChannels,
                         style: TextStyle(color: Colors.grey.shade600),
                       ),
                     ],

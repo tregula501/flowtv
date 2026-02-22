@@ -274,5 +274,6 @@
   "bufferSize": "Buffer Size",
   "noNetworkConnection": "No network connection",
   "offlineMode": "You are offline. Cached data is shown.",
-  "networkRestored": "Network connection restored"
+  "networkRestored": "Network connection restored",
+  "selectChannelTitle": "Select Channel"
 }

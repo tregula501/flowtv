@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,17 +10,18 @@ final connectivityProvider = StreamNotifierProvider<ConnectivityNotifier, bool>(
 
 class ConnectivityNotifier extends StreamNotifier<bool> {
   @override
-  Stream<bool> build() {
-    // Check initial state
-    Connectivity().checkConnectivity().then((results) {
-      final connected = results.any((r) => r != ConnectivityResult.none);
-      AppLogger.info('Initial connectivity: ${connected ? "online" : "offline"}');
-    });
+  Stream<bool> build() async* {
+    // Emit initial connectivity state so the provider isn't stuck in loading
+    final initial = await Connectivity().checkConnectivity();
+    final initiallyConnected = initial.any((r) => r != ConnectivityResult.none);
+    AppLogger.info('Initial connectivity: ${initiallyConnected ? "online" : "offline"}');
+    yield initiallyConnected;
 
-    return Connectivity().onConnectivityChanged.map((results) {
+    // Then stream ongoing changes
+    await for (final results in Connectivity().onConnectivityChanged) {
       final connected = results.any((r) => r != ConnectivityResult.none);
       AppLogger.info('Connectivity changed: ${connected ? "online" : "offline"}');
-      return connected;
-    });
+      yield connected;
+    }
   }
 }

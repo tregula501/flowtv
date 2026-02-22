@@ -19,7 +19,9 @@ Future<T> withRetry<T>(
     } catch (e) {
       if (attempt == maxAttempts) rethrow;
 
-      final baseDelay = initialDelay * pow(2, attempt - 1);
+      // Cap the exponent to prevent overflow with large maxAttempts
+      final exponent = min(attempt - 1, 10);
+      final baseDelay = initialDelay * pow(2, exponent);
       // Add ±10% random jitter to avoid synchronized retries
       final jitter = baseDelay.inMilliseconds * 0.1 * (2 * random.nextDouble() - 1);
       final delay = Duration(
