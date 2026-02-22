@@ -298,6 +298,19 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   @override
   PlayerState build() {
+    // Clean up from any prior build() call (Notifier.build() re-runs on invalidation)
+    _isDisposed = false;
+    _prebufferProgressTimer?.cancel();
+    _prebufferCompleteTimer?.cancel();
+    _retryTimer?.cancel();
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
+    _player?.dispose();
+    _player = null;
+    _videoController = null;
+
     _loadBufferSizeFromDb();
     _initPlayer();
 
@@ -354,8 +367,17 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     }
   }
 
-  Player get player => _player!;
-  VideoController get videoController => _videoController!;
+  Player get player {
+    final p = _player;
+    if (p == null) throw StateError('Player not initialized');
+    return p;
+  }
+
+  VideoController get videoController {
+    final vc = _videoController;
+    if (vc == null) throw StateError('VideoController not initialized');
+    return vc;
+  }
   Channel? get currentChannel => _currentChannel;
 
   void _initPlayer() {
@@ -1035,10 +1057,10 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
           }
         }
 
-        // Fallback: use PowerShell Start-Process (safe, no shell injection)
+        // Fallback: use PowerShell Start-Process with quoted URL to prevent metachar interpretation
         await Process.start(
           'powershell',
-          ['-NoProfile', '-Command', 'Start-Process', streamUrl],
+          ['-NoProfile', '-Command', 'Start-Process', "'$streamUrl'"],
           mode: ProcessStartMode.detached,
         );
         AppLogger.info('Opened stream with system default player');

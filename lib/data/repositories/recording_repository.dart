@@ -30,7 +30,12 @@ class RecordingRepository {
     AppLogger.info('Recordings directory: $_recordingsDir');
   }
 
-  String get recordingsDir => _recordingsDir;
+  String get recordingsDir {
+    if (!_initialized) {
+      throw StateError('RecordingRepository not initialized. Call initialize() first.');
+    }
+    return _recordingsDir;
+  }
 
   /// Generate a unique file path for a new recording
   String generateFilePath(String title, DateTime startTime) {
@@ -173,11 +178,15 @@ class RecordingRepository {
   Future<void> deleteRecording(int recordingId) async {
     final recording = await (_db.select(_db.recordings)..where((t) => t.id.equals(recordingId))).getSingleOrNull();
     if (recording != null) {
-      // Delete the file if it exists
-      final file = File(recording.filePath);
-      if (await file.exists()) {
-        await file.delete();
-        AppLogger.info('Deleted recording file: ${recording.filePath}');
+      // Delete the file if it exists (don't let file errors block DB cleanup)
+      try {
+        final file = File(recording.filePath);
+        if (await file.exists()) {
+          await file.delete();
+          AppLogger.info('Deleted recording file: ${recording.filePath}');
+        }
+      } catch (e) {
+        AppLogger.warning('Could not delete recording file: ${recording.filePath}: $e');
       }
 
       // Delete from database

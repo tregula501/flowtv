@@ -91,6 +91,19 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
 
   @override
   MultiViewState build() {
+    // Clean up from any prior build() call (Notifier.build() re-runs on invalidation)
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
+    try {
+      for (final slot in state.slots) {
+        slot.player.dispose();
+      }
+    } catch (_) {
+      // state not yet initialized on first build
+    }
+
     // Initialize slots when building
     final slots = <MultiViewSlot>[];
 

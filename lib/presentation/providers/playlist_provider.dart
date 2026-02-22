@@ -277,12 +277,14 @@ class PlaylistManager {
 
   /// Set active playlist
   Future<void> setActivePlaylist(int playlistId) async {
-    // Deactivate all playlists
-    await _db.update(_db.playlists).write(const PlaylistsCompanion(isActive: Value(false)));
+    await _db.transaction(() async {
+      // Deactivate all playlists
+      await _db.update(_db.playlists).write(const PlaylistsCompanion(isActive: Value(false)));
 
-    // Activate selected playlist
-    await (_db.update(_db.playlists)..where((t) => t.id.equals(playlistId)))
-        .write(const PlaylistsCompanion(isActive: Value(true)));
+      // Activate selected playlist
+      await (_db.update(_db.playlists)..where((t) => t.id.equals(playlistId)))
+          .write(const PlaylistsCompanion(isActive: Value(true)));
+    });
   }
 
   /// Delete a playlist and all its related data (channels, favorites, recordings)
@@ -354,6 +356,20 @@ class PlaylistManager {
 
       // Atomic refresh: delete + re-insert in a single transaction
       await _db.transaction(() async {
+        // Clean up FK-dependent rows before deleting channels
+        final oldChannelIds = await (_db.select(_db.channels)
+              ..where((t) => t.playlistId.equals(playlist.id)))
+            .map((c) => c.id)
+            .get();
+        if (oldChannelIds.isNotEmpty) {
+          await (_db.delete(_db.favorites)
+                ..where((t) => t.channelId.isIn(oldChannelIds)))
+              .go();
+          await (_db.delete(_db.recordings)
+                ..where((t) => t.channelId.isIn(oldChannelIds)))
+              .go();
+        }
+
         // Delete old channels
         await (_db.delete(_db.channels)..where((t) => t.playlistId.equals(playlist.id))).go();
 
@@ -448,6 +464,20 @@ class PlaylistManager {
 
     // Atomic refresh: delete + re-insert in a single transaction
     await _db.transaction(() async {
+      // Clean up FK-dependent rows before deleting channels
+      final oldChannelIds = await (_db.select(_db.channels)
+            ..where((t) => t.playlistId.equals(playlist.id)))
+          .map((c) => c.id)
+          .get();
+      if (oldChannelIds.isNotEmpty) {
+        await (_db.delete(_db.favorites)
+              ..where((t) => t.channelId.isIn(oldChannelIds)))
+            .go();
+        await (_db.delete(_db.recordings)
+              ..where((t) => t.channelId.isIn(oldChannelIds)))
+            .go();
+      }
+
       // Delete old channels
       await (_db.delete(_db.channels)..where((t) => t.playlistId.equals(playlist.id))).go();
 

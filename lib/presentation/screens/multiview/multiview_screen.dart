@@ -252,10 +252,16 @@ class _MultiViewTileState extends State<_MultiViewTile> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: Container(
+    return GestureDetector(
+      onTap: () {
+        if (widget.slot.channel != null) {
+          setState(() => _isHovered = !_isHovered);
+        }
+      },
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: Container(
         decoration: BoxDecoration(
           border: Border.all(
             color: widget.slot.isAudioActive
@@ -341,6 +347,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
           ],
         ),
       ),
+    ),
     );
   }
 

@@ -44,6 +44,10 @@ class CastControllerNotifier extends Notifier<CastState> {
 
   @override
   CastState build() {
+    // Clean up from any prior build() call (Notifier.build() re-runs on invalidation)
+    _devicesSubscription?.cancel();
+    _sessionSubscription?.cancel();
+
     // Check platform support
     final isSupported = CastService.isSupported;
 

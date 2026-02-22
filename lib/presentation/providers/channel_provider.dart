@@ -118,6 +118,7 @@ class ChannelSearchQueryNotifier extends Notifier<String> {
 
   @override
   String build() {
+    _debounce?.cancel();
     ref.onDispose(() => _debounce?.cancel());
     return '';
   }

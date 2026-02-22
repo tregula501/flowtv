@@ -97,7 +97,7 @@ class FFmpegService {
         final result = await Process.run(
           path,
           ['-version'],
-          runInShell: true,
+          runInShell: Platform.isWindows,
         );
         if (result.exitCode == 0) {
           return path;
@@ -179,11 +179,10 @@ class FFmpegService {
 
       AppLogger.info('Starting FFmpeg recording: $_ffmpegPath ${args.join(' ')}');
 
-      // Start FFmpeg process
+      // Start FFmpeg process (no runInShell to prevent cmd.exe metachar injection)
       final process = await Process.start(
         _ffmpegPath!,
         args,
-        runInShell: Platform.isWindows,
       );
 
       // Create session
@@ -253,8 +252,8 @@ class FFmpegService {
       // Send 'q' to FFmpeg to gracefully stop
       if (session._process != null) {
         if (Platform.isWindows) {
-          // On Windows, kill the process (graceful stop is harder)
-          session._process!.kill(ProcessSignal.sigint);
+          // On Windows, kill the process (sigint not supported on Windows)
+          session._process!.kill();
         } else {
           // On Unix, send 'q' to stdin for graceful stop
           session._process!.stdin.write('q');
