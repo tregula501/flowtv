@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../l10n/app_localizations.dart';
+import '../../providers/cast_provider.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../widgets/cast_device_sheet.dart';
 import '../../widgets/video_player_controls.dart';
 
 class PlayerScreen extends ConsumerWidget {
@@ -84,6 +86,28 @@ class PlayerScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
+                // Chromecast button (only shown when supported, i.e. Android)
+                Consumer(
+                  builder: (context, ref, _) {
+                    final castState = ref.watch(castControllerProvider);
+                    if (!castState.isSupported) return const SizedBox.shrink();
+                    return IconButton(
+                      icon: Icon(
+                        castState.isConnected
+                            ? Icons.cast_connected
+                            : Icons.cast,
+                        color: castState.isConnected
+                            ? Colors.blue
+                            : Colors.white70,
+                        size: 20,
+                      ),
+                      tooltip: l10n.cast,
+                      onPressed: () =>
+                          showCastSheet(context, ref, currentChannel),
+                    );
+                  },
+                ),
+
                 // Expand/Collapse button (in-app fullscreen)
                 IconButton(
                   icon: Icon(

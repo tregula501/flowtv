@@ -81,11 +81,19 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
   }
 
   Widget _buildHomeScreen() {
-    // Use mobile UI for Android and iOS
-    if (Platform.isAndroid || Platform.isIOS) {
-      return const MobileHomeScreen();
+    // Use width-based breakpoint so foldables/tablets get the richer
+    // desktop-style layout when unfolded, while phones stay with the
+    // mobile bottom-nav UI.  Desktop platforms always get HomeScreen.
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      return const HomeScreen();
     }
-    // Use desktop UI for Windows, macOS, Linux
-    return const HomeScreen();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 600) {
+          return const HomeScreen();
+        }
+        return const MobileHomeScreen();
+      },
+    );
   }
 }
