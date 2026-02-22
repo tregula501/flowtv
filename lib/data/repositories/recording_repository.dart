@@ -118,7 +118,7 @@ class RecordingRepository {
       if (await file.exists()) {
         final fileSize = await file.length();
         final durationSeconds = recording.actualStart != null
-            ? DateTime.now().difference(recording.actualStart!).inSeconds
+            ? (recording.actualEnd ?? DateTime.now()).difference(recording.actualStart!).inSeconds
             : 0;
 
         await (_db.update(_db.recordings)..where((t) => t.id.equals(recordingId)))

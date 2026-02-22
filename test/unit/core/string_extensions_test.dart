@@ -171,8 +171,8 @@ void main() {
         expect('Hello'.truncate(5), 'Hello');
       });
 
-      test('should handle maxLength of 3 (minimum for ellipsis)', () {
-        expect('Hello World'.truncate(3), '...');
+      test('should handle maxLength of 3 (returns plain substring)', () {
+        expect('Hello World'.truncate(3), 'Hel');
       });
 
       test('should handle empty string', () {

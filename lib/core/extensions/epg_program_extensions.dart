@@ -19,6 +19,7 @@ extension EpgProgramExtensions on EpgProgram {
     final now = DateTime.now();
     final elapsed = now.difference(startTime).inSeconds;
     final total = endTime.difference(startTime).inSeconds;
+    if (total <= 0) return 0.0;
     return (elapsed / total).clamp(0.0, 1.0);
   }
 }

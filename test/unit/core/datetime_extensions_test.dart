@@ -179,9 +179,9 @@ void main() {
         expect(date.relativeTime, anyOf('in 4d', 'in 5d'));
       });
 
-      test('should show 0 min ago for just now', () {
+      test('should show "just now" for just now', () {
         final date = DateTime.now();
-        expect(date.relativeTime, anyOf('0 min ago', '1 min ago'));
+        expect(date.relativeTime, 'just now');
       });
     });
   });

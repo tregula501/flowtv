@@ -59,7 +59,9 @@ extension DateTimeExtensions on DateTime {
       }
     } else {
       // Past
-      if (difference.inMinutes < 60) {
+      if (difference.inSeconds < 60) {
+        return 'just now';
+      } else if (difference.inMinutes < 60) {
         return '${difference.inMinutes} min ago';
       } else if (difference.inHours < 24) {
         return '${difference.inHours}h ago';

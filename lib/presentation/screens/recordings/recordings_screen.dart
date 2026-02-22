@@ -296,19 +296,41 @@ class _RecordingTile extends ConsumerWidget {
   }
 
   void _handleAction(BuildContext context, WidgetRef ref, String action) {
-    final manager = ref.read(recordingManagerProvider);
-
     switch (action) {
       case 'play':
         _playRecording(context, ref);
         break;
       case 'stop':
-        manager.stopRecording(recording.channelId);
+        _confirmStop(context, ref);
         break;
       case 'delete':
         _confirmDelete(context, ref);
         break;
     }
+  }
+
+  void _confirmStop(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Stop Recording'),
+        content: Text('Are you sure you want to stop recording "${recording.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(recordingManagerProvider).stopRecording(recording.channelId);
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Stop'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref) {
