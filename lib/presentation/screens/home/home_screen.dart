@@ -33,6 +33,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   double _playerPanelWidth = AppConstants.defaultPlayerPanelWidth;
   static const double _minPlayerWidth = AppConstants.minPlayerWidth;
   static const double _maxPlayerWidth = AppConstants.maxPlayerWidth;
+  bool _hasInitializedPlayerWidth = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_hasInitializedPlayerWidth) {
+      _hasInitializedPlayerWidth = true;
+      final screenWidth = MediaQuery.of(context).size.width;
+      _playerPanelWidth = (screenWidth * 0.35).clamp(_minPlayerWidth, _maxPlayerWidth);
+    }
+  }
 
   @override
   void dispose() {
