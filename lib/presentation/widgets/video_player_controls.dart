@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -419,35 +420,37 @@ class _QualitySettingsButton extends ConsumerWidget {
             ),),
         const PopupMenuDivider(),
 
-        // Buffer size section
-        const PopupMenuItem(
-          enabled: false,
-          height: 32,
-          child: Text(
-            'BUFFER SIZE',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
+        // Buffer size section (desktop only — MPV-specific setting)
+        if (!Platform.isAndroid && !Platform.isIOS) ...[
+          const PopupMenuItem(
+            enabled: false,
+            height: 32,
+            child: Text(
+              'BUFFER SIZE',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
             ),
           ),
-        ),
-        ...BufferSize.values.map((size) => PopupMenuItem(
-              value: 'buffer:${size.index}',
-              child: Row(
-                children: [
-                  Icon(
-                    playerState.bufferSize == size
-                        ? Icons.check
-                        : Icons.radio_button_unchecked,
-                    size: 18,
-                    color: playerState.bufferSize == size ? Colors.blue : Colors.grey,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(size.displayName),
-                ],
-              ),
-            ),),
+          ...BufferSize.values.map((size) => PopupMenuItem(
+                value: 'buffer:${size.index}',
+                child: Row(
+                  children: [
+                    Icon(
+                      playerState.bufferSize == size
+                          ? Icons.check
+                          : Icons.radio_button_unchecked,
+                      size: 18,
+                      color: playerState.bufferSize == size ? Colors.blue : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(size.displayName),
+                  ],
+                ),
+              ),),
+        ],
       ],
       onSelected: (value) {
         final controller = ref.read(playerControllerProvider.notifier);
