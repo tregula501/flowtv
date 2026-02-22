@@ -165,7 +165,7 @@ class _ChannelTileState extends State<ChannelTile> {
                     widget.channel.isFavorite ? Icons.star : Icons.star_border,
                     color: widget.channel.isFavorite
                         ? Colors.amber
-                        : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                        : Colors.white70,
                     size: 20,
                   ),
                   onPressed: widget.onFavoriteToggle,
