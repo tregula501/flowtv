@@ -114,6 +114,7 @@ class M3uParser {
     int? currentNumber;
     String? currentLanguage;
     String? currentCountry;
+    String? currentType;
 
     for (int i = 1; i < lines.length; i++) {
       final line = lines[i];
@@ -130,6 +131,7 @@ class M3uParser {
         currentNumber = parsed['number'];
         currentLanguage = parsed['language'];
         currentCountry = parsed['country'];
+        currentType = parsed['type'] as String?;
       } else if (line.startsWith('#')) {
         // Skip other directives
         continue;
@@ -144,7 +146,7 @@ class M3uParser {
           channelNumber: currentNumber,
           language: currentLanguage,
           country: currentCountry,
-          isVod: _isVodUrl(line),
+          isVod: _isVodContent(line, currentType, currentGroup),
         );
 
         channels.add(channel);
@@ -161,6 +163,7 @@ class M3uParser {
         currentNumber = null;
         currentLanguage = null;
         currentCountry = null;
+        currentType = null;
       }
     }
 
@@ -189,6 +192,7 @@ class M3uParser {
     result['group'] = _extractAttribute(line, 'group-title');
     result['language'] = _extractAttribute(line, 'tvg-language');
     result['country'] = _extractAttribute(line, 'tvg-country');
+    result['type'] = _extractAttribute(line, 'tvg-type');
 
     // Extract channel number
     final numberStr = _extractAttribute(line, 'tvg-chno') ??
@@ -217,12 +221,38 @@ class M3uParser {
     return null;
   }
 
-  /// Check if URL is likely a VOD item
-  bool _isVodUrl(String url) {
-    final vodExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv'];
+  /// Determine if content is VOD using metadata, group, and URL heuristics.
+  ///
+  /// Checks in priority order:
+  /// 1. Explicit `tvg-type` attribute from the EXTINF line (most reliable)
+  /// 2. Group name containing VOD/movie/series keywords
+  /// 3. URL path patterns (Xtream-style /movie/ or /series/)
+  /// 4. File extension heuristics (.mp4, .mkv, etc.)
+  bool _isVodContent(String url, String? tvgType, String? group) {
+    // 1. Explicit type attribute is most reliable
+    if (tvgType != null) {
+      final lower = tvgType.toLowerCase();
+      return lower == 'movie' || lower == 'vod' || lower == 'series';
+    }
+
+    // 2. Group name hints
+    if (group != null) {
+      final lowerGroup = group.toLowerCase();
+      if (lowerGroup.contains('vod') ||
+          lowerGroup.contains('movie') ||
+          lowerGroup.contains('film') ||
+          lowerGroup.contains('series')) {
+        return true;
+      }
+    }
+
+    // 3. URL path and extension heuristics
     final lowerUrl = url.toLowerCase();
-    return vodExtensions.any((ext) => lowerUrl.endsWith(ext)) ||
-        lowerUrl.contains('/movie/') ||
-        lowerUrl.contains('/series/');
+    if (lowerUrl.contains('/movie/') || lowerUrl.contains('/series/')) {
+      return true;
+    }
+
+    const vodExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.wmv'];
+    return vodExtensions.any((ext) => lowerUrl.endsWith(ext));
   }
 }
