@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -85,6 +87,8 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
   // Use medium buffer for multi-view (balance between stability and resources)
   static const BufferSize _bufferSize = BufferSize.medium;
 
+  final List<StreamSubscription> _subscriptions = [];
+
   @override
   MultiViewState build() {
     // Initialize slots when building
@@ -117,6 +121,10 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
 
     // Register disposal callback
     ref.onDispose(() {
+      for (final sub in _subscriptions) {
+        sub.cancel();
+      }
+      _subscriptions.clear();
       for (final slot in state.slots) {
         slot.player.dispose();
       }
@@ -179,25 +187,31 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
   }
 
   void _setupPlayerListeners(int index, Player player) {
-    player.stream.playing.listen((playing) {
-      // When playback starts successfully, clear any previous error
-      if (playing) {
-        _updateSlot(index, (slot) => slot.copyWith(isPlaying: true, clearError: true));
-      } else {
-        _updateSlot(index, (slot) => slot.copyWith(isPlaying: false));
-      }
-    });
+    _subscriptions.add(
+      player.stream.playing.listen((playing) {
+        // When playback starts successfully, clear any previous error
+        if (playing) {
+          _updateSlot(index, (slot) => slot.copyWith(isPlaying: true, clearError: true));
+        } else {
+          _updateSlot(index, (slot) => slot.copyWith(isPlaying: false));
+        }
+      }),
+    );
 
-    player.stream.buffering.listen((buffering) {
-      _updateSlot(index, (slot) => slot.copyWith(isBuffering: buffering));
-    });
+    _subscriptions.add(
+      player.stream.buffering.listen((buffering) {
+        _updateSlot(index, (slot) => slot.copyWith(isBuffering: buffering));
+      }),
+    );
 
-    player.stream.error.listen((error) {
-      if (error.isNotEmpty) {
-        AppLogger.error('MultiView slot $index error: $error');
-        _updateSlot(index, (slot) => slot.copyWith(error: error));
-      }
-    });
+    _subscriptions.add(
+      player.stream.error.listen((error) {
+        if (error.isNotEmpty) {
+          AppLogger.error('MultiView slot $index error: $error');
+          _updateSlot(index, (slot) => slot.copyWith(error: error));
+        }
+      }),
+    );
   }
 
   void _updateSlot(int index, MultiViewSlot Function(MultiViewSlot) updater) {

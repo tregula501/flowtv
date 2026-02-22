@@ -29,16 +29,22 @@ class CastButton extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    return IconButton(
-      icon: Icon(
-        castState.isConnected ? Icons.cast_connected : Icons.cast,
-        color: iconColor ?? (castState.isConnected ? Colors.blue : null),
-        size: iconSize,
-      ),
-      tooltip: castState.isConnected
-          ? 'Connected to ${castState.connectedDevice?.name}'
+    return Semantics(
+      label: castState.isConnected
+          ? 'Cast connected to ${castState.connectedDevice?.name}'
           : 'Cast to device',
-      onPressed: () => _showCastDialog(context, ref, castState),
+      button: true,
+      child: IconButton(
+        icon: Icon(
+          castState.isConnected ? Icons.cast_connected : Icons.cast,
+          color: iconColor ?? (castState.isConnected ? Colors.blue : null),
+          size: iconSize,
+        ),
+        tooltip: castState.isConnected
+            ? 'Connected to ${castState.connectedDevice?.name}'
+            : 'Cast to device',
+        onPressed: () => _showCastDialog(context, ref, castState),
+      ),
     );
   }
 

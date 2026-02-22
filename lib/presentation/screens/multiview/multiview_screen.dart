@@ -15,6 +15,8 @@ class MultiViewScreen extends ConsumerStatefulWidget {
 }
 
 class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
+  final _focusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
@@ -22,6 +24,12 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(multiViewControllerProvider.notifier).enableMultiView();
     });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
   }
 
   void _handleKeyEvent(KeyEvent event) {
@@ -51,7 +59,7 @@ class _MultiViewScreenState extends ConsumerState<MultiViewScreen> {
     final multiViewState = ref.watch(multiViewControllerProvider);
 
     return KeyboardListener(
-      focusNode: FocusNode(),
+      focusNode: _focusNode,
       onKeyEvent: _handleKeyEvent,
       autofocus: true,
       child: Scaffold(

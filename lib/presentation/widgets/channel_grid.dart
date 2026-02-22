@@ -91,11 +91,14 @@ class _ChannelTileState extends State<ChannelTile> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
+    return Semantics(
+      label: '${widget.channel.name}${widget.channel.isFavorite ? ', favorite' : ''}${widget.isPlaying ? ', now playing' : ''}',
+      button: true,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           decoration: BoxDecoration(
@@ -207,6 +210,7 @@ class _ChannelTileState extends State<ChannelTile> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

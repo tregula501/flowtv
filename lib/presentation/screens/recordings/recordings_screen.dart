@@ -19,9 +19,9 @@ class RecordingsScreen extends ConsumerWidget {
           title: const Text('Recordings'),
           bottom: const TabBar(
             tabs: [
-              Tab(text: 'All'),
-              Tab(text: 'Recording'),
-              Tab(text: 'Scheduled'),
+              const Tab(text: 'All'),
+              const Tab(text: 'Recording'),
+              const Tab(text: 'Scheduled'),
             ],
           ),
         ),
@@ -290,19 +290,9 @@ class _RecordingTile extends ConsumerWidget {
   }
 
   void _playRecording(BuildContext context, WidgetRef ref) {
-    final manager = ref.read(recordingManagerProvider);
-    final url = manager.getRecordingPlaybackUrl(recording);
-
-    if (url != null) {
-      // For now, just show a message - full implementation would open player
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Playing: ${recording.title}')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recording file not found')),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Recording playback is not yet implemented')),
+    );
   }
 
   void _handleAction(BuildContext context, WidgetRef ref, String action) {
