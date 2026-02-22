@@ -106,11 +106,15 @@ class XmltvParser {
         final iconElement = programme.findElements('icon').firstOrNull;
         final episodeElement = programme.findElements('episode-num').firstOrNull;
 
+        final startTime = _parseXmltvDate(start);
+        final endTime = _parseXmltvDate(stop);
+        if (startTime == null || endTime == null) continue;
+
         final program = XmltvProgram(
           channelId: channelId,
           title: titleElement?.innerText ?? 'Unknown',
-          startTime: _parseXmltvDate(start),
-          endTime: _parseXmltvDate(stop),
+          startTime: startTime,
+          endTime: endTime,
           description: descElement?.innerText,
           category: categoryElement?.innerText,
           episode: episodeElement?.innerText,
@@ -135,10 +139,11 @@ class XmltvParser {
     }
   }
 
-  /// Parse XMLTV date format (YYYYMMDDHHmmss +ZZZZ)
-  DateTime _parseXmltvDate(String dateStr) {
+  /// Parse XMLTV date format (YYYYMMDDHHmmss +ZZZZ).
+  /// Returns null if the date string is malformed so the caller can skip
+  /// the program instead of inserting it with a wrong time.
+  DateTime? _parseXmltvDate(String dateStr) {
     try {
-      // Format: 20240101120000 +0000
       final cleanDate = dateStr.replaceAll(' ', '');
 
       final year = int.parse(cleanDate.substring(0, 4));
@@ -168,8 +173,8 @@ class XmltvParser {
 
       return DateTime(year, month, day, hour, minute, second);
     } catch (e) {
-      AppLogger.warning('Failed to parse date: $dateStr');
-      return DateTime.now();
+      AppLogger.warning('Skipping program with unparseable date: $dateStr');
+      return null;
     }
   }
 }
