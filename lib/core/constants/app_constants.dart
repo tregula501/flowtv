@@ -3,7 +3,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = 'FlowTV';
-  static const String appVersion = '0.3.0';
+  static const String appVersion = '0.3.1';
 
   // Default settings
   static const int defaultBufferDuration = 30; // seconds
