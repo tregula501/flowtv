@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/local/drift/app_database.dart' show EpgProgram;
+import '../../data/datasources/local/drift/app_database.dart' show EpgProgram, AppSettingsTableCompanion;
+import '../../data/datasources/local/database_service.dart';
 import '../../data/repositories/epg_repository.dart';
 import '../../core/utils/logger.dart';
 import 'playlist_provider.dart';
@@ -101,13 +103,39 @@ final epgLastUpdateProvider = NotifierProvider<EpgLastUpdateNotifier, DateTime?>
   EpgLastUpdateNotifier.new,
 );
 
-/// EPG refresh interval notifier - migrated to Riverpod 3.x
+/// EPG refresh interval notifier - persists to database
 class EpgRefreshIntervalNotifier extends Notifier<int> {
   @override
-  int build() => 6; // default 6 hours
+  int build() {
+    _loadFromDatabase();
+    return 6; // default 6 hours until DB value loads
+  }
+
+  Future<void> _loadFromDatabase() async {
+    try {
+      final db = DatabaseService.instance;
+      final settings = await (db.select(db.appSettingsTable)..limit(1)).getSingle();
+      if (state != settings.epgRefreshHours) {
+        state = settings.epgRefreshHours;
+      }
+    } catch (e) {
+      AppLogger.warning('Could not load EPG refresh interval from database: $e');
+    }
+  }
 
   void setInterval(int hours) {
     state = hours;
+    _persistToDatabase(hours);
+  }
+
+  Future<void> _persistToDatabase(int hours) async {
+    try {
+      final db = DatabaseService.instance;
+      await (db.update(db.appSettingsTable)..where((t) => t.id.equals(1)))
+          .write(AppSettingsTableCompanion(epgRefreshHours: Value(hours)));
+    } catch (e) {
+      AppLogger.warning('Could not save EPG refresh interval to database: $e');
+    }
   }
 }
 

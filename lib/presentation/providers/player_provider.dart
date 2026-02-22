@@ -10,7 +10,10 @@ import 'package:window_manager/window_manager.dart';
 // ignore: implementation_imports
 import 'package:media_kit/src/player/native/player/player.dart' as native;
 
-import '../../data/datasources/local/drift/app_database.dart' show Channel;
+import 'package:drift/drift.dart' show Value;
+
+import '../../data/datasources/local/drift/app_database.dart' show Channel, AppSettingsTableCompanion;
+import '../../data/datasources/local/database_service.dart';
 import '../../core/utils/logger.dart';
 
 /// Track info for audio/video/subtitle tracks
@@ -295,6 +298,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   @override
   PlayerState build() {
+    _loadBufferSizeFromDb();
     _initPlayer();
 
     // Register disposal callback
@@ -311,6 +315,43 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     });
 
     return const PlayerState();
+  }
+
+  /// Load persisted buffer size from database
+  Future<void> _loadBufferSizeFromDb() async {
+    try {
+      final db = DatabaseService.instance;
+      final settings = await (db.select(db.appSettingsTable)..limit(1)).getSingle();
+      final saved = _bufferSizeFromSeconds(settings.bufferSeconds);
+      if (saved != _currentBufferSize) {
+        _currentBufferSize = saved;
+        state = state.copyWith(bufferSize: saved);
+        await _applyBufferSettings();
+        AppLogger.info('Loaded buffer size from DB: ${saved.displayName}');
+      }
+    } catch (e) {
+      AppLogger.warning('Could not load buffer size from database: $e');
+    }
+  }
+
+  /// Convert seconds to BufferSize enum (nearest match)
+  static BufferSize _bufferSizeFromSeconds(int seconds) {
+    if (seconds <= 1) return BufferSize.small;
+    if (seconds <= 5) return BufferSize.medium;
+    if (seconds <= 15) return BufferSize.large;
+    if (seconds <= 30) return BufferSize.veryLarge;
+    return BufferSize.extraLarge;
+  }
+
+  /// Persist buffer size to database
+  Future<void> _persistBufferSize(BufferSize size) async {
+    try {
+      final db = DatabaseService.instance;
+      await (db.update(db.appSettingsTable)..where((t) => t.id.equals(1)))
+          .write(AppSettingsTableCompanion(bufferSeconds: Value(size.durationSeconds)));
+    } catch (e) {
+      AppLogger.warning('Could not save buffer size to database: $e');
+    }
   }
 
   Player get player => _player!;
@@ -740,6 +781,9 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     _currentBufferSize = size;
     state = state.copyWith(bufferSize: size);
     AppLogger.info('Buffer size set: ${size.displayName}');
+
+    // Persist to database
+    _persistBufferSize(size);
 
     // Apply new buffer settings
     await _applyBufferSettings();
