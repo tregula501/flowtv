@@ -168,13 +168,13 @@ class _CategoryTile extends StatelessWidget {
       leading: Icon(
         icon,
         color: isSelected ? selectedColor : iconColor ?? theme.iconTheme.color,
-        size: 22,
+        size: 24,
       ),
       title: Text(
         label,
         style: TextStyle(
           color: isSelected ? selectedColor : null,
-          fontWeight: isSelected ? FontWeight.w600 : null,
+          fontWeight: isSelected ? FontWeight.w700 : null,
         ),
         overflow: TextOverflow.ellipsis,
       ),
@@ -196,7 +196,7 @@ class _CategoryTile extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       onTap: onTap,
     );
   }
