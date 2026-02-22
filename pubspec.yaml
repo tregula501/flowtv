@@ -1,7 +1,7 @@
 name: flowtv
 description: A cross-platform IPTV streaming application with EPG, DVR, and multi-view support.
 publish_to: 'none'
-version: 0.2.4+1
+version: 0.2.5+1
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
