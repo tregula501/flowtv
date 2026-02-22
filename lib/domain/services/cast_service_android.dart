@@ -19,7 +19,7 @@ class CastService implements ICastService {
     _init();
   }
 
-  bool _initialized = false;
+  final Completer<void> _initCompleter = Completer<void>();
 
   /// Casting is supported on Android and iOS
   static bool get isSupported => Platform.isAndroid || Platform.isIOS;
@@ -50,9 +50,6 @@ class CastService implements ICastService {
   StreamSubscription? _positionSubscription;
 
   Future<void> _init() async {
-    if (_initialized) return;
-    _initialized = true;
-
     try {
       // Initialize with the Default Media Receiver app ID
       // The base GoogleCastOptions class does NOT include appId in toMap(),
@@ -180,11 +177,14 @@ class CastService implements ICastService {
       AppLogger.info('Cast: Service initialized');
     } catch (e) {
       AppLogger.error('Cast: Failed to initialize - $e');
+    } finally {
+      _initCompleter.complete();
     }
   }
 
   @override
   Future<void> startDiscovery() async {
+    await _initCompleter.future;
     try {
       AppLogger.info('Cast: Starting discovery');
       await GoogleCastDiscoveryManager.instance.startDiscovery();
@@ -206,6 +206,7 @@ class CastService implements ICastService {
   /// Connect to a Cast device with automatic retry
   @override
   Future<bool> connect(CastDeviceInfo deviceInfo) async {
+    await _initCompleter.future;
     for (int attempt = 1; attempt <= 2; attempt++) {
       final result = await _tryConnect(deviceInfo, attempt);
       if (result) return true;
@@ -334,6 +335,7 @@ class CastService implements ICastService {
 
   @override
   Future<bool> castMedia(CastMediaInfo media) async {
+    await _initCompleter.future;
     if (!_sessionState.isConnected) {
       AppLogger.error('Cast: Not connected to any device');
       return false;
