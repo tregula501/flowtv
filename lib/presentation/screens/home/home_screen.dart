@@ -142,10 +142,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
             return Row(
               children: [
-                // Category sidebar
-                const SizedBox(
-                  width: AppConstants.sidebarWidth,
-                  child: CategorySidebar(),
+                // Category sidebar (responsive width)
+                SizedBox(
+                  width: _sidebarWidth(context),
+                  child: const CategorySidebar(),
                 ),
 
                 // Vertical divider
@@ -208,6 +208,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
     );
+  }
+
+  double _sidebarWidth(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    if (screenWidth >= 1200) return 280;
+    if (screenWidth >= 800) return 240;
+    return 220;
   }
 
   Widget _buildAppBar(BuildContext context, String title) {
