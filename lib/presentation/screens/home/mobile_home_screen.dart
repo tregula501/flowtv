@@ -128,7 +128,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
   Widget _buildEmptyState(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
