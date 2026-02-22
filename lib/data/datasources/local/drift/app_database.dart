@@ -149,6 +149,11 @@ class AppDatabase extends _$AppDatabase {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
+        // Create index for faster EPG lookups (also added in v1->v2 migration)
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_epg_channel_start '
+          'ON epg_programs (channel_id, start_time)',
+        );
         // Create default settings
         await into(appSettingsTable).insert(
           AppSettingsTableCompanion.insert(),
