@@ -103,8 +103,10 @@ class CastDeviceSheet extends ConsumerWidget {
                   ElevatedButton(
                     onPressed: () async {
                       try {
-                        // Stop local player to free the connection for Chromecast
+                        // Stop local player and wait for IPTV server to release the connection
                         await ref.read(playerControllerProvider.notifier).stop();
+                        await Future.delayed(const Duration(seconds: 2));
+                        if (!context.mounted) return;
                         final success = await castNotifier.castMedia(
                           url: channel.streamUrl,
                           title: channel.name,
@@ -218,10 +220,12 @@ class CastDeviceSheet extends ConsumerWidget {
 
                           final success = await castNotifier.connect(device);
                           if (success && context.mounted) {
-                            // Stop local player to free the connection for Chromecast
+                            // Stop local player and wait for IPTV server to release the connection
                             await ref
                                 .read(playerControllerProvider.notifier)
                                 .stop();
+                            await Future.delayed(const Duration(seconds: 2));
+                            if (!context.mounted) return;
 
                             final castSuccess = await castNotifier.castMedia(
                               url: channel.streamUrl,
