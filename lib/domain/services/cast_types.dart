@@ -45,7 +45,7 @@ class CastMediaInfo {
     required this.title,
     this.subtitle,
     this.imageUrl,
-    this.contentType = 'video/mp4',
+    this.contentType = 'application/x-mpegurl',
   });
 }
 

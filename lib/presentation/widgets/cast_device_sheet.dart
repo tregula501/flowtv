@@ -110,18 +110,26 @@ class CastDeviceSheet extends ConsumerWidget {
                           title: channel.name,
                           subtitle: channel.group,
                           imageUrl: channel.logoUrl,
-                          contentType: 'video/mp4',
                         );
-                        if (success && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(l10n.castingTo(
-                                  channel.name,
-                                  castState.connectedDevice!.name)),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                          onClose();
+                        if (context.mounted) {
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(l10n.castingTo(
+                                    channel.name,
+                                    castState.connectedDevice!.name)),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                            onClose();
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(l10n.connectedButPlaybackFailed),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
                         }
                       } catch (e) {
                         if (context.mounted) {
@@ -220,7 +228,6 @@ class CastDeviceSheet extends ConsumerWidget {
                               title: channel.name,
                               subtitle: channel.group,
                               imageUrl: channel.logoUrl,
-                              contentType: 'video/mp4',
                             );
                             if (context.mounted) {
                               ScaffoldMessenger.of(context)

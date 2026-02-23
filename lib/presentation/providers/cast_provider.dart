@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/logger.dart';
 import '../../domain/services/cast_service.dart';
 
 /// Cast state for the provider
@@ -110,9 +111,15 @@ class CastControllerNotifier extends Notifier<CastState> {
     required String title,
     String? subtitle,
     String? imageUrl,
-    String contentType = 'video/mp4',
+    String contentType = 'application/x-mpegurl',
   }) async {
-    if (!state.isSupported || !state.isConnected) return false;
+    if (!state.isSupported || !state.isConnected) {
+      AppLogger.error(
+        'Cast: castMedia precondition failed — '
+        'supported=${state.isSupported}, connected=${state.isConnected}',
+      );
+      return false;
+    }
 
     return CastService.instance.castMedia(CastMediaInfo(
       url: url,

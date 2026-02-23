@@ -358,11 +358,6 @@ class CastService implements ICastService {
       AppLogger.info('Cast: URL ends with stream ID, defaulting to HLS');
       return 'application/x-mpegurl';
     }
-    if (defaultType == 'video/mp4') {
-      AppLogger.info('Cast: IPTV stream, defaulting to HLS instead of MP4');
-      return 'application/x-mpegurl';
-    }
-
     return defaultType;
   }
 
