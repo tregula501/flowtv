@@ -49,9 +49,17 @@ class _FullscreenPlayerScreenState
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: MouseRegion(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        // Exit fullscreen and go back
+        playerController.setFullscreen(false);
+        Navigator.of(context).pop();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: MouseRegion(
         onEnter: (_) => setState(() {
           _isHovering = true;
           _showControls = true;
@@ -292,6 +300,7 @@ class _FullscreenPlayerScreenState
           ),
         ),
       ),
+    ),
     );
   }
 }

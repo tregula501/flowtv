@@ -362,17 +362,35 @@ class PlaylistManager {
       onProgress?.call(0, total, 'Clearing old channels...');
       _updateProgress(0, total, 'Clearing old channels...');
 
-      // Atomic refresh: delete + re-insert in a single transaction
       await _db.transaction(() async {
+        // Save favorite channel identifiers before deleting
+        final oldFavoriteChannelIds = await (_db.select(_db.favorites)
+              ..where((t) => t.playlistId.equals(playlist.id)))
+            .map((f) => f.channelId)
+            .get();
+
+        // Map favorite channel IDs to (name, streamUrl) for re-matching
+        final Set<String> favoriteKeys = {};
+        if (oldFavoriteChannelIds.isNotEmpty) {
+          final oldFavChannels = await (_db.select(_db.channels)
+                ..where((t) => t.id.isIn(oldFavoriteChannelIds)))
+              .get();
+          for (final ch in oldFavChannels) {
+            favoriteKeys.add('${ch.name}\n${ch.streamUrl}');
+          }
+        }
+
         // Clean up FK-dependent rows before deleting channels
         final oldChannelIds = await (_db.select(_db.channels)
               ..where((t) => t.playlistId.equals(playlist.id)))
             .map((c) => c.id)
             .get();
         if (oldChannelIds.isNotEmpty) {
+          // Delete favorites (will be re-created below)
           await (_db.delete(_db.favorites)
                 ..where((t) => t.channelId.isIn(oldChannelIds)))
               .go();
+          // Delete recordings (cannot preserve — channel IDs change)
           await (_db.delete(_db.recordings)
                 ..where((t) => t.channelId.isIn(oldChannelIds)))
               .go();
@@ -409,6 +427,27 @@ class PlaylistManager {
           processed = end;
           onProgress?.call(processed, total, 'Adding channels...');
           _updateProgress(processed, total, 'Adding channels...');
+        }
+
+        // Restore favorites by matching name+streamUrl
+        if (favoriteKeys.isNotEmpty) {
+          final newChannels = await (_db.select(_db.channels)
+                ..where((t) => t.playlistId.equals(playlist.id)))
+              .get();
+          await _db.batch((batch) {
+            for (final ch in newChannels) {
+              if (favoriteKeys.contains('${ch.name}\n${ch.streamUrl}')) {
+                batch.insert(
+                  _db.favorites,
+                  FavoritesCompanion.insert(
+                    channelId: ch.id,
+                    playlistId: playlist.id,
+                    addedAt: DateTime.now(),
+                  ),
+                );
+              }
+            }
+          });
         }
 
         // Update playlist
@@ -470,8 +509,24 @@ class PlaylistManager {
     onProgress?.call(0, total, 'Clearing old channels...');
     _updateProgress(0, total, 'Clearing old channels...');
 
-    // Atomic refresh: delete + re-insert in a single transaction
     await _db.transaction(() async {
+      // Save favorite channel identifiers before deleting
+      final oldFavoriteChannelIds = await (_db.select(_db.favorites)
+            ..where((t) => t.playlistId.equals(playlist.id)))
+          .map((f) => f.channelId)
+          .get();
+
+      // Map favorite channel IDs to (name, streamUrl) for re-matching
+      final Set<String> favoriteKeys = {};
+      if (oldFavoriteChannelIds.isNotEmpty) {
+        final oldFavChannels = await (_db.select(_db.channels)
+              ..where((t) => t.id.isIn(oldFavoriteChannelIds)))
+            .get();
+        for (final ch in oldFavChannels) {
+          favoriteKeys.add('${ch.name}\n${ch.streamUrl}');
+        }
+      }
+
       // Clean up FK-dependent rows before deleting channels
       final oldChannelIds = await (_db.select(_db.channels)
             ..where((t) => t.playlistId.equals(playlist.id)))
@@ -520,6 +575,27 @@ class PlaylistManager {
         processed = end;
         onProgress?.call(processed, total, 'Adding channels...');
         _updateProgress(processed, total, 'Adding channels...');
+      }
+
+      // Restore favorites by matching name+streamUrl
+      if (favoriteKeys.isNotEmpty) {
+        final newChannels = await (_db.select(_db.channels)
+              ..where((t) => t.playlistId.equals(playlist.id)))
+            .get();
+        await _db.batch((batch) {
+          for (final ch in newChannels) {
+            if (favoriteKeys.contains('${ch.name}\n${ch.streamUrl}')) {
+              batch.insert(
+                _db.favorites,
+                FavoritesCompanion.insert(
+                  channelId: ch.id,
+                  playlistId: playlist.id,
+                  addedAt: DateTime.now(),
+                ),
+              );
+            }
+          }
+        });
       }
 
       // Update playlist

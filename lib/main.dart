@@ -49,6 +49,34 @@ Future<void> main(List<String> args) async {
     AppLogger.info('Database initialized');
   } catch (e) {
     AppLogger.error('Database init failed: $e');
+    runApp(MaterialApp(
+      home: Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.storage, color: Colors.red, size: 64),
+                const SizedBox(height: 16),
+                const Text(
+                  'Database Error',
+                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Failed to initialize database:\n$e\n\nPlease restart the app.',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ));
+    return;
   }
 
   runApp(

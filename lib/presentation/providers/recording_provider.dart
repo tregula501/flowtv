@@ -3,8 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/local/drift/app_database.dart'
-    show Recording, Channel, RecordingStatus;
+import '../../data/datasources/local/database_service.dart';
 import '../../data/repositories/recording_repository.dart';
 import '../../domain/services/ffmpeg_service.dart';
 import '../../core/utils/logger.dart';
@@ -117,9 +116,103 @@ class RecordingManager {
     final dueRecordings = await repo.getRecordingsDueToStart();
 
     for (final recording in dueRecordings) {
+      // Skip if already being recorded
+      if (isRecording(recording.channelId)) continue;
+
       AppLogger.info('Starting scheduled recording: ${recording.title}');
-      // For scheduled recordings, we'd need to get the channel and start
-      // This is a placeholder - full implementation would need channel lookup
+
+      try {
+        // Look up the channel
+        final db = DatabaseService.instance;
+        final channel = await (db.select(db.channels)
+              ..where((t) => t.id.equals(recording.channelId)))
+            .getSingleOrNull();
+
+        if (channel == null) {
+          AppLogger.warning('Channel ${recording.channelId} not found for scheduled recording');
+          await repo.updateStatus(
+            recording.id,
+            RecordingStatus.failed,
+            errorMessage: 'Channel not found',
+          );
+          continue;
+        }
+
+        // Calculate remaining duration
+        final now = DateTime.now();
+        final remainingDuration = recording.scheduledEnd.difference(now);
+
+        if (remainingDuration.isNegative) {
+          AppLogger.warning('Scheduled recording ${recording.title} end time has passed');
+          await repo.updateStatus(
+            recording.id,
+            RecordingStatus.failed,
+            errorMessage: 'Recording end time has passed',
+          );
+          continue;
+        }
+
+        // Start FFmpeg recording
+        final ffmpeg = _ref.read(ffmpegServiceProvider);
+        if (!ffmpeg.isAvailable) {
+          await repo.updateStatus(
+            recording.id,
+            RecordingStatus.failed,
+            errorMessage: 'FFmpeg not available',
+          );
+          continue;
+        }
+
+        final success = await ffmpeg.startRecording(
+          recordingId: recording.id,
+          streamUrl: channel.streamUrl,
+          outputPath: recording.filePath,
+          maxDuration: remainingDuration,
+        );
+
+        if (!success) {
+          await repo.updateStatus(
+            recording.id,
+            RecordingStatus.failed,
+            errorMessage: 'FFmpeg failed to start',
+          );
+          continue;
+        }
+
+        // Update status to recording
+        await repo.updateStatus(recording.id, RecordingStatus.recording);
+
+        // Start periodic file size update
+        final updateTimer = Timer.periodic(
+          const Duration(seconds: 10),
+          (_) async {
+            final size = await ffmpeg.getFileSize(recording.filePath);
+            if (size > 0) {
+              await repo.updateFileSize(recording.id);
+            }
+            final elapsed = ffmpeg.getRecordingDuration(recording.id);
+            if (elapsed != null && elapsed >= remainingDuration) {
+              AppLogger.info('Scheduled recording duration reached: ${recording.title}');
+              await stopRecording(recording.channelId);
+            }
+          },
+        );
+
+        _activeRecordings[recording.channelId] = ActiveRecordingState(
+          channelId: recording.channelId,
+          recording: recording,
+          updateTimer: updateTimer,
+        );
+
+        AppLogger.info('Started scheduled recording: ${recording.title}');
+      } catch (e, st) {
+        AppLogger.error('Failed to start scheduled recording: ${recording.title}', e, st);
+        await repo.updateStatus(
+          recording.id,
+          RecordingStatus.failed,
+          errorMessage: e.toString(),
+        );
+      }
     }
   }
 
@@ -291,8 +384,15 @@ class RecordingManager {
 
   void dispose() {
     _schedulerTimer?.cancel();
-    for (final state in _activeRecordings.values) {
-      state.updateTimer?.cancel();
+    // Stop all active FFmpeg recordings before clearing
+    final ffmpeg = _ref.read(ffmpegServiceProvider);
+    for (final entry in _activeRecordings.entries) {
+      entry.value.updateTimer?.cancel();
+      try {
+        ffmpeg.stopRecording(entry.value.recording.id);
+      } catch (e) {
+        AppLogger.warning('Failed to stop recording ${entry.key} during dispose: $e');
+      }
     }
     _activeRecordings.clear();
   }

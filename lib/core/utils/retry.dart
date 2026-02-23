@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import '../errors/exceptions.dart';
 import 'logger.dart';
 
 /// Retry a function with exponential backoff and jitter.
@@ -17,6 +18,11 @@ Future<T> withRetry<T>(
     try {
       return await fn();
     } catch (e) {
+      // Don't retry non-transient HTTP errors (auth failures, not found, etc.)
+      if (e is ApiException && e.statusCode != null) {
+        final code = e.statusCode!;
+        if (code == 401 || code == 403 || code == 404) rethrow;
+      }
       if (attempt == maxAttempts) rethrow;
 
       // Cap the exponent to prevent overflow with large maxAttempts

@@ -28,6 +28,36 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Override Flutter's default red error screen with a user-friendly one
+    ErrorWidget.builder = (FlutterErrorDetails details) {
+      return Material(
+        color: Colors.black,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.orange, size: 48),
+                const SizedBox(height: 16),
+                const Text(
+                  'Something went wrong',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  details.exceptionAsString(),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  textAlign: TextAlign.center,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    };
     // Start EPG auto-refresh after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(epgManagerProvider).startAutoRefresh();

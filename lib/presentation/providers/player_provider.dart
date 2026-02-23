@@ -12,7 +12,6 @@ import 'package:media_kit/src/player/native/player/player.dart' as native;
 
 import 'package:drift/drift.dart' show Value;
 
-import '../../data/datasources/local/drift/app_database.dart' show Channel, AppSettingsTableCompanion;
 import '../../data/datasources/local/database_service.dart';
 import '../../core/utils/logger.dart';
 
@@ -590,7 +589,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     _prebufferProgressTimer = null;
     _prebufferCompleteTimer = null;
     state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
-    _player!.play();
+    _player?.play();
     AppLogger.info('Prebuffer complete, starting playback');
   }
 
@@ -666,17 +665,17 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     AppLogger.info('Attempting reconnect to ${_currentChannel!.name}...');
 
     try {
-      await _player!.stop();
+      await _player?.stop();
       await Future.delayed(const Duration(milliseconds: 500));
 
       // Re-open the stream without resetting retry state yet
-      await _player!.open(Media(_currentChannel!.streamUrl), play: true);
+      await _player?.open(Media(_currentChannel!.streamUrl), play: true);
 
       // Wait a moment to see if playback starts successfully
       await Future.delayed(const Duration(seconds: 2));
 
       // Check if we're actually playing
-      if (_player!.state.playing) {
+      if (_player?.state.playing ?? false) {
         AppLogger.info('Reconnect successful!');
         _resetRetryState();
         if (!_isDisposed) {
@@ -755,6 +754,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       AppLogger.info('Opening media stream...');
 
       // Open the stream
+      if (_player == null) return;
       await _player!.open(Media(channel.streamUrl), play: bufferSeconds <= 1);
 
       AppLogger.info('Media opened successfully, play=${bufferSeconds <= 1}');
@@ -786,7 +786,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   Future<void> refreshChannel(Channel channel) async {
     try {
       AppLogger.info('Refreshing channel: ${channel.name}');
-      await _player!.stop();
+      await _player?.stop();
       // Small delay before reopening
       await Future.delayed(const Duration(milliseconds: 300));
       await playChannel(channel);
@@ -819,17 +819,17 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   /// Play/Pause toggle
   Future<void> playPause() async {
-    await _player!.playOrPause();
+    await _player?.playOrPause();
   }
 
   /// Play
   Future<void> play() async {
-    await _player!.play();
+    await _player?.play();
   }
 
   /// Pause
   Future<void> pause() async {
-    await _player!.pause();
+    await _player?.pause();
   }
 
   /// Stop
@@ -837,30 +837,32 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     _cancelPrebuffering();
     _cancelRetry();
     _currentChannel = null;
-    await _player!.stop();
+    await _player?.stop();
   }
 
   /// Set volume (0.0 to 1.0)
   Future<void> setVolume(double volume) async {
-    await _player!.setVolume(volume * 100);
+    await _player?.setVolume(volume * 100);
   }
 
   /// Toggle mute
   void toggleMute() {
+    final player = _player;
+    if (player == null) return;
     if (state.isMuted) {
       // Restore the saved volume
-      _player!.setVolume(_preMuteVolume * 100);
+      player.setVolume(_preMuteVolume * 100);
     } else {
       // Save current volume before muting
       _preMuteVolume = state.volume > 0 ? state.volume : 1.0;
-      _player!.setVolume(0);
+      player.setVolume(0);
     }
     state = state.copyWith(isMuted: !state.isMuted);
   }
 
   /// Seek to position
   Future<void> seek(Duration position) async {
-    await _player!.seek(position);
+    await _player?.seek(position);
   }
 
   /// Toggle fullscreen
@@ -889,47 +891,48 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   /// Set video track
   Future<void> setVideoTrack(String trackId) async {
-    final tracks = _player!.state.tracks.video;
+    final tracks = _player?.state.tracks.video ?? [];
     if (tracks.isEmpty) return;
     final track = tracks.firstWhere(
       (t) => t.id == trackId,
       orElse: () => tracks[0],
     );
-    await _player!.setVideoTrack(track);
+    await _player?.setVideoTrack(track);
     AppLogger.info('Video track set: $trackId');
   }
 
   /// Set audio track
   Future<void> setAudioTrack(String trackId) async {
-    final tracks = _player!.state.tracks.audio;
+    final tracks = _player?.state.tracks.audio ?? [];
     if (tracks.isEmpty) return;
     final track = tracks.firstWhere(
       (t) => t.id == trackId,
       orElse: () => tracks[0],
     );
-    await _player!.setAudioTrack(track);
+    await _player?.setAudioTrack(track);
     AppLogger.info('Audio track set: $trackId');
   }
 
   /// Set subtitle track
   Future<void> setSubtitleTrack(String? trackId) async {
+    if (_player == null) return;
     if (trackId == null) {
-      await _player!.setSubtitleTrack(SubtitleTrack.no());
+      await _player?.setSubtitleTrack(SubtitleTrack.no());
       AppLogger.info('Subtitles disabled');
       return;
     }
-    final tracks = _player!.state.tracks.subtitle;
+    final tracks = _player?.state.tracks.subtitle ?? [];
     final track = tracks.firstWhere(
       (t) => t.id == trackId,
       orElse: () => SubtitleTrack.no(),
     );
-    await _player!.setSubtitleTrack(track);
+    await _player?.setSubtitleTrack(track);
     AppLogger.info('Subtitle track set: $trackId');
   }
 
   /// Set playback speed
   Future<void> setPlaybackSpeed(double speed) async {
-    await _player!.setRate(speed);
+    await _player?.setRate(speed);
     state = state.copyWith(playbackSpeed: speed);
     AppLogger.info('Playback speed set: ${speed}x');
   }
