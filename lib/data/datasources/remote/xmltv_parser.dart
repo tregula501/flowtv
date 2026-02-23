@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:dio/dio.dart';
 import 'package:xml/xml.dart';
 
@@ -46,6 +48,8 @@ class XmltvParser {
   final Dio _dio;
   final bool _ownsDio;
 
+  static final _tzSignRegex = RegExp(r'[+-]');
+
   XmltvParser({Dio? dio})
       : _dio = dio ?? Dio(),
         _ownsDio = dio == null;
@@ -79,7 +83,7 @@ class XmltvParser {
         throw const EpgParseException('Empty EPG data received');
       }
 
-      return parseContent(response.data!);
+      return await parseContent(response.data!);
     } on DioException catch (e) {
       AppLogger.error('Failed to fetch EPG', e);
       throw NetworkException(
@@ -89,8 +93,13 @@ class XmltvParser {
     }
   }
 
-  /// Parse XMLTV content string
-  XmltvParseResult parseContent(String content) {
+  /// Parse XMLTV content string (runs in isolate for large EPG files)
+  Future<XmltvParseResult> parseContent(String content) async {
+    return Isolate.run(() => _parseContentSync(content));
+  }
+
+  /// Synchronous parsing logic (runs in isolate)
+  static XmltvParseResult _parseContentSync(String content) {
     try {
       final document = XmlDocument.parse(content);
       final tvElements = document.findElements('tv');
@@ -136,17 +145,12 @@ class XmltvParser {
         programs.add(program);
       }
 
-      AppLogger.info(
-        'Parsed ${programs.length} programs for ${channelIds.length} channels',
-      );
-
       return XmltvParseResult(
         programs: programs,
         channelCount: channelIds.length,
         programCount: programs.length,
       );
-    } catch (e, stack) {
-      AppLogger.error('Failed to parse XMLTV', e, stack);
+    } catch (e) {
       throw EpgParseException('Failed to parse EPG: $e', originalError: e);
     }
   }
@@ -154,7 +158,7 @@ class XmltvParser {
   /// Parse XMLTV date format (YYYYMMDDHHmmss +ZZZZ).
   /// Returns null if the date string is malformed so the caller can skip
   /// the program instead of inserting it with a wrong time.
-  DateTime? _parseXmltvDate(String dateStr) {
+  static DateTime? _parseXmltvDate(String dateStr) {
     try {
       final cleanDate = dateStr.replaceAll(' ', '');
 
@@ -171,7 +175,7 @@ class XmltvParser {
       if (cleanDate.length > 14) {
         final tzStr = cleanDate.substring(14);
         final tzSign = tzStr.startsWith('-') ? -1 : 1;
-        final tzOffset = tzStr.replaceAll(RegExp(r'[+-]'), '');
+        final tzOffset = tzStr.replaceAll(_tzSignRegex, '');
         final tzHours = int.parse(tzOffset.substring(0, 2));
         final tzMinutes = tzOffset.length >= 4
             ? int.parse(tzOffset.substring(2, 4))
@@ -184,8 +188,7 @@ class XmltvParser {
       }
 
       return DateTime(year, month, day, hour, minute, second);
-    } catch (e) {
-      AppLogger.warning('Skipping program with unparseable date: $dateStr');
+    } catch (_) {
       return null;
     }
   }

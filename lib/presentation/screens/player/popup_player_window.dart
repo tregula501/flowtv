@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -161,10 +162,12 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
         autofocus: true,
         child: Scaffold(
           backgroundColor: Colors.black,
-          body: MouseRegion(
-            onEnter: (_) => setState(() => _controlsVisible = true),
-            onExit: (_) => setState(() => _controlsVisible = false),
-            child: Stack(
+          body: GestureDetector(
+            onTap: () => setState(() => _controlsVisible = !_controlsVisible),
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _controlsVisible = true),
+              onExit: (_) => setState(() => _controlsVisible = false),
+              child: Stack(
               children: [
                 // Video player
                 Positioned.fill(
@@ -220,10 +223,12 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                   ),
 
                 // Top bar with channel info and close button
-                AnimatedOpacity(
-                  opacity: _controlsVisible ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Container(
+                IgnorePointer(
+                  ignoring: !_controlsVisible,
+                  child: AnimatedOpacity(
+                    opacity: _controlsVisible ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -249,10 +254,10 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(4),
-                              child: Image.network(
-                                widget.logoUrl!,
+                              child: CachedNetworkImage(
+                                imageUrl: widget.logoUrl!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const Icon(
+                                errorWidget: (_, _, _) => const Icon(
                                   Icons.tv,
                                   color: Colors.white54,
                                   size: 20,
@@ -284,17 +289,20 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                     ),
                   ),
                 ),
+                ),
 
                 // Bottom controls
                 Positioned(
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: AnimatedOpacity(
-                    opacity: _controlsVisible ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
+                  child: IgnorePointer(
+                    ignoring: !_controlsVisible,
+                    child: AnimatedOpacity(
+                      opacity: _controlsVisible ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.bottomCenter,
@@ -313,6 +321,7 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                               _isPlaying ? Icons.pause : Icons.play_arrow,
                               color: Colors.white,
                             ),
+                            tooltip: 'Play/Pause',
                             onPressed: () => _player.playOrPause(),
                           ),
 
@@ -322,6 +331,7 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                               _isMuted ? Icons.volume_off : Icons.volume_up,
                               color: Colors.white,
                             ),
+                            tooltip: 'Mute/Unmute',
                             onPressed: _toggleMute,
                           ),
 
@@ -350,15 +360,18 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                               _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
                               color: Colors.white,
                             ),
+                            tooltip: 'Fullscreen',
                             onPressed: _toggleFullscreen,
                           ),
                         ],
                       ),
                     ),
                   ),
+                  ),
                 ),
               ],
             ),
+          ),
           ),
         ),
       ),

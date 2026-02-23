@@ -142,7 +142,7 @@ class AppDatabase extends _$AppDatabase {
 
   // Bump this when you change the schema. Add a migration step below.
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -163,6 +163,11 @@ class AppDatabase extends _$AppDatabase {
         await customStatement(
           'CREATE INDEX IF NOT EXISTS idx_channels_epg_id '
           'ON channels (epg_id)',
+        );
+        // Index on epg_programs.end_time for time-range queries and stale cleanup
+        await customStatement(
+          'CREATE INDEX IF NOT EXISTS idx_epg_end_time '
+          'ON epg_programs (end_time)',
         );
         // Create default settings
         await into(appSettingsTable).insert(
@@ -208,6 +213,13 @@ class AppDatabase extends _$AppDatabase {
           await customStatement(
             'CREATE INDEX IF NOT EXISTS idx_channels_epg_id '
             'ON channels (epg_id)',
+          );
+        }
+        if (from < 5) {
+          // v4 -> v5: Add index on end_time for EPG time-range queries and stale cleanup.
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_epg_end_time '
+            'ON epg_programs (end_time)',
           );
         }
       },

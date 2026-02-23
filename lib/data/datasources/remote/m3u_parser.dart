@@ -1,3 +1,5 @@
+import 'dart:isolate';
+
 import 'package:dio/dio.dart';
 
 import '../../../core/errors/exceptions.dart';
@@ -83,7 +85,7 @@ class M3uParser {
         throw const PlaylistParseException('Empty playlist received');
       }
 
-      return parseContent(response.data!);
+      return await parseContent(response.data!);
     } on DioException catch (e) {
       AppLogger.error('Failed to fetch M3U', e);
       throw NetworkException(
@@ -93,8 +95,13 @@ class M3uParser {
     }
   }
 
-  /// Parse M3U content string
-  M3uParseResult parseContent(String content) {
+  /// Parse M3U content string (runs in isolate for large playlists)
+  Future<M3uParseResult> parseContent(String content) async {
+    return Isolate.run(() => _parseContentSync(content));
+  }
+
+  /// Synchronous parsing logic (runs in isolate)
+  static M3uParseResult _parseContentSync(String content) {
     final lines = content.split('\n').map((l) => l.trim()).toList();
 
     if (lines.isEmpty || !lines[0].startsWith('#EXTM3U')) {
@@ -170,8 +177,6 @@ class M3uParser {
       }
     }
 
-    AppLogger.info('Parsed ${channels.length} channels in ${groupCounts.length} groups');
-
     return M3uParseResult(
       channels: channels,
       epgUrl: epgUrl,
@@ -180,7 +185,7 @@ class M3uParser {
   }
 
   /// Parse #EXTINF line
-  Map<String, dynamic> _parseExtInf(String line) {
+  static Map<String, dynamic> _parseExtInf(String line) {
     final result = <String, dynamic>{};
 
     // Extract name (after last comma)
@@ -208,7 +213,7 @@ class M3uParser {
   }
 
   /// Extract attribute value from M3U line
-  String? _extractAttribute(String line, String attribute) {
+  static String? _extractAttribute(String line, String attribute) {
     // Use cached RegExp patterns — avoids recompilation per line per attribute
     final patterns = _attrPatternCache.putIfAbsent(attribute, () => [
       RegExp('$attribute="([^"]*)"'),
@@ -231,7 +236,7 @@ class M3uParser {
   /// 2. Group name containing VOD/movie/series keywords
   /// 3. URL path patterns (Xtream-style /movie/ or /series/)
   /// 4. File extension heuristics (.mp4, .mkv, etc.)
-  bool _isVodContent(String url, String? tvgType, String? group) {
+  static bool _isVodContent(String url, String? tvgType, String? group) {
     // 1. Explicit type attribute is most reliable
     if (tvgType != null) {
       final lower = tvgType.toLowerCase();

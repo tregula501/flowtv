@@ -45,7 +45,10 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
 
   @override
   Widget build(BuildContext context) {
-    final playerState = ref.watch(playerControllerProvider);
+    final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
+    final isMuted = ref.watch(playerControllerProvider.select((s) => s.isMuted));
+    final volume = ref.watch(playerControllerProvider.select((s) => s.volume));
+    final isFullscreen = ref.watch(playerControllerProvider.select((s) => s.isFullscreen));
     final playerController = ref.read(playerControllerProvider.notifier);
 
     return MouseRegion(
@@ -92,7 +95,7 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
                 // Play/Pause button
                 IconButton(
                   icon: Icon(
-                    playerState.isPlaying ? Icons.pause : Icons.play_arrow,
+                    isPlaying ? Icons.pause : Icons.play_arrow,
                     color: Colors.white,
                     size: 32,
                   ),
@@ -107,9 +110,9 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
                 // Volume controls
                 IconButton(
                   icon: Icon(
-                    playerState.isMuted
+                    isMuted
                         ? Icons.volume_off
-                        : playerState.volume > 0.5
+                        : volume > 0.5
                             ? Icons.volume_up
                             : Icons.volume_down,
                     color: Colors.white70,
@@ -120,7 +123,7 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
                 SizedBox(
                   width: 100,
                   child: Slider(
-                    value: playerState.isMuted ? 0 : playerState.volume,
+                    value: isMuted ? 0 : volume,
                     onChanged: (value) => playerController.setVolume(value),
                     activeColor: Colors.white,
                     inactiveColor: Colors.white30,
@@ -137,7 +140,7 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
                 // Fullscreen button
                 IconButton(
                   icon: Icon(
-                    playerState.isFullscreen
+                    isFullscreen
                         ? Icons.fullscreen_exit
                         : Icons.fullscreen,
                     color: Colors.white70,
@@ -158,10 +161,20 @@ class _QualitySettingsButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final playerState = ref.watch(playerControllerProvider);
-    final hasMultipleTracks = playerState.audioTracks.length > 1 ||
-        playerState.videoTracks.length > 1 ||
-        playerState.subtitleTracks.isNotEmpty;
+    final ps = ref.watch(playerControllerProvider.select((s) => (
+        audioTracks: s.audioTracks,
+        videoTracks: s.videoTracks,
+        subtitleTracks: s.subtitleTracks,
+        currentAudioTrack: s.currentAudioTrack,
+        currentVideoTrack: s.currentVideoTrack,
+        currentSubtitleTrack: s.currentSubtitleTrack,
+        aspectRatioMode: s.aspectRatioMode,
+        playbackSpeed: s.playbackSpeed,
+        bufferSize: s.bufferSize,
+    )));
+    final hasMultipleTracks = ps.audioTracks.length > 1 ||
+        ps.videoTracks.length > 1 ||
+        ps.subtitleTracks.isNotEmpty;
 
     return PopupMenuButton<String>(
       icon: Icon(
@@ -172,7 +185,7 @@ class _QualitySettingsButton extends ConsumerWidget {
       color: Colors.grey.shade900,
       itemBuilder: (context) => [
         // Audio tracks section
-        if (playerState.audioTracks.length > 1) ...[
+        if (ps.audioTracks.length > 1) ...[
           const PopupMenuItem(
             enabled: false,
             height: 32,
@@ -185,16 +198,16 @@ class _QualitySettingsButton extends ConsumerWidget {
               ),
             ),
           ),
-          ...playerState.audioTracks.map((track) => PopupMenuItem(
+          ...ps.audioTracks.map((track) => PopupMenuItem(
                 value: 'audio:${track.id}',
                 child: Row(
                   children: [
                     Icon(
-                      playerState.currentAudioTrack == track.id
+                      ps.currentAudioTrack == track.id
                           ? Icons.check
                           : Icons.radio_button_unchecked,
                       size: 18,
-                      color: playerState.currentAudioTrack == track.id
+                      color: ps.currentAudioTrack == track.id
                           ? Colors.blue
                           : Colors.grey,
                     ),
@@ -207,7 +220,7 @@ class _QualitySettingsButton extends ConsumerWidget {
         ],
 
         // Video tracks section
-        if (playerState.videoTracks.length > 1) ...[
+        if (ps.videoTracks.length > 1) ...[
           const PopupMenuItem(
             enabled: false,
             height: 32,
@@ -220,16 +233,16 @@ class _QualitySettingsButton extends ConsumerWidget {
               ),
             ),
           ),
-          ...playerState.videoTracks.map((track) => PopupMenuItem(
+          ...ps.videoTracks.map((track) => PopupMenuItem(
                 value: 'video:${track.id}',
                 child: Row(
                   children: [
                     Icon(
-                      playerState.currentVideoTrack == track.id
+                      ps.currentVideoTrack == track.id
                           ? Icons.check
                           : Icons.radio_button_unchecked,
                       size: 18,
-                      color: playerState.currentVideoTrack == track.id
+                      color: ps.currentVideoTrack == track.id
                           ? Colors.blue
                           : Colors.grey,
                     ),
@@ -242,7 +255,7 @@ class _QualitySettingsButton extends ConsumerWidget {
         ],
 
         // Subtitle tracks section
-        if (playerState.subtitleTracks.isNotEmpty) ...[
+        if (ps.subtitleTracks.isNotEmpty) ...[
           const PopupMenuItem(
             enabled: false,
             height: 32,
@@ -260,13 +273,13 @@ class _QualitySettingsButton extends ConsumerWidget {
             child: Row(
               children: [
                 Icon(
-                  playerState.currentSubtitleTrack == null ||
-                          playerState.currentSubtitleTrack == 'no'
+                  ps.currentSubtitleTrack == null ||
+                          ps.currentSubtitleTrack == 'no'
                       ? Icons.check
                       : Icons.radio_button_unchecked,
                   size: 18,
-                  color: playerState.currentSubtitleTrack == null ||
-                          playerState.currentSubtitleTrack == 'no'
+                  color: ps.currentSubtitleTrack == null ||
+                          ps.currentSubtitleTrack == 'no'
                       ? Colors.blue
                       : Colors.grey,
                 ),
@@ -275,16 +288,16 @@ class _QualitySettingsButton extends ConsumerWidget {
               ],
             ),
           ),
-          ...playerState.subtitleTracks.map((track) => PopupMenuItem(
+          ...ps.subtitleTracks.map((track) => PopupMenuItem(
                 value: 'subtitle:${track.id}',
                 child: Row(
                   children: [
                     Icon(
-                      playerState.currentSubtitleTrack == track.id
+                      ps.currentSubtitleTrack == track.id
                           ? Icons.check
                           : Icons.radio_button_unchecked,
                       size: 18,
-                      color: playerState.currentSubtitleTrack == track.id
+                      color: ps.currentSubtitleTrack == track.id
                           ? Colors.blue
                           : Colors.grey,
                     ),
@@ -314,12 +327,12 @@ class _QualitySettingsButton extends ConsumerWidget {
               child: Row(
                 children: [
                   Icon(
-                    playerState.aspectRatioMode == mode
+                    ps.aspectRatioMode == mode
                         ? Icons.check
                         : Icons.radio_button_unchecked,
                     size: 18,
                     color:
-                        playerState.aspectRatioMode == mode ? Colors.blue : Colors.grey,
+                        ps.aspectRatioMode == mode ? Colors.blue : Colors.grey,
                   ),
                   const SizedBox(width: 8),
                   Text(mode.displayName),
@@ -346,12 +359,12 @@ class _QualitySettingsButton extends ConsumerWidget {
               child: Row(
                 children: [
                   Icon(
-                    playerState.playbackSpeed == speed
+                    ps.playbackSpeed == speed
                         ? Icons.check
                         : Icons.radio_button_unchecked,
                     size: 18,
                     color:
-                        playerState.playbackSpeed == speed ? Colors.blue : Colors.grey,
+                        ps.playbackSpeed == speed ? Colors.blue : Colors.grey,
                   ),
                   const SizedBox(width: 8),
                   Text('${speed}x${speed == 1.0 ? ' (Normal)' : ''}'),
@@ -379,11 +392,11 @@ class _QualitySettingsButton extends ConsumerWidget {
                 child: Row(
                   children: [
                     Icon(
-                      playerState.bufferSize == size
+                      ps.bufferSize == size
                           ? Icons.check
                           : Icons.radio_button_unchecked,
                       size: 18,
-                      color: playerState.bufferSize == size ? Colors.blue : Colors.grey,
+                      color: ps.bufferSize == size ? Colors.blue : Colors.grey,
                     ),
                     const SizedBox(width: 8),
                     Text(size.displayName),
@@ -428,7 +441,7 @@ class _RefreshButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final currentChannel = ref.watch(currentChannelProvider);
-    final playerState = ref.watch(playerControllerProvider);
+    final isBuffering = ref.watch(playerControllerProvider.select((s) => s.isBuffering));
 
     if (currentChannel == null) {
       return const SizedBox.shrink();
@@ -437,10 +450,10 @@ class _RefreshButton extends ConsumerWidget {
     return IconButton(
       icon: Icon(
         Icons.refresh,
-        color: playerState.isBuffering ? Colors.orange : Colors.white70,
+        color: isBuffering ? Colors.orange : Colors.white70,
       ),
       tooltip: l10n.refreshStream,
-      onPressed: playerState.isBuffering
+      onPressed: isBuffering
           ? null
           : () async {
               final controller = ref.read(playerControllerProvider.notifier);

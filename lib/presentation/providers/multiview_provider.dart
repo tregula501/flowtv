@@ -228,11 +228,19 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
   }
 
   void _updateSlot(int index, MultiViewSlot Function(MultiViewSlot) updater) {
+    if (index < 0 || index >= state.slots.length) return;
+    final oldSlot = state.slots[index];
+    final newSlot = updater(oldSlot);
+    // Skip state update if nothing actually changed
+    if (identical(oldSlot, newSlot)) return;
+    if (newSlot.isPlaying == oldSlot.isPlaying &&
+        newSlot.isBuffering == oldSlot.isBuffering &&
+        newSlot.isAudioActive == oldSlot.isAudioActive &&
+        newSlot.error == oldSlot.error &&
+        newSlot.channel == oldSlot.channel) return;
     final newSlots = List<MultiViewSlot>.from(state.slots);
-    if (index >= 0 && index < newSlots.length) {
-      newSlots[index] = updater(newSlots[index]);
-      state = state.copyWith(slots: newSlots);
-    }
+    newSlots[index] = newSlot;
+    state = state.copyWith(slots: newSlots);
   }
 
   /// Enable multi-view mode

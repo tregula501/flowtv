@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -566,12 +567,12 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
                   final channel = filteredChannels[index];
                   return ListTile(
                     leading: channel.logoUrl != null
-                        ? Image.network(
-                            channel.logoUrl!,
+                        ? CachedNetworkImage(
+                            imageUrl: channel.logoUrl!,
                             width: 40,
                             height: 40,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) =>
+                            errorWidget: (_, _, _) =>
                                 const Icon(Icons.tv, size: 40),
                           )
                         : const Icon(Icons.tv, size: 40),

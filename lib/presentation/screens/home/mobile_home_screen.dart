@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -347,7 +348,7 @@ class _MobileChannelList extends ConsumerWidget {
                       child: ActionChip(
                         avatar: channel.logoUrl != null && channel.logoUrl!.isNotEmpty
                             ? CircleAvatar(
-                                backgroundImage: NetworkImage(channel.logoUrl!),
+                                backgroundImage: CachedNetworkImageProvider(channel.logoUrl!),
                                 backgroundColor: Colors.grey.shade800,
                               )
                             : const CircleAvatar(child: Icon(Icons.tv, size: 16)),
@@ -491,16 +492,13 @@ class _MobileChannelTile extends ConsumerWidget {
     if (channel.logoUrl != null && channel.logoUrl!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(4),
-        child: Image.network(
-          channel.logoUrl!,
+        child: CachedNetworkImage(
+          imageUrl: channel.logoUrl!,
           width: 48,
           height: 48,
           fit: BoxFit.contain,
-          loadingBuilder: (_, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return _buildPlaceholder();
-          },
-          errorBuilder: (_, _, _) => _buildPlaceholder(),
+          placeholder: (_, _) => _buildPlaceholder(),
+          errorWidget: (_, _, _) => _buildPlaceholder(),
         ),
       );
     }

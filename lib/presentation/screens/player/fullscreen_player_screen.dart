@@ -25,7 +25,15 @@ class _FullscreenPlayerScreenState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final playerState = ref.watch(playerControllerProvider);
+    final isPrebuffering = ref.watch(playerControllerProvider.select((s) => s.isPrebuffering));
+    final isReconnecting = ref.watch(playerControllerProvider.select((s) => s.isReconnecting));
+    final isBuffering = ref.watch(playerControllerProvider.select((s) => s.isBuffering));
+    final error = ref.watch(playerControllerProvider.select((s) => s.error));
+    final retryAttempt = ref.watch(playerControllerProvider.select((s) => s.retryAttempt));
+    final maxRetries = ref.watch(playerControllerProvider.select((s) => s.maxRetries));
+    final bufferedDuration = ref.watch(playerControllerProvider.select((s) => s.bufferedDuration));
+    final bufferSize = ref.watch(playerControllerProvider.select((s) => s.bufferSize));
+    final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
     final playerController = ref.read(playerControllerProvider.notifier);
     final currentChannel = ref.watch(currentChannelProvider);
 
@@ -50,7 +58,7 @@ class _FullscreenPlayerScreenState
         }),
         onExit: (_) => setState(() {
           _isHovering = false;
-          if (playerState.isPlaying) {
+          if (isPlaying) {
             Future.delayed(const Duration(seconds: 3), () {
               // Read fresh state to avoid stale closure
               if (mounted && !_isHovering &&
@@ -74,7 +82,7 @@ class _FullscreenPlayerScreenState
               ),
 
               // Prebuffering indicator with progress
-              if (playerState.isPrebuffering)
+              if (isPrebuffering)
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(24),
@@ -97,16 +105,16 @@ class _FullscreenPlayerScreenState
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '${playerState.bufferedDuration.inSeconds}s / ${playerState.bufferSize.durationSeconds}s',
+                          '${bufferedDuration.inSeconds}s / ${bufferSize.durationSeconds}s',
                           style: const TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                         const SizedBox(height: 8),
                         SizedBox(
                           width: 150,
                           child: LinearProgressIndicator(
-                            value: playerState.bufferSize.durationSeconds > 0
-                                ? (playerState.bufferedDuration.inMilliseconds /
-                                        (playerState.bufferSize.durationSeconds * 1000))
+                            value: bufferSize.durationSeconds > 0
+                                ? (bufferedDuration.inMilliseconds /
+                                        (bufferSize.durationSeconds * 1000))
                                     .clamp(0.0, 1.0)
                                 : 0.0,
                             backgroundColor: Colors.white24,
@@ -118,7 +126,7 @@ class _FullscreenPlayerScreenState
                   ),
                 )
               // Reconnecting indicator (auto-retry in progress)
-              else if (playerState.isReconnecting)
+              else if (isReconnecting)
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(24),
@@ -141,7 +149,7 @@ class _FullscreenPlayerScreenState
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          l10n.retryAttempt(playerState.retryAttempt, playerState.maxRetries),
+                          l10n.retryAttempt(retryAttempt, maxRetries),
                           style: const TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                       ],
@@ -149,13 +157,13 @@ class _FullscreenPlayerScreenState
                   ),
                 )
               // Regular buffering indicator
-              else if (playerState.isBuffering)
+              else if (isBuffering)
                 const Center(
                   child: CircularProgressIndicator(color: Colors.white),
                 ),
 
               // Error message (only when not reconnecting)
-              if (playerState.error != null && !playerState.isReconnecting)
+              if (error != null && !isReconnecting)
                 Center(
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -182,7 +190,7 @@ class _FullscreenPlayerScreenState
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          playerState.error!,
+                          error,
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -221,28 +229,33 @@ class _FullscreenPlayerScreenState
                   ),
                   child: Row(
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            currentChannel.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (currentChannel.group != null)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              currentChannel.group!,
+                              currentChannel.name,
                               style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 14,
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                        ],
+                            if (currentChannel.group != null)
+                              Text(
+                                currentChannel.group!,
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
                       ),
-                      const Spacer(),
                       // Exit fullscreen hint (desktop only — has ESC key)
                       if (!Platform.isAndroid && !Platform.isIOS)
                         Container(

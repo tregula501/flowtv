@@ -22,15 +22,17 @@ class CastButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
-    final castState = ref.watch(castControllerProvider);
+    final isSupported = ref.watch(castControllerProvider.select((s) => s.isSupported));
+    final isConnected = ref.watch(castControllerProvider.select((s) => s.isConnected));
+    final connectedDeviceName = ref.watch(castControllerProvider.select((s) => s.connectedDevice?.name));
 
     // Don't show on unsupported platforms
-    if (!castState.isSupported) {
+    if (!isSupported) {
       return const SizedBox.shrink();
     }
 
-    final connectedLabel = castState.isConnected
-        ? l10n.castConnectedTo(castState.connectedDevice?.name ?? '')
+    final connectedLabel = isConnected
+        ? l10n.castConnectedTo(connectedDeviceName ?? '')
         : l10n.castToDevice;
 
     return Semantics(
@@ -38,8 +40,8 @@ class CastButton extends ConsumerWidget {
       button: true,
       child: IconButton(
         icon: Icon(
-          castState.isConnected ? Icons.cast_connected : Icons.cast,
-          color: iconColor ?? (castState.isConnected ? Colors.blue : null),
+          isConnected ? Icons.cast_connected : Icons.cast,
+          color: iconColor ?? (isConnected ? Colors.blue : null),
           size: iconSize,
         ),
         tooltip: connectedLabel,

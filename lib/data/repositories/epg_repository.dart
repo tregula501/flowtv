@@ -43,9 +43,7 @@ class EpgRepository {
 
       await _db.batch((batch) {
         for (final program in chunk) {
-          batch.insert(
-            _db.epgPrograms,
-            EpgProgramsCompanion.insert(
+          final companion = EpgProgramsCompanion.insert(
               channelId: program.channelId,
               title: program.title,
               startTime: program.startTime,
@@ -54,8 +52,21 @@ class EpgRepository {
               category: Value(program.category),
               episode: Value(program.episode),
               iconUrl: Value(program.iconUrl),
+          );
+          batch.insert(
+            _db.epgPrograms,
+            companion,
+            onConflict: DoUpdate(
+              (old) => EpgProgramsCompanion.custom(
+                title: Variable(program.title),
+                endTime: Variable(program.endTime),
+                description: Variable(program.description),
+                category: Variable(program.category),
+                episode: Variable(program.episode),
+                iconUrl: Variable(program.iconUrl),
+              ),
+              target: [_db.epgPrograms.channelId, _db.epgPrograms.startTime],
             ),
-            mode: InsertMode.insertOrReplace,
           );
         }
       });

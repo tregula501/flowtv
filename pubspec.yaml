@@ -49,15 +49,6 @@ dependencies:
 
   # Desktop-specific
   window_manager: ^0.5.1
-  hotkey_manager: ^0.2.3
-
-  # File handling
-  file_picker: ^10.3.8
-  share_plus: ^12.0.1
-
-  # URL launcher
-  url_launcher: ^6.2.6
-  desktop_multi_window: ^0.3.0
 
   # Chromecast support (Android/iOS)
   flutter_chrome_cast: ^1.2.8

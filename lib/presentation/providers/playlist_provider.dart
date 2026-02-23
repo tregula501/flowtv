@@ -96,53 +96,57 @@ class PlaylistManager {
       onProgress?.call(0, total, 'Preparing database...');
       _updateProgress(0, total, 'Preparing database...');
 
-      // Check if this is the first playlist
-      final existingCount = await _db.playlists.count().getSingle();
-      final isActive = existingCount == 0;
+      // Wrap playlist + channel inserts in a transaction for atomicity
+      late final int playlistId;
+      await _db.transaction(() async {
+        // Check if this is the first playlist
+        final existingCount = await _db.playlists.count().getSingle();
+        final isActive = existingCount == 0;
 
-      // Save playlist
-      final playlistId = await _db.into(_db.playlists).insert(
-        PlaylistsCompanion.insert(
-          name: name,
-          url: url,
-          type: PlaylistType.m3u,
-          createdAt: DateTime.now(),
-          epgUrl: Value(epgUrl ?? result.epgUrl),
-          isActive: Value(isActive),
-          channelCount: Value(channels.length),
-          lastRefresh: Value(DateTime.now()),
-        ),
-      );
+        // Save playlist
+        playlistId = await _db.into(_db.playlists).insert(
+          PlaylistsCompanion.insert(
+            name: name,
+            url: url,
+            type: PlaylistType.m3u,
+            createdAt: DateTime.now(),
+            epgUrl: Value(epgUrl ?? result.epgUrl),
+            isActive: Value(isActive),
+            channelCount: Value(channels.length),
+            lastRefresh: Value(DateTime.now()),
+          ),
+        );
 
-      // Batch insert channels in chunks
-      const batchSize = 500;
-      int processed = 0;
+        // Batch insert channels in chunks
+        const batchSize = 500;
+        int processed = 0;
 
-      for (int i = 0; i < channels.length; i += batchSize) {
-        final end = (i + batchSize > channels.length) ? channels.length : i + batchSize;
-        final chunk = channels.sublist(i, end);
+        for (int i = 0; i < channels.length; i += batchSize) {
+          final end = (i + batchSize > channels.length) ? channels.length : i + batchSize;
+          final chunk = channels.sublist(i, end);
 
-        await _db.batch((batch) {
-          for (final c in chunk) {
-            batch.insert(
-              _db.channels,
-              ChannelsCompanion.insert(
-                playlistId: playlistId,
-                name: c.name,
-                streamUrl: c.streamUrl,
-                logoUrl: Value(c.logoUrl),
-                epgId: Value(c.epgId),
-                group: Value(c.group),
-                channelNumber: Value(c.channelNumber),
-              ),
-            );
-          }
-        });
+          await _db.batch((batch) {
+            for (final c in chunk) {
+              batch.insert(
+                _db.channels,
+                ChannelsCompanion.insert(
+                  playlistId: playlistId,
+                  name: c.name,
+                  streamUrl: c.streamUrl,
+                  logoUrl: Value(c.logoUrl),
+                  epgId: Value(c.epgId),
+                  group: Value(c.group),
+                  channelNumber: Value(c.channelNumber),
+                ),
+              );
+            }
+          });
 
-        processed = end;
-        onProgress?.call(processed, total, 'Adding channels...');
-        _updateProgress(processed, total, 'Adding channels...');
-      }
+          processed = end;
+          onProgress?.call(processed, total, 'Adding channels...');
+          _updateProgress(processed, total, 'Adding channels...');
+        }
+      });
 
       final playlist = await (_db.select(_db.playlists)..where((t) => t.id.equals(playlistId))).getSingle();
       AppLogger.info('Added playlist with $total channels using batch inserts');
@@ -194,58 +198,62 @@ class PlaylistManager {
     onProgress?.call(0, total, 'Preparing database...');
     _updateProgress(0, total, 'Preparing database...');
 
-    // Check if this is the first playlist
-    final existingCount = await _db.playlists.count().getSingle();
-    final isActive = existingCount == 0;
+    // Wrap playlist + channel inserts in a transaction for atomicity
+    late final int playlistId;
+    await _db.transaction(() async {
+      // Check if this is the first playlist
+      final existingCount = await _db.playlists.count().getSingle();
+      final isActive = existingCount == 0;
 
-    // Save playlist (credentials stored securely, not in database)
-    final playlistId = await _db.into(_db.playlists).insert(
-      PlaylistsCompanion.insert(
-        name: name,
-        url: serverUrl,
-        type: PlaylistType.xtream,
-        createdAt: DateTime.now(),
-        isActive: Value(isActive),
-        channelCount: Value(total),
-        lastRefresh: Value(DateTime.now()),
-      ),
-    );
+      // Save playlist (credentials stored securely, not in database)
+      playlistId = await _db.into(_db.playlists).insert(
+        PlaylistsCompanion.insert(
+          name: name,
+          url: serverUrl,
+          type: PlaylistType.xtream,
+          createdAt: DateTime.now(),
+          isActive: Value(isActive),
+          channelCount: Value(total),
+          lastRefresh: Value(DateTime.now()),
+        ),
+      );
 
-    // Store credentials in encrypted secure storage
+      // Batch insert channels in chunks
+      const batchSize = 500;
+      int processed = 0;
+
+      for (int i = 0; i < xtreamChannels.length; i += batchSize) {
+        final end = (i + batchSize > xtreamChannels.length) ? xtreamChannels.length : i + batchSize;
+        final chunk = xtreamChannels.sublist(i, end);
+
+        await _db.batch((batch) {
+          for (final c in chunk) {
+            final streamUrl = client.getLiveStreamUrl(c.id);
+            final group = categoryMap[c.categoryId];
+
+            batch.insert(
+              _db.channels,
+              ChannelsCompanion.insert(
+                playlistId: playlistId,
+                name: c.name,
+                streamUrl: streamUrl,
+                logoUrl: Value(c.streamIcon.isNotEmpty ? c.streamIcon : null),
+                epgId: Value(c.epgChannelId.isNotEmpty ? c.epgChannelId : null),
+                group: Value(group),
+                channelNumber: Value(c.channelNumber),
+              ),
+            );
+          }
+        });
+
+        processed = end;
+        onProgress?.call(processed, total, 'Adding channels...');
+        _updateProgress(processed, total, 'Adding channels...');
+      }
+    });
+
+    // Store credentials in encrypted secure storage (outside transaction, separate storage)
     await SecureStorage.storeCredentials(playlistId, username, password);
-
-    // Batch insert channels in chunks
-    const batchSize = 500;
-    int processed = 0;
-
-    for (int i = 0; i < xtreamChannels.length; i += batchSize) {
-      final end = (i + batchSize > xtreamChannels.length) ? xtreamChannels.length : i + batchSize;
-      final chunk = xtreamChannels.sublist(i, end);
-
-      await _db.batch((batch) {
-        for (final c in chunk) {
-          final streamUrl = client.getLiveStreamUrl(c.id);
-          final group = categoryMap[c.categoryId];
-
-          batch.insert(
-            _db.channels,
-            ChannelsCompanion.insert(
-              playlistId: playlistId,
-              name: c.name,
-              streamUrl: streamUrl,
-              logoUrl: Value(c.streamIcon.isNotEmpty ? c.streamIcon : null),
-              epgId: Value(c.epgChannelId.isNotEmpty ? c.epgChannelId : null),
-              group: Value(group),
-              channelNumber: Value(c.channelNumber),
-            ),
-          );
-        }
-      });
-
-      processed = end;
-      onProgress?.call(processed, total, 'Adding channels...');
-      _updateProgress(processed, total, 'Adding channels...');
-    }
 
     final playlist = await (_db.select(_db.playlists)..where((t) => t.id.equals(playlistId))).getSingle();
     AppLogger.info('Added Xtream playlist with $total channels');

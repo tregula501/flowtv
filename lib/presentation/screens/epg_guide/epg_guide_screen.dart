@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -247,26 +248,23 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
           child: Row(
             children: [
               if (channel.logoUrl != null)
-                Image.network(
-                  channel.logoUrl!,
+                CachedNetworkImage(
+                  imageUrl: channel.logoUrl!,
                   width: 40,
                   height: 40,
                   fit: BoxFit.contain,
-                  loadingBuilder: (_, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return const SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
+                  placeholder: (_, _) => const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                    );
-                  },
-                  errorBuilder: (_, _, _) => const Icon(Icons.tv, size: 40),
+                    ),
+                  ),
+                  errorWidget: (_, _, _) => const Icon(Icons.tv, size: 40),
                 )
               else
                 const Icon(Icons.tv, size: 40),
