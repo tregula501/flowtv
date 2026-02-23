@@ -186,12 +186,12 @@ class _QualitySettingsButton extends ConsumerWidget {
       itemBuilder: (context) => [
         // Audio tracks section
         if (ps.audioTracks.length > 1) ...[
-          const PopupMenuItem(
+          PopupMenuItem(
             enabled: false,
             height: 32,
             child: Text(
-              'AUDIO',
-              style: TextStyle(
+              l10n.audioSection,
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey,
@@ -221,12 +221,12 @@ class _QualitySettingsButton extends ConsumerWidget {
 
         // Video tracks section
         if (ps.videoTracks.length > 1) ...[
-          const PopupMenuItem(
+          PopupMenuItem(
             enabled: false,
             height: 32,
             child: Text(
-              'VIDEO QUALITY',
-              style: TextStyle(
+              l10n.videoQualitySection,
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey,
@@ -256,12 +256,12 @@ class _QualitySettingsButton extends ConsumerWidget {
 
         // Subtitle tracks section
         if (ps.subtitleTracks.isNotEmpty) ...[
-          const PopupMenuItem(
+          PopupMenuItem(
             enabled: false,
             height: 32,
             child: Text(
-              'SUBTITLES',
-              style: TextStyle(
+              l10n.subtitlesSection,
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey,
@@ -310,12 +310,12 @@ class _QualitySettingsButton extends ConsumerWidget {
         ],
 
         // Aspect ratio section
-        const PopupMenuItem(
+        PopupMenuItem(
           enabled: false,
           height: 32,
           child: Text(
-            'ASPECT RATIO',
-            style: TextStyle(
+            l10n.aspectRatioSection,
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
               color: Colors.grey,
@@ -342,12 +342,12 @@ class _QualitySettingsButton extends ConsumerWidget {
         const PopupMenuDivider(),
 
         // Playback speed section
-        const PopupMenuItem(
+        PopupMenuItem(
           enabled: false,
           height: 32,
           child: Text(
-            'PLAYBACK SPEED',
-            style: TextStyle(
+            l10n.playbackSpeedSection,
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
               color: Colors.grey,
@@ -375,12 +375,12 @@ class _QualitySettingsButton extends ConsumerWidget {
 
         // Buffer size section (desktop only — MPV-specific setting)
         if (!Platform.isAndroid && !Platform.isIOS) ...[
-          const PopupMenuItem(
+          PopupMenuItem(
             enabled: false,
             height: 32,
             child: Text(
-              'BUFFER SIZE',
-              style: TextStyle(
+              l10n.bufferSizeSection,
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey,

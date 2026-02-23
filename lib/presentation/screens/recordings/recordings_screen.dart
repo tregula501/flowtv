@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/datasources/local/drift/app_database.dart' show Recording, RecordingStatus;
+import '../../../l10n/app_localizations.dart';
 import '../../providers/recording_provider.dart';
 import '../../../core/extensions/datetime_extensions.dart';
 
@@ -10,24 +11,25 @@ class RecordingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     final recordingsAsync = ref.watch(recordingsProvider);
 
     return DefaultTabController(
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Recordings'),
-          bottom: const TabBar(
+          title: Text(l10n.recordings),
+          bottom: TabBar(
             tabs: [
-              Tab(text: 'All'),
-              Tab(text: 'Recording'),
-              Tab(text: 'Scheduled'),
+              Tab(text: l10n.all),
+              Tab(text: l10n.recording),
+              Tab(text: l10n.scheduled),
             ],
           ),
         ),
         body: recordingsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => const Center(child: Text('Failed to load recordings.')),
+          error: (_, _) => Center(child: Text(l10n.failedToLoadRecordings)),
           data: (recordings) {
             final active = recordings
                 .where((r) => r.status == RecordingStatus.recording)
@@ -41,17 +43,17 @@ class RecordingsScreen extends ConsumerWidget {
                 // All recordings
                 _RecordingsList(
                   recordings: recordings,
-                  emptyMessage: 'No recordings yet',
+                  emptyMessage: l10n.noRecordingsYet,
                 ),
                 // Active recordings
                 _RecordingsList(
                   recordings: active,
-                  emptyMessage: 'No active recordings',
+                  emptyMessage: l10n.noActiveRecordings,
                 ),
                 // Scheduled recordings
                 _RecordingsList(
                   recordings: scheduled,
-                  emptyMessage: 'No scheduled recordings',
+                  emptyMessage: l10n.noScheduledRecordings,
                 ),
               ],
             );
@@ -114,6 +116,7 @@ class _RecordingTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -154,7 +157,7 @@ class _RecordingTile extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _getDateTimeText(),
+                      _getDateTimeText(l10n),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                       ),
@@ -192,28 +195,28 @@ class _RecordingTile extends ConsumerWidget {
                         children: [
                           Icon(Icons.play_arrow, color: Colors.grey.shade600),
                           const SizedBox(width: 8),
-                          Text('Play (coming soon)', style: TextStyle(color: Colors.grey.shade600)),
+                          Text(l10n.playComingSoon, style: TextStyle(color: Colors.grey.shade600)),
                         ],
                       ),
                     ),
                   if (recording.status == RecordingStatus.recording)
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: 'stop',
                       child: Row(
                         children: [
-                          Icon(Icons.stop),
-                          SizedBox(width: 8),
-                          Text('Stop'),
+                          const Icon(Icons.stop),
+                          const SizedBox(width: 8),
+                          Text(l10n.stop),
                         ],
                       ),
                     ),
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.delete, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('Delete', style: TextStyle(color: Colors.red)),
+                        const Icon(Icons.delete, color: Colors.red),
+                        const SizedBox(width: 8),
+                        Text(l10n.delete, style: const TextStyle(color: Colors.red)),
                       ],
                     ),
                   ),
@@ -227,12 +230,12 @@ class _RecordingTile extends ConsumerWidget {
     );
   }
 
-  String _getDateTimeText() {
+  String _getDateTimeText(AppLocalizations l10n) {
     if (recording.status == RecordingStatus.recording) {
-      return 'Started: ${recording.actualStart?.timeString ?? recording.scheduledStart.timeString}';
+      return '${l10n.started}${recording.actualStart?.timeString ?? recording.scheduledStart.timeString}';
     }
     if (recording.status == RecordingStatus.scheduled) {
-      return 'Scheduled: ${recording.scheduledStart.dateTimeString}';
+      return '${l10n.scheduledAt}${recording.scheduledStart.dateTimeString}';
     }
     return recording.actualStart?.dateTimeString ??
         recording.scheduledStart.dateTimeString;
@@ -289,8 +292,9 @@ class _RecordingTile extends ConsumerWidget {
   }
 
   void _playRecording(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Recording playback is not yet implemented')),
+      SnackBar(content: Text(l10n.recordingPlaybackNotImplemented)),
     );
   }
 
@@ -309,15 +313,16 @@ class _RecordingTile extends ConsumerWidget {
   }
 
   void _confirmStop(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Stop Recording'),
-        content: Text('Are you sure you want to stop recording "${recording.title}"?'),
+        title: Text(l10n.stopRecording),
+        content: Text(l10n.stopRecordingConfirm(recording.title)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () {
@@ -325,7 +330,7 @@ class _RecordingTile extends ConsumerWidget {
               Navigator.pop(context);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Stop'),
+            child: Text(l10n.stop),
           ),
         ],
       ),
@@ -333,15 +338,16 @@ class _RecordingTile extends ConsumerWidget {
   }
 
   void _confirmDelete(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Recording'),
-        content: Text('Are you sure you want to delete "${recording.title}"?'),
+        title: Text(l10n.deleteRecording),
+        content: Text(l10n.deleteRecordingConfirm(recording.title)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             onPressed: () {
@@ -349,7 +355,7 @@ class _RecordingTile extends ConsumerWidget {
               Navigator.pop(context);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -364,6 +370,7 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final color = _getColor();
 
     return Container(
@@ -373,7 +380,7 @@ class _StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        _getText(),
+        _getText(l10n),
         style: TextStyle(
           color: color,
           fontSize: 12,
@@ -383,18 +390,18 @@ class _StatusChip extends StatelessWidget {
     );
   }
 
-  String _getText() {
+  String _getText(AppLocalizations l10n) {
     switch (status) {
       case RecordingStatus.scheduled:
-        return 'Scheduled';
+        return l10n.statusScheduled;
       case RecordingStatus.recording:
-        return 'Recording';
+        return l10n.statusRecording;
       case RecordingStatus.completed:
-        return 'Completed';
+        return l10n.statusCompleted;
       case RecordingStatus.failed:
-        return 'Failed';
+        return l10n.statusFailed;
       case RecordingStatus.cancelled:
-        return 'Cancelled';
+        return l10n.statusCancelled;
     }
   }
 
