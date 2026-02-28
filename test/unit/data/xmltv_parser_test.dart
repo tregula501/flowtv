@@ -11,7 +11,7 @@ void main() {
     });
 
     group('parseContent', () {
-      test('should parse basic XMLTV with single program', () {
+      test('should parse basic XMLTV with single program', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -19,7 +19,7 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs.length, 1);
         expect(result.programCount, 1);
@@ -28,7 +28,7 @@ void main() {
         expect(result.programs[0].channelId, 'channel.1');
       });
 
-      test('should parse multiple programs', () {
+      test('should parse multiple programs', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -42,14 +42,14 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs.length, 3);
         expect(result.programCount, 3);
         expect(result.channelCount, 2);
       });
 
-      test('should parse program description', () {
+      test('should parse program description', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -58,12 +58,12 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs[0].description, 'This is a test description');
       });
 
-      test('should parse program category', () {
+      test('should parse program category', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -72,12 +72,12 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs[0].category, 'Sports');
       });
 
-      test('should parse episode number', () {
+      test('should parse episode number', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -86,12 +86,12 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs[0].episode, 'S01E05');
       });
 
-      test('should parse icon URL', () {
+      test('should parse icon URL', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -100,12 +100,12 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs[0].iconUrl, 'http://example.com/poster.jpg');
       });
 
-      test('should parse date with timezone offset', () {
+      test('should parse date with timezone offset', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0500" stop="20240115130000 +0500" channel="channel.1">
@@ -113,13 +113,13 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         // 12:00 +0500 should convert to 07:00 UTC
         expect(result.programs[0].startTime.hour, 7);
       });
 
-      test('should parse date without timezone', () {
+      test('should parse date without timezone', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000" stop="20240115130000" channel="channel.1">
@@ -127,12 +127,12 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs[0].startTime.hour, 12);
       });
 
-      test('should skip programs without required attributes', () {
+      test('should skip programs without required attributes', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" channel="channel.1">
@@ -143,25 +143,25 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs.length, 1);
         expect(result.programs[0].title, 'Complete Program');
       });
 
-      test('should use "Unknown" for missing title', () {
+      test('should use "Unknown" for missing title', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs[0].title, 'Unknown');
       });
 
-      test('should handle negative timezone offset', () {
+      test('should handle negative timezone offset', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 -0500" stop="20240115130000 -0500" channel="channel.1">
@@ -169,22 +169,22 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         // 12:00 -0500 should convert to 17:00 UTC
         expect(result.programs[0].startTime.hour, 17);
       });
 
-      test('should throw EpgParseException for invalid XML', () {
+      test('should throw EpgParseException for invalid XML', () async {
         const content = '''This is not valid XML''';
 
-        expect(
-          () => parser.parseContent(content),
+        await expectLater(
+          parser.parseContent(content),
           throwsA(isA<EpgParseException>()),
         );
       });
 
-      test('should throw EpgParseException for missing tv element', () {
+      test('should throw EpgParseException for missing tv element', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <notTv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -192,13 +192,13 @@ void main() {
   </programme>
 </notTv>''';
 
-        expect(
-          () => parser.parseContent(content),
+        await expectLater(
+          parser.parseContent(content),
           throwsA(isA<EpgParseException>()),
         );
       });
 
-      test('should count unique channels correctly', () {
+      test('should count unique channels correctly', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -215,13 +215,13 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programCount, 4);
         expect(result.channelCount, 2);
       });
 
-      test('should handle all optional fields being null', () {
+      test('should handle all optional fields being null', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -229,7 +229,7 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
 
         expect(result.programs[0].description, null);
         expect(result.programs[0].category, null);
@@ -237,7 +237,7 @@ void main() {
         expect(result.programs[0].iconUrl, null);
       });
 
-      test('should parse complete program with all fields', () {
+      test('should parse complete program with all fields', () async {
         const content = '''<?xml version="1.0" encoding="UTF-8"?>
 <tv>
   <programme start="20240115120000 +0000" stop="20240115130000 +0000" channel="channel.1">
@@ -249,7 +249,7 @@ void main() {
   </programme>
 </tv>''';
 
-        final result = parser.parseContent(content);
+        final result = await parser.parseContent(content);
         final program = result.programs[0];
 
         expect(program.title, 'Full Program');

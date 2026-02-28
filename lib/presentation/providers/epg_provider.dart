@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/local/drift/app_database.dart' show EpgProgram, AppSettingsTableCompanion;
 import '../../data/datasources/local/database_service.dart';
 import '../../data/repositories/epg_repository.dart';
 import '../../core/utils/logger.dart';

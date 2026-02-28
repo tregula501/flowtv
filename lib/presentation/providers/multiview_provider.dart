@@ -197,7 +197,9 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
         newSlot.isBuffering == oldSlot.isBuffering &&
         newSlot.isAudioActive == oldSlot.isAudioActive &&
         newSlot.error == oldSlot.error &&
-        newSlot.channel == oldSlot.channel) return;
+        newSlot.channel == oldSlot.channel) {
+      return;
+    }
     final newSlots = List<MultiViewSlot>.from(state.slots);
     newSlots[index] = newSlot;
     state = state.copyWith(slots: newSlots);

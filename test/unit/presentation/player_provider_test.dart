@@ -62,7 +62,7 @@ void main() {
 
       test('should clear error when null passed', () {
         final state = const PlayerState().copyWith(error: 'Test error');
-        final clearedState = state.copyWith(); // error not passed, stays null
+        final clearedState = state.copyWith(clearError: true);
 
         expect(clearedState.error, null);
       });
