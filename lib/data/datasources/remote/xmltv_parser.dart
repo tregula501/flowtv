@@ -1,7 +1,7 @@
 import 'dart:isolate';
 
 import 'package:dio/dio.dart';
-import 'package:xml/xml.dart';
+import 'package:xml/xml_events.dart';
 
 import '../../../core/errors/exceptions.dart';
 import '../../../core/utils/logger.dart';
@@ -98,51 +98,162 @@ class XmltvParser {
     return Isolate.run(() => _parseContentSync(content));
   }
 
-  /// Synchronous parsing logic (runs in isolate)
+  /// Synchronous parsing logic (runs in isolate).
+  ///
+  /// Uses event-based (pull) parsing via [parseEvents] to avoid building a
+  /// full DOM tree in memory.  For a 50 MB EPG file this keeps memory usage
+  /// proportional to the number of *retained* [XmltvProgram] objects instead
+  /// of 3-5x the file size for the DOM.
   static XmltvParseResult _parseContentSync(String content) {
     try {
-      final document = XmlDocument.parse(content);
-      final tvElements = document.findElements('tv');
-      if (tvElements.isEmpty) {
-        throw const EpgParseException('Invalid EPG: missing <tv> root element');
-      }
-      final tv = tvElements.first;
-
       final programs = <XmltvProgram>[];
       final channelIds = <String>{};
 
-      // Parse programmes
-      for (final programme in tv.findElements('programme')) {
-        final channelId = programme.getAttribute('channel');
-        final start = programme.getAttribute('start');
-        final stop = programme.getAttribute('stop');
+      // Whether we have seen the root <tv> element.
+      bool foundTvRoot = false;
 
-        if (channelId == null || start == null || stop == null) continue;
+      // State while inside a <programme> element.
+      bool inProgramme = false;
+      String? channelId;
+      String? start;
+      String? stop;
+      String? title;
+      String? description;
+      String? category;
+      String? episode;
+      String? iconSrc;
 
-        channelIds.add(channelId);
+      // The name of the direct child element we are currently reading text
+      // from (e.g. "title", "desc", …).  Null when we are not inside a
+      // relevant child element.
+      String? currentChild;
 
-        final titleElement = programme.findElements('title').firstOrNull;
-        final descElement = programme.findElements('desc').firstOrNull;
-        final categoryElement = programme.findElements('category').firstOrNull;
-        final iconElement = programme.findElements('icon').firstOrNull;
-        final episodeElement = programme.findElements('episode-num').firstOrNull;
+      // Nesting depth within a <programme>.  We need this to correctly
+      // ignore nested elements inside children (e.g. <desc><b>bold</b></desc>)
+      // and to know when the <programme> truly ends.
+      int programmeDepth = 0;
 
-        final startTime = _parseXmltvDate(start);
-        final endTime = _parseXmltvDate(stop);
-        if (startTime == null || endTime == null) continue;
+      for (final event in parseEvents(content)) {
+        if (event is XmlStartElementEvent) {
+          if (event.name == 'tv') {
+            foundTvRoot = true;
+          } else if (event.name == 'programme' && !inProgramme) {
+            inProgramme = true;
+            programmeDepth = 1;
 
-        final program = XmltvProgram(
-          channelId: channelId,
-          title: titleElement?.innerText ?? 'Unknown',
-          startTime: startTime,
-          endTime: endTime,
-          description: descElement?.innerText,
-          category: categoryElement?.innerText,
-          episode: episodeElement?.innerText,
-          iconUrl: iconElement?.getAttribute('src'),
-        );
+            // Extract attributes from the <programme> tag.
+            channelId = null;
+            start = null;
+            stop = null;
+            title = null;
+            description = null;
+            category = null;
+            episode = null;
+            iconSrc = null;
+            currentChild = null;
 
-        programs.add(program);
+            for (final attr in event.attributes) {
+              switch (attr.name) {
+                case 'channel':
+                  channelId = attr.value;
+                case 'start':
+                  start = attr.value;
+                case 'stop':
+                  stop = attr.value;
+              }
+            }
+
+            // Self-closing <programme /> is technically valid XML but
+            // useless – skip it.
+            if (event.isSelfClosing) {
+              inProgramme = false;
+              programmeDepth = 0;
+            }
+          } else if (inProgramme) {
+            programmeDepth++;
+
+            // Only treat direct children (depth == 2) as data sources.
+            if (programmeDepth == 2) {
+              switch (event.name) {
+                case 'title':
+                case 'desc':
+                case 'category':
+                case 'episode-num':
+                  currentChild = event.name;
+                case 'icon':
+                  // <icon> carries its data in the src attribute.
+                  for (final attr in event.attributes) {
+                    if (attr.name == 'src') {
+                      iconSrc = attr.value;
+                      break;
+                    }
+                  }
+                  currentChild = null;
+                default:
+                  currentChild = null;
+              }
+            }
+
+            // Handle self-closing child tags (e.g. <icon src="…" />).
+            if (event.isSelfClosing) {
+              programmeDepth--;
+              if (programmeDepth == 1) {
+                currentChild = null;
+              }
+            }
+          }
+        } else if (event is XmlTextEvent) {
+          if (inProgramme && currentChild != null) {
+            final text = event.value;
+            switch (currentChild) {
+              case 'title':
+                title = (title ?? '') + text;
+              case 'desc':
+                description = (description ?? '') + text;
+              case 'category':
+                category = (category ?? '') + text;
+              case 'episode-num':
+                episode = (episode ?? '') + text;
+            }
+          }
+        } else if (event is XmlEndElementEvent) {
+          if (inProgramme) {
+            programmeDepth--;
+
+            if (event.name == 'programme' && programmeDepth == 0) {
+              // Finished a <programme> – build the result object.
+              inProgramme = false;
+              currentChild = null;
+
+              if (channelId == null || start == null || stop == null) continue;
+
+              final startTime = _parseXmltvDate(start);
+              final endTime = _parseXmltvDate(stop);
+              if (startTime == null || endTime == null) continue;
+
+              channelIds.add(channelId);
+
+              programs.add(XmltvProgram(
+                channelId: channelId,
+                title: title ?? 'Unknown',
+                startTime: startTime,
+                endTime: endTime,
+                description: description,
+                category: category,
+                episode: episode,
+                iconUrl: iconSrc,
+              ));
+            } else if (programmeDepth == 1) {
+              // Exiting a direct child element – stop accumulating text.
+              currentChild = null;
+            }
+          }
+        }
+      }
+
+      if (!foundTvRoot) {
+        throw const EpgParseException(
+            'Invalid EPG: missing <tv> root element');
       }
 
       return XmltvParseResult(
@@ -150,6 +261,8 @@ class XmltvParser {
         channelCount: channelIds.length,
         programCount: programs.length,
       );
+    } on EpgParseException {
+      rethrow;
     } catch (e) {
       throw EpgParseException('Failed to parse EPG: $e', originalError: e);
     }

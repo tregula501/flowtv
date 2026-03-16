@@ -2,6 +2,7 @@ import 'dart:isolate';
 
 import 'package:dio/dio.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/errors/exceptions.dart';
 import '../../../core/utils/logger.dart';
 import '../../../core/utils/retry.dart';
@@ -52,6 +53,17 @@ class M3uParser {
   // Cache compiled RegExp per attribute name to avoid recompilation on every line
   static final _attrPatternCache = <String, List<RegExp>>{};
 
+  /// Allowed URL schemes for stream URLs (SSRF protection)
+  static const _allowedStreamSchemes = {'http', 'https', 'rtsp', 'rtmp', 'rtp', 'mms'};
+
+  /// Check if a stream URL uses an allowed scheme.
+  /// Returns false for file://, javascript:, data:, ftp://, and other blocked schemes.
+  static bool _isAllowedStreamUrl(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme) return false;
+    return _allowedStreamSchemes.contains(uri.scheme.toLowerCase());
+  }
+
   M3uParser({Dio? dio})
       : _dio = dio ?? Dio(),
         _ownsDio = dio == null;
@@ -83,6 +95,13 @@ class M3uParser {
 
       if (response.data == null || response.data!.isEmpty) {
         throw const PlaylistParseException('Empty playlist received');
+      }
+
+      if (response.data!.length > AppConstants.maxM3uFileSizeBytes) {
+        throw PlaylistParseException(
+          'M3U file too large: ${response.data!.length} bytes exceeds '
+          '${AppConstants.maxM3uFileSizeBytes} byte limit',
+        );
       }
 
       return await parseContent(response.data!);
@@ -146,7 +165,24 @@ class M3uParser {
         // Skip other directives
         continue;
       } else if (line.isNotEmpty && currentName != null) {
-        // This is a stream URL
+        // This is a stream URL — validate scheme to prevent SSRF
+        if (!_isAllowedStreamUrl(line)) {
+          // Log runs inside isolate; print directly since AppLogger
+          // depends on Flutter bindings not available in isolates.
+          // ignore: avoid_print
+          print('[WARNING] Skipping channel "$currentName": '
+              'blocked URL scheme in "$line"');
+          currentName = null;
+          currentLogo = null;
+          currentEpgId = null;
+          currentGroup = null;
+          currentNumber = null;
+          currentLanguage = null;
+          currentCountry = null;
+          currentType = null;
+          continue;
+        }
+
         final channel = M3uChannel(
           name: currentName,
           streamUrl: line,
@@ -164,6 +200,15 @@ class M3uParser {
         // Count groups
         final group = currentGroup ?? 'Uncategorized';
         groupCounts[group] = (groupCounts[group] ?? 0) + 1;
+
+        // Enforce channel count limit
+        if (channels.length >= AppConstants.maxM3uChannelCount) {
+          // ignore: avoid_print
+          print('[WARNING] M3U channel limit reached '
+              '(${AppConstants.maxM3uChannelCount}). '
+              'Remaining entries will be skipped.');
+          break;
+        }
 
         // Reset for next channel
         currentName = null;

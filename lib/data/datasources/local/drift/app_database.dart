@@ -240,6 +240,10 @@ LazyDatabase _openConnection() {
       setup: (db) {
         // Enable foreign key enforcement
         db.execute('PRAGMA foreign_keys = ON');
+        // WAL mode improves concurrent read/write performance
+        db.execute('PRAGMA journal_mode = WAL');
+        // NORMAL synchronous improves write speed with reasonable durability
+        db.execute('PRAGMA synchronous = NORMAL');
       },
     );
   });

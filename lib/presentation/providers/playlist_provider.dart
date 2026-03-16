@@ -473,15 +473,16 @@ class PlaylistManager {
     onProgress?.call(0, 100, 'Connecting to server...');
     _updateProgress(0, 100, 'Connecting to server...');
 
-    // Read credentials from secure storage (fall back to database for backward compat)
-    final (secureUsername, securePassword) =
+    // Read credentials exclusively from secure storage
+    final (username, password) =
         await SecureStorage.getCredentials(playlist.id);
-    final username = secureUsername ?? playlist.username;
-    final password = securePassword ?? playlist.password;
 
-    if (username == null || password == null) {
+    if (username == null || username.isEmpty || password == null) {
       _ref.read(playlistProgressProvider.notifier).stopLoading();
-      throw Exception('Xtream playlist missing credentials');
+      throw Exception(
+        'Xtream playlist credentials not found in secure storage. '
+        'Please re-enter your credentials for "${playlist.name}".',
+      );
     }
 
     final client = XtreamApiClient(

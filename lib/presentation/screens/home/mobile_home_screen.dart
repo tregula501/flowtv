@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -168,7 +170,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              l10n.welcomeSubtitle,
+              l10n.welcomeSubtitleDetailed,
               style: Theme.of(context).textTheme.bodyLarge,
               textAlign: TextAlign.center,
             ),
@@ -518,8 +520,8 @@ class _MobileChannelTile extends ConsumerWidget {
   }
 }
 
-/// Mobile fullscreen player
-class _MobilePlayerScreen extends ConsumerWidget {
+/// Mobile fullscreen player with swipe-to-switch-channel support
+class _MobilePlayerScreen extends ConsumerStatefulWidget {
   final Channel channel;
   final VoidCallback onBack;
 
@@ -529,8 +531,81 @@ class _MobilePlayerScreen extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_MobilePlayerScreen> createState() => _MobilePlayerScreenState();
+}
+
+class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
+  /// Channel name to show in the switch overlay (null = hidden)
+  String? _switchOverlayText;
+
+  /// Controls the fade-in / fade-out of the channel switch overlay
+  double _switchOverlayOpacity = 0.0;
+
+  /// Timer that auto-dismisses the overlay after 2 seconds
+  Timer? _switchOverlayTimer;
+
+  @override
+  void dispose() {
+    _switchOverlayTimer?.cancel();
+    super.dispose();
+  }
+
+  // ------------------------------------------------------------------
+  // Channel switching
+  // ------------------------------------------------------------------
+
+  /// Switch to the next (+1) or previous (-1) channel in the list.
+  void _switchChannel(int direction) {
+    final currentChannel = ref.read(currentChannelProvider);
+    if (currentChannel == null) return;
+
+    // Use the same list the channel-list tab shows (respects search/filter)
+    final channels = ref.read(searchedChannelsProvider);
+    if (channels.isEmpty) return;
+
+    final currentIndex = channels.indexWhere((c) => c.id == currentChannel.id);
+    if (currentIndex == -1) return;
+
+    // Wrap around at boundaries
+    final nextIndex = (currentIndex + direction) % channels.length;
+    final nextChannel = channels[nextIndex];
+
+    // Play the new channel
+    ref.read(currentChannelProvider.notifier).select(nextChannel);
+    ref.read(playerControllerProvider.notifier).playChannel(nextChannel);
+    ref.read(channelManagerProvider).markAsWatched(nextChannel.id);
+
+    // Show the overlay
+    _showSwitchOverlay(nextChannel);
+  }
+
+  /// Display a brief overlay with the new channel's name, auto-hiding after
+  /// 2 seconds with a fade-out animation.
+  void _showSwitchOverlay(Channel channel) {
+    _switchOverlayTimer?.cancel();
+
+    setState(() {
+      _switchOverlayText = channel.channelNumber != null
+          ? '${channel.channelNumber}  ${channel.name}'
+          : channel.name;
+      _switchOverlayOpacity = 1.0;
+    });
+
+    _switchOverlayTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _switchOverlayOpacity = 0.0);
+      }
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Build
+  // ------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final channel = widget.channel;
     final playerNotifier = ref.read(playerControllerProvider.notifier);
 
     return Scaffold(
@@ -538,10 +613,21 @@ class _MobilePlayerScreen extends ConsumerWidget {
       body: SafeArea(
         child: Stack(
           children: [
-            // Video player
+            // Video player — swipe up/down to switch channels,
+            // tap to toggle play/pause (unchanged behaviour).
             Positioned.fill(
               child: GestureDetector(
                 onTap: () => playerNotifier.playPause(),
+                onVerticalDragEnd: (details) {
+                  if (details.primaryVelocity == null) return;
+                  if (details.primaryVelocity! < -300) {
+                    // Swipe up -> next channel
+                    _switchChannel(1);
+                  } else if (details.primaryVelocity! > 300) {
+                    // Swipe down -> previous channel
+                    _switchChannel(-1);
+                  }
+                },
                 child: Video(
                   controller: playerNotifier.videoController,
                   controls: NoVideoControls,
@@ -625,6 +711,39 @@ class _MobilePlayerScreen extends ConsumerWidget {
               },
             ),
 
+            // Channel switch overlay — semi-transparent bar at the top
+            if (_switchOverlayText != null)
+              Positioned(
+                top: 56,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: _switchOverlayOpacity,
+                    duration: const Duration(milliseconds: 400),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _switchOverlayText!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
             // Top bar with back button, channel name, and cast button
             Positioned(
               top: 0,
@@ -643,7 +762,7 @@ class _MobilePlayerScreen extends ConsumerWidget {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: onBack,
+                      onPressed: widget.onBack,
                     ),
                     Expanded(
                       child: Text(

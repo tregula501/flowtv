@@ -274,9 +274,9 @@ class _MultiViewTileState extends State<_MultiViewTile> {
         child: Stack(
           children: [
             // Video or empty state
-            if (widget.slot.channel != null)
+            if (widget.slot.channel != null && widget.slot.videoController != null)
               Video(
-                controller: widget.slot.videoController,
+                controller: widget.slot.videoController!,
                 controls: NoVideoControls,
               )
             else
@@ -371,6 +371,14 @@ class _MultiViewTileState extends State<_MultiViewTile> {
               style: TextStyle(
                 color: Colors.grey.shade600,
                 fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.addChannel,
+              style: TextStyle(
+                color: Colors.grey.shade700,
+                fontSize: 12,
               ),
             ),
           ],

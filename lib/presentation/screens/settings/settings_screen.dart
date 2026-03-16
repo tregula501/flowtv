@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/theme_provider.dart';
 import '../../providers/playlist_provider.dart';
 import '../../providers/epg_provider.dart';
+import '../../providers/player_provider.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../../widgets/edit_playlist_dialog.dart';
 import '../../../core/extensions/datetime_extensions.dart';
@@ -42,6 +45,13 @@ class SettingsScreen extends ConsumerWidget {
             l10n.tvGuideEpg,
             [
               _buildEpgTile(context, ref),
+            ],
+          ),
+          _buildSection(
+            context,
+            'Playback',
+            [
+              _buildBufferSizeTile(context, ref),
             ],
           ),
           _buildSection(
@@ -324,6 +334,38 @@ class SettingsScreen extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBufferSizeTile(BuildContext context, WidgetRef ref) {
+    final playerState = ref.watch(playerControllerProvider);
+    final currentSize = playerState.bufferSize;
+
+    final bool isMobile = Platform.isAndroid || Platform.isIOS;
+    // extraLarge (240MB) causes OOM on most mobile devices
+    final availableSizes = isMobile
+        ? BufferSize.values.where((s) => s != BufferSize.extraLarge).toList()
+        : BufferSize.values;
+
+    return ListTile(
+      leading: const Icon(Icons.speed),
+      title: const Text('Buffer Size'),
+      subtitle: Text(currentSize.displayName),
+      trailing: DropdownButton<BufferSize>(
+        value: availableSizes.contains(currentSize) ? currentSize : BufferSize.large,
+        underline: const SizedBox(),
+        items: availableSizes
+            .map((size) => DropdownMenuItem(
+                  value: size,
+                  child: Text(size.displayName),
+                ))
+            .toList(),
+        onChanged: (value) {
+          if (value != null) {
+            ref.read(playerControllerProvider.notifier).setBufferSize(value);
+          }
+        },
+      ),
     );
   }
 

@@ -1,8 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Allow cleartext (HTTP) traffic for IPTV streaming -->
-    <!-- Most IPTV services use HTTP streams which Android 9+ blocks by default -->
+    <!--
+        Cleartext (HTTP) traffic is permitted globally because IPTV streams are
+        typically served over HTTP (not HTTPS). The stream domains are user-defined
+        and cannot be enumerated in advance, so we cannot restrict cleartext to a
+        fixed domain-config list. This is an accepted trade-off for IPTV functionality.
+    -->
     <base-config cleartextTrafficPermitted="true">
+        <!--
+            Only system-installed CAs are trusted. User-installed certificates are
+            explicitly excluded to prevent man-in-the-middle attacks via rogue CAs.
+        -->
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

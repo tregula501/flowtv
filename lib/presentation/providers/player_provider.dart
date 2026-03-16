@@ -1,17 +1,22 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:drift/drift.dart' show Value;
 
 import '../../data/datasources/local/database_service.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/mpv_buffer_config.dart';
+import '../../core/models/buffer_size.dart';
+export '../../core/models/buffer_size.dart';
+
+import 'player/prebuffer_controller.dart';
+import 'player/retry_controller.dart';
+import 'player/display_mode_controller.dart';
+import 'player/external_player_launcher.dart';
 
 /// Track info for audio/video/subtitle tracks
 class TrackInfo {
@@ -84,78 +89,6 @@ extension AspectRatioModeExtension on AspectRatioMode {
         return 4 / 3;
       case AspectRatioMode.ratio21x9:
         return 21 / 9;
-    }
-  }
-}
-
-/// Buffer size options for streaming
-enum BufferSize {
-  small,
-  medium,
-  large,
-  veryLarge,
-  extraLarge, // For very unstable connections
-}
-
-extension BufferSizeExtension on BufferSize {
-  String get displayName {
-    switch (this) {
-      case BufferSize.small:
-        return 'Small (1s)';
-      case BufferSize.medium:
-        return 'Medium (5s)';
-      case BufferSize.large:
-        return 'Large (15s)';
-      case BufferSize.veryLarge:
-        return 'Very Large (30s)';
-      case BufferSize.extraLarge:
-        return 'Extra Large (60s)';
-    }
-  }
-
-  int get durationSeconds {
-    switch (this) {
-      case BufferSize.small:
-        return 1;
-      case BufferSize.medium:
-        return 5;
-      case BufferSize.large:
-        return 15;
-      case BufferSize.veryLarge:
-        return 30;
-      case BufferSize.extraLarge:
-        return 60;
-    }
-  }
-
-  /// Minimum seconds to buffer before resuming playback after a stall
-  int get minBufferBeforeResume {
-    switch (this) {
-      case BufferSize.small:
-        return 1;
-      case BufferSize.medium:
-        return 2;
-      case BufferSize.large:
-        return 5;
-      case BufferSize.veryLarge:
-        return 10;
-      case BufferSize.extraLarge:
-        return 15;
-    }
-  }
-
-  String get description {
-    switch (this) {
-      case BufferSize.small:
-        return 'Lowest latency, may buffer more';
-      case BufferSize.medium:
-        return 'Balanced latency and stability';
-      case BufferSize.large:
-        return 'More stable, higher latency';
-      case BufferSize.veryLarge:
-        return 'Most stable for slow connections';
-      case BufferSize.extraLarge:
-        return 'Maximum stability for very unstable connections';
     }
   }
 }
@@ -271,18 +204,15 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   Player? _player;
   VideoController? _videoController;
   BufferSize _currentBufferSize = BufferSize.medium;
-  bool _isPrebuffering = false;
-  DateTime? _prebufferStartTime;
-  Timer? _prebufferProgressTimer;
-  Timer? _prebufferCompleteTimer;
 
-  // Auto-retry state
+  // Delegate controllers
+  final PrebufferController _prebuffer = PrebufferController();
+  final RetryController _retry = RetryController();
+  final DisplayModeController _displayMode = DisplayModeController();
+  final ExternalPlayerLauncher _externalPlayer = ExternalPlayerLauncher();
+
+  // Channel currently being played (needed for retry & external player)
   Channel? _currentChannel;
-  int _retryAttempt = 0;
-  static const int _maxRetries = 3;
-  bool _isRetrying = false;
-  Timer? _retryTimer;
-  bool _autoRetryEnabled = true;
 
   // Saved volume for mute/unmute (the stream listener overwrites state.volume)
   double _preMuteVolume = 1.0;
@@ -297,9 +227,8 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   PlayerState build() {
     // Clean up from any prior build() call (Notifier.build() re-runs on invalidation)
     _isDisposed = false;
-    _prebufferProgressTimer?.cancel();
-    _prebufferCompleteTimer?.cancel();
-    _retryTimer?.cancel();
+    _prebuffer.dispose();
+    _retry.dispose();
     for (final sub in _subscriptions) {
       sub.cancel();
     }
@@ -314,14 +243,19 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     // Register disposal callback
     ref.onDispose(() {
       _isDisposed = true;
-      _prebufferProgressTimer?.cancel();
-      _prebufferCompleteTimer?.cancel();
-      _retryTimer?.cancel();
+      _prebuffer.dispose();
+      _retry.dispose();
       for (final sub in _subscriptions) {
         sub.cancel();
       }
       _subscriptions.clear();
       _player?.dispose();
+      // Ensure screen can sleep when provider is disposed
+      try {
+        WakelockPlus.disable();
+      } catch (e) {
+        // Silently ignore — app may be shutting down
+      }
     });
 
     return const PlayerState();
@@ -332,7 +266,12 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     try {
       final db = DatabaseService.instance;
       final settings = await (db.select(db.appSettingsTable)..limit(1)).getSingle();
-      final saved = _bufferSizeFromSeconds(settings.bufferSeconds);
+      var saved = _bufferSizeFromSeconds(settings.bufferSeconds);
+      // Cap extraLarge on mobile — 240MB causes OOM on most devices
+      if ((Platform.isAndroid || Platform.isIOS) && saved == BufferSize.extraLarge) {
+        saved = BufferSize.large;
+        AppLogger.warning('Extra large buffer capped to large on mobile');
+      }
       if (saved != _currentBufferSize) {
         _currentBufferSize = saved;
         state = state.copyWith(bufferSize: saved);
@@ -376,6 +315,13 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     return vc;
   }
   Channel? get currentChannel => _currentChannel;
+
+  /// Helper to pass a state-updating function to delegate controllers.
+  void _updateState(PlayerState Function(PlayerState) transform) {
+    if (!_isDisposed) {
+      state = transform(state);
+    }
+  }
 
   void _initPlayer() {
     AppLogger.info('=== INITIALIZING PLAYER ===');
@@ -456,16 +402,26 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
         if (error.isNotEmpty && !_isDisposed) {
           AppLogger.error('Player error: $error');
           state = state.copyWith(error: error);
-          _handleStreamError(error);
+          _retry.handleStreamError(
+            error,
+            player: _player,
+            channel: _currentChannel,
+            updateState: _updateState,
+          );
         }
       }),
     );
 
     _subscriptions.add(
       _player!.stream.completed.listen((completed) {
-        if (completed && _currentChannel != null && _autoRetryEnabled && !_isDisposed) {
+        if (completed && _currentChannel != null && _retry.autoRetryEnabled && !_isDisposed) {
           AppLogger.warning('Stream completed unexpectedly, attempting reconnect');
-          _handleStreamError('Stream ended');
+          _retry.handleStreamError(
+            'Stream ended',
+            player: _player,
+            channel: _currentChannel,
+            updateState: _updateState,
+          );
         }
       }),
     );
@@ -525,141 +481,9 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     await applyMpvBufferSettings(player, _currentBufferSize);
   }
 
-  /// Complete prebuffering and start playback
-  void _completePrebuffering() {
-    if (!_isPrebuffering || _isDisposed) return;
-
-    _isPrebuffering = false;
-    _prebufferStartTime = null;
-    _prebufferProgressTimer?.cancel();
-    _prebufferProgressTimer = null;
-    _prebufferCompleteTimer = null;
-    state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
-    _player?.play();
-    AppLogger.info('Prebuffer complete, starting playback');
-  }
-
-  /// Cancel prebuffering (used when stopping or changing channels)
-  void _cancelPrebuffering() {
-    _isPrebuffering = false;
-    _prebufferStartTime = null;
-    _prebufferProgressTimer?.cancel();
-    _prebufferProgressTimer = null;
-    _prebufferCompleteTimer?.cancel();
-    _prebufferCompleteTimer = null;
-    state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
-  }
-
-  /// Start periodic prebuffer progress updates
-  void _startPrebufferProgress() {
-    _prebufferProgressTimer?.cancel();
-    _prebufferProgressTimer = Timer.periodic(
-      const Duration(milliseconds: 100),
-      (_) {
-        if (!_isPrebuffering || _prebufferStartTime == null || _isDisposed) {
-          _prebufferProgressTimer?.cancel();
-          _prebufferProgressTimer = null;
-          return;
-        }
-        final elapsed = DateTime.now().difference(_prebufferStartTime!);
-        state = state.copyWith(bufferedDuration: elapsed);
-      },
-    );
-  }
-
-  /// Handle stream errors with auto-retry
-  void _handleStreamError(String error) {
-    if (!_autoRetryEnabled || _currentChannel == null || _isRetrying || _isDisposed) return;
-
-    // Check if we've exceeded max retries
-    if (_retryAttempt >= _maxRetries) {
-      AppLogger.error('Max retry attempts reached ($_maxRetries), giving up');
-      state = state.copyWith(
-        error: 'Connection lost after $_maxRetries retry attempts: $error',
-        isReconnecting: false,
-        retryAttempt: 0,
-      );
-      _resetRetryState();
-      return;
-    }
-
-    // Calculate delay with exponential backoff + jitter: ~1s, ~2s, ~4s
-    final baseDelayMs = (1 << _retryAttempt) * 1000; // 2^retryAttempt seconds
-    final jitter = (baseDelayMs * 0.25 * (2 * Random().nextDouble() - 1)).toInt();
-    final delayMs = baseDelayMs + jitter;
-    _retryAttempt++;
-
-    AppLogger.info('Stream error, retry attempt $_retryAttempt/$_maxRetries in ${delayMs}ms');
-
-    state = state.copyWith(
-      isReconnecting: true,
-      retryAttempt: _retryAttempt,
-      clearError: true,
-    );
-
-    _retryTimer?.cancel();
-    _retryTimer = Timer(Duration(milliseconds: delayMs), () {
-      _attemptReconnect();
-    });
-  }
-
-  /// Attempt to reconnect to the current channel
-  Future<void> _attemptReconnect() async {
-    if (_currentChannel == null || _isDisposed) return;
-
-    _isRetrying = true;
-    AppLogger.info('Attempting reconnect to ${_currentChannel!.name}...');
-
-    try {
-      await _player?.stop();
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      // Re-open the stream without resetting retry state yet
-      await _player?.open(Media(_currentChannel!.streamUrl), play: true);
-
-      // Wait a moment to see if playback starts successfully
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Check if we're actually playing
-      if (_player?.state.playing ?? false) {
-        AppLogger.info('Reconnect successful!');
-        _resetRetryState();
-        if (!_isDisposed) {
-          state = state.copyWith(
-            isReconnecting: false,
-            retryAttempt: 0,
-            clearError: true,
-          );
-        }
-      } else {
-        // Still not playing, trigger another retry
-        _isRetrying = false;
-        _handleStreamError('Reconnect failed - not playing');
-      }
-    } catch (e) {
-      AppLogger.error('Reconnect attempt failed: $e');
-      _isRetrying = false;
-      _handleStreamError(e.toString());
-    }
-  }
-
-  /// Reset retry state
-  void _resetRetryState() {
-    _retryAttempt = 0;
-    _isRetrying = false;
-    _retryTimer?.cancel();
-    _retryTimer = null;
-  }
-
-  /// Cancel any pending retry
-  void _cancelRetry() {
-    _resetRetryState();
-    state = state.copyWith(isReconnecting: false, retryAttempt: 0, clearError: true);
-  }
-
   /// Enable or disable auto-retry
   void setAutoRetryEnabled(bool enabled) {
-    _autoRetryEnabled = enabled;
+    _retry.autoRetryEnabled = enabled;
     AppLogger.info('Auto-retry ${enabled ? 'enabled' : 'disabled'}');
   }
 
@@ -667,8 +491,9 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   Future<void> playChannel(Channel channel) async {
     try {
       // Cancel any existing prebuffer and retry
-      _cancelPrebuffering();
-      _cancelRetry();
+      _prebuffer.cancelPrebuffering();
+      state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
+      _retry.cancelRetry(_updateState);
 
       // Store current channel for auto-retry
       _currentChannel = channel;
@@ -705,26 +530,36 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
       AppLogger.info('Media opened successfully, play=${bufferSeconds <= 1}');
 
+      // Keep screen awake during playback
+      try {
+        WakelockPlus.enable();
+      } catch (e) {
+        AppLogger.warning('Could not enable wakelock: $e');
+      }
+
       // For buffer sizes > 1 second, wait before playing
       if (bufferSeconds > 1) {
-        _isPrebuffering = true;
-        _prebufferStartTime = DateTime.now();
-
-        // Start periodic progress updates
-        _startPrebufferProgress();
-
-        // Schedule playback start after buffer duration
-        AppLogger.info('Prebuffering for ${bufferSeconds}s...');
-        _prebufferCompleteTimer = Timer(Duration(seconds: bufferSeconds), () {
-          _completePrebuffering();
-        });
+        _prebuffer.startPrebuffering(
+          bufferSeconds,
+          onComplete: () {
+            if (!_isDisposed) {
+              state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
+              _player?.play();
+            }
+          },
+          onProgress: (elapsed) {
+            if (!_isDisposed) {
+              state = state.copyWith(bufferedDuration: elapsed);
+            }
+          },
+        );
       }
     } catch (e, stack) {
       AppLogger.error('=== PLAY CHANNEL FAILED ===');
       AppLogger.error('Error: $e');
       AppLogger.error('Stack: $stack');
-      _cancelPrebuffering();
-      state = state.copyWith(error: e.toString());
+      _prebuffer.cancelPrebuffering();
+      state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero, error: e.toString());
     }
   }
 
@@ -780,10 +615,17 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   /// Stop
   Future<void> stop() async {
-    _cancelPrebuffering();
-    _cancelRetry();
+    _prebuffer.cancelPrebuffering();
+    state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
+    _retry.cancelRetry(_updateState);
     _currentChannel = null;
     await _player?.stop();
+    // Allow screen to sleep when not playing
+    try {
+      WakelockPlus.disable();
+    } catch (e) {
+      AppLogger.warning('Could not disable wakelock: $e');
+    }
   }
 
   /// Set volume (0.0 to 1.0)
@@ -813,26 +655,22 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   /// Toggle fullscreen
   Future<void> toggleFullscreen() async {
-    final newFullscreen = !state.isFullscreen;
-    await setFullscreen(newFullscreen);
+    await _displayMode.toggleFullscreen(
+      state.isFullscreen,
+      onChanged: (fullscreen) {
+        state = state.copyWith(isFullscreen: fullscreen);
+      },
+    );
   }
 
   /// Set fullscreen state
   Future<void> setFullscreen(bool fullscreen) async {
-    // For desktop platforms, use window_manager
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      try {
-        await windowManager.ensureInitialized();
-        await windowManager.setFullScreen(fullscreen);
-        state = state.copyWith(isFullscreen: fullscreen);
-        AppLogger.info('Fullscreen: $fullscreen');
-      } catch (e) {
-        AppLogger.error('Failed to toggle fullscreen: $e');
-      }
-    } else {
-      // For mobile/other platforms, just update state (UI will handle it)
-      state = state.copyWith(isFullscreen: fullscreen);
-    }
+    await _displayMode.setFullscreen(
+      fullscreen,
+      onChanged: (fs) {
+        state = state.copyWith(isFullscreen: fs);
+      },
+    );
   }
 
   /// Set video track
@@ -897,153 +735,41 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     setAspectRatioMode(modes[nextIndex]);
   }
 
-  // ===== Display Mode Methods =====
-
-  /// Saved window state for restoring after PiP
-  Size? _savedWindowSize;
-  Offset? _savedWindowPosition;
-  bool _savedAlwaysOnTop = false;
-
   /// Toggle Picture-in-Picture mode (small always-on-top window)
   Future<void> togglePiPMode() async {
-    await setPiPMode(!state.isPiPMode);
+    await _displayMode.togglePiPMode(
+      currentPiP: state.isPiPMode,
+      currentFullscreen: state.isFullscreen,
+      onChanged: ({required bool isPiP, bool? isFullscreen}) {
+        state = state.copyWith(
+          isPiPMode: isPiP,
+          isFullscreen: isFullscreen ?? state.isFullscreen,
+        );
+      },
+    );
   }
 
   /// Set Picture-in-Picture mode
   Future<void> setPiPMode(bool pip) async {
-    if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
-      AppLogger.warning('PiP mode only supported on desktop');
-      return;
-    }
-
-    try {
-      await windowManager.ensureInitialized();
-
-      if (pip) {
-        // Save current window state before entering PiP
-        _savedWindowSize = await windowManager.getSize();
-        _savedWindowPosition = await windowManager.getPosition();
-        _savedAlwaysOnTop = await windowManager.isAlwaysOnTop();
-
-        // Exit fullscreen if active
-        if (state.isFullscreen) {
-          await windowManager.setFullScreen(false);
-        }
-
-        // Configure PiP window: small, always on top, positioned in corner
-        await windowManager.setAlwaysOnTop(true);
-        const pipSize = Size(400, 250);
-        await windowManager.setSize(pipSize);
-
-        // Position in bottom-right area relative to the previous window bounds
-        const padding = 20.0;
-        final savedPos = _savedWindowPosition ?? Offset.zero;
-        final savedSize = _savedWindowSize ?? const Size(1280, 720);
-        final right = savedPos.dx + savedSize.width;
-        final bottom = savedPos.dy + savedSize.height;
-        await windowManager.setPosition(Offset(
-          right - pipSize.width - padding,
-          bottom - pipSize.height - padding,
-        ),);
-
+    await _displayMode.setPiPMode(
+      pip,
+      currentFullscreen: state.isFullscreen,
+      onChanged: ({required bool isPiP, bool? isFullscreen}) {
         state = state.copyWith(
-          isPiPMode: true,
-          isFullscreen: false,
+          isPiPMode: isPiP,
+          isFullscreen: isFullscreen ?? state.isFullscreen,
         );
-        AppLogger.info('Entered PiP mode');
-      } else {
-        // Restore previous window state
-        await windowManager.setAlwaysOnTop(_savedAlwaysOnTop);
-
-        if (_savedWindowSize != null) {
-          await windowManager.setSize(_savedWindowSize!);
-        }
-        if (_savedWindowPosition != null) {
-          await windowManager.setPosition(_savedWindowPosition!);
-        }
-
-        state = state.copyWith(isPiPMode: false);
-        AppLogger.info('Exited PiP mode');
-      }
-    } catch (e) {
-      AppLogger.error('Failed to toggle PiP mode: $e');
-    }
+      },
+    );
   }
 
   /// Open current stream in external player (VLC, mpv, etc.)
-  ///
-  /// Uses direct process invocation (no shell) to prevent command injection
-  /// from malicious stream URLs in untrusted M3U playlists.
   Future<bool> openInExternalPlayer() async {
     if (_currentChannel == null) {
       AppLogger.warning('No channel to open in external player');
       return false;
     }
-
-    final streamUrl = _currentChannel!.streamUrl;
-
-    // Validate URL scheme to prevent file:// or other dangerous URIs
-    final uri = Uri.tryParse(streamUrl);
-    if (uri == null || !['http', 'https', 'rtsp', 'rtmp'].contains(uri.scheme)) {
-      AppLogger.warning('Refusing to open non-network URL in external player');
-      return false;
-    }
-
-    try {
-      if (Platform.isWindows) {
-        // Try VLC directly — use Process.start (detached) so it doesn't block
-        for (final vlcPath in [
-          'vlc',
-          r'C:\Program Files\VideoLAN\VLC\vlc.exe',
-          r'C:\Program Files (x86)\VideoLAN\VLC\vlc.exe',
-        ]) {
-          try {
-            await Process.start(vlcPath, [streamUrl], mode: ProcessStartMode.detached);
-            AppLogger.info('Opened stream in VLC');
-            return true;
-          } catch (_) {
-            continue;
-          }
-        }
-
-        // Fallback: use PowerShell Start-Process with quoted URL to prevent metachar interpretation
-        await Process.start(
-          'powershell',
-          ['-NoProfile', '-Command', 'Start-Process', "'$streamUrl'"],
-          mode: ProcessStartMode.detached,
-        );
-        AppLogger.info('Opened stream with system default player');
-        return true;
-      } else if (Platform.isMacOS) {
-        // Try VLC first (no shell), detached
-        try {
-          await Process.start('open', ['-a', 'VLC', streamUrl], mode: ProcessStartMode.detached);
-          AppLogger.info('Opened stream in VLC');
-          return true;
-        } catch (_) {
-          // Fallback to default handler
-          await Process.start('open', [streamUrl], mode: ProcessStartMode.detached);
-          return true;
-        }
-      } else if (Platform.isLinux) {
-        // Try common players in order (detached)
-        for (final player in ['vlc', 'mpv', 'celluloid', 'xdg-open']) {
-          try {
-            await Process.start(player, [streamUrl], mode: ProcessStartMode.detached);
-            AppLogger.info('Opened stream in $player');
-            return true;
-          } catch (_) {
-            continue;
-          }
-        }
-      }
-
-      AppLogger.warning('Could not open stream in external player');
-      return false;
-    } catch (e) {
-      AppLogger.error('Failed to open in external player: $e');
-      return false;
-    }
+    return _externalPlayer.openInExternalPlayer(_currentChannel!.streamUrl);
   }
 
 }

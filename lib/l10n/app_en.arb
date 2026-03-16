@@ -275,5 +275,13 @@
   "noNetworkConnection": "No network connection",
   "offlineMode": "You are offline. Cached data is shown.",
   "networkRestored": "Network connection restored",
-  "selectChannelTitle": "Select Channel"
+  "selectChannelTitle": "Select Channel",
+
+  "m3uUrlHelperText": "Your IPTV provider should have given you a link ending in .m3u or .m3u8. Paste it here.",
+  "xtreamHelperText": "Enter the server details from your IPTV provider. Check your activation email or provider's website.",
+  "epgUrlHelperText": "Optional. Your provider may supply an EPG/TV guide URL for program schedules.",
+  "welcomeSubtitleDetailed": "To watch channels, you'll need a playlist link from your IPTV service provider. Tap the button below to add one.",
+
+  "recordingDesktopOnly": "Recording is available on desktop only",
+  "recordingDesktopOnlyDescription": "Stream recording requires FFmpeg, which is only available on Windows, macOS, and Linux."
 }

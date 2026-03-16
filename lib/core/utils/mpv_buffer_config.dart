@@ -2,7 +2,7 @@
 import 'package:media_kit/src/player/native/player/player.dart' as native;
 import 'package:media_kit/media_kit.dart';
 
-import '../../presentation/providers/player_provider.dart' show BufferSize, BufferSizeExtension;
+import '../models/buffer_size.dart';
 import 'logger.dart';
 
 /// Apply MPV-specific buffer settings for stable live IPTV streaming.

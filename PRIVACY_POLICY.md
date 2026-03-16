@@ -1,65 +1,113 @@
 # FlowTV Privacy Policy
 
-**Last updated:** February 21, 2026
+**Effective date:** March 15, 2026
 
-## Overview
+This privacy policy explains how FlowTV ("the app", "we", "our") handles your data. FlowTV is a free, open-source IPTV player developed by tregula501. The full source code is publicly available under the GPL v3 license at [github.com/tregula501/flowtv](https://github.com/tregula501/flowtv), so you can verify every claim in this policy yourself.
 
-FlowTV is an open-source IPTV media player application. This privacy policy describes how FlowTV handles user data.
+We wrote this policy in plain language because you deserve to understand it without a law degree.
 
-## Data Collection
+---
 
-FlowTV does **not** collect, transmit, or share any personal data. All data stays on your device.
+## 1. Data We Collect
 
-### What FlowTV Stores Locally
+**None.** FlowTV does not collect, transmit, or share any personal data with the developer or any third party. There are no analytics, no crash reporting, no telemetry, no advertising, and no tracking of any kind.
 
-- **Playlist URLs and credentials:** Stored on-device using encrypted storage (Android Keystore / Windows DPAPI). These are never transmitted to any server other than the IPTV service you configure.
-- **App settings:** Theme preference, EPG refresh interval, and other configuration options stored in a local database.
-- **EPG data:** Electronic Program Guide data fetched from sources you configure, cached locally for offline access.
-- **Favorites and channel ordering:** Stored locally in the app database.
+The app does store data **locally on your device** to function. That data never leaves your device except when sent to IPTV servers that *you* configure.
 
-### What FlowTV Does NOT Do
+## 2. Data Stored on Your Device
 
-- Does not collect analytics or usage data
-- Does not use advertising SDKs or tracking frameworks
-- Does not transmit data to the developer or any third party
-- Does not access contacts, camera, microphone, or location
-- Does not require account creation
+The following data is created and stored entirely on your device:
 
-## Network Activity
+| Data | Storage method | Purpose |
+|------|---------------|---------|
+| Xtream API usernames and passwords | Encrypted device storage (Android Keystore / iOS Keychain / OS-level secure storage) | Authenticating with your IPTV servers |
+| Playlist URLs (M3U) | Local SQLite database | Loading your channel lists |
+| Channel lists and EPG data | Local SQLite database | Displaying channels and TV guide |
+| Favorites and viewing history | Local SQLite database | Personalizing your experience |
+| User profiles | Local SQLite database | Supporting multiple users on one device |
+| App settings | Local SQLite database | Remembering your preferences |
+| Cached channel logos | Local image cache | Displaying logos without re-downloading |
 
-FlowTV connects to the internet solely to:
+**We have no access to any of this data.** It exists only on your device.
 
-1. Fetch IPTV playlists and stream content from servers **you** configure
-2. Download EPG (TV guide) data from sources **you** configure
-3. Load channel logos from URLs provided in your playlists
+## 3. Network Connections
 
-All network requests go directly to the servers you have configured. FlowTV does not proxy, intercept, or redirect your traffic.
+FlowTV connects to the internet only when you ask it to, and only to servers you have configured. Specifically:
 
-## Third-Party Content
+- **Your IPTV servers** -- to fetch playlists, EPG/guide data, and stream video content.
+- **Image URLs from your playlists/EPG** -- to download and cache channel logos.
+- **Google Cast (Chromecast)** -- if you choose to cast video to a Chromecast or Cast-compatible device on your local network.
 
-FlowTV is a media player — it does not provide, host, or endorse any streaming content. Users are responsible for ensuring they have the legal right to access the content they configure in the app.
+FlowTV **never** connects to any server operated by the developer. There is no "phone home" behavior.
 
-## Data Deletion
+## 4. Third-Party Services
 
-All data can be removed by:
-- Deleting individual playlists from the Settings screen
-- Clearing app data from your device's system settings
-- Uninstalling the application
+### Google Cast (Chromecast)
+If you use the casting feature, the app communicates with Google Cast-compatible devices on your local network. This interaction is governed by [Google's Privacy Policy](https://policies.google.com/privacy). Casting is entirely optional and initiated only by you.
 
-## Children's Privacy
+### Your IPTV Providers
+When you add an Xtream Codes server or M3U playlist URL, the app connects to that provider's server. The data shared with those servers (such as your credentials) is governed by your agreement with that provider, not by this policy. We have no relationship with your IPTV providers and no control over their data practices.
 
-FlowTV does not knowingly collect any information from children under 13. The app does not collect information from any user.
+No other third-party services, SDKs, or libraries in the app transmit data externally.
 
-## Changes to This Policy
+## 5. Security
 
-Updates to this privacy policy will be posted in this file within the project repository. Since FlowTV collects no data, meaningful changes to this policy are unlikely.
+We take reasonable steps to protect your data:
 
-## Contact
+- **Credentials are encrypted** using your platform's secure storage (Android Keystore, iOS Keychain, or equivalent OS-level mechanisms).
+- **All data stays on your device** and is protected by your device's own security (lock screen, encryption, etc.).
 
-For questions about this privacy policy, open an issue at:
-https://github.com/tregula501/flowtv/issues
+### Important Security Notices
 
-## Open Source
+- **HTTP streams:** Some IPTV servers use unencrypted HTTP rather than HTTPS. When connecting to an HTTP server, your stream data and any credentials embedded in the URL are not encrypted in transit. This is a limitation of those servers, not of FlowTV.
+- **Xtream Codes API:** The Xtream Codes protocol transmits credentials as part of the URL. This is an inherent design of the protocol. We strongly recommend using HTTPS-enabled servers when possible.
 
-FlowTV is open-source software licensed under GPL v3. The complete source code is available at:
-https://github.com/tregula501/flowtv
+## 6. Data Retention and Deletion
+
+Your data stays on your device for as long as you keep it there. You are in full control.
+
+**To delete your data:**
+- Remove individual playlists or profiles from within the app settings.
+- Clear the app's data through your device's system settings.
+- Uninstall the app.
+
+Once deleted, the data is gone. We have no backups because we never had your data in the first place.
+
+## 7. Your Rights (GDPR, CCPA, and Other Privacy Laws)
+
+Because FlowTV collects **zero** personal data and transmits **nothing** to the developer or any third party, many of the rights granted by privacy laws (such as the EU General Data Protection Regulation or the California Consumer Privacy Act) are satisfied by design:
+
+- **Right to know / access:** All your data is on your device. You already have it.
+- **Right to delete:** You can delete all data at any time (see Section 6).
+- **Right to data portability:** Your data is stored locally and can be managed through your device.
+- **Right to opt out of sale:** We do not sell, rent, or trade any personal information. There is nothing to opt out of.
+- **Right to non-discrimination:** There is no data collection to discriminate on.
+- **Do Not Track:** The app does not track you, regardless of your browser or device settings.
+
+If you believe you have a privacy concern, please contact us (see Section 10).
+
+## 8. Children's Privacy
+
+FlowTV is not directed at children under 13 (or under 16 in the EU). The app does not collect personal information from any user, including children.
+
+Because FlowTV plays content from user-configured sources, the app has no control over and does not moderate the content accessed through it. Parents and guardians are responsible for supervising the content their children access.
+
+## 9. Changes to This Policy
+
+If we update this privacy policy, we will post the revised version in the project repository and update the effective date at the top. Since FlowTV collects no data, significant changes are unlikely.
+
+You can view the full history of changes to this policy in the [Git commit history](https://github.com/tregula501/flowtv/commits/main/PRIVACY_POLICY.md).
+
+## 10. Contact
+
+If you have questions or concerns about this privacy policy, please open an issue at:
+
+**[github.com/tregula501/flowtv/issues](https://github.com/tregula501/flowtv/issues)**
+
+## 11. Open Source
+
+FlowTV is free and open-source software licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html). The complete source code is available at:
+
+**[github.com/tregula501/flowtv](https://github.com/tregula501/flowtv)**
+
+You can audit the code to verify that this privacy policy is accurate.

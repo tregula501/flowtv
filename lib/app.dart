@@ -81,8 +81,10 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
     final playerState = ref.read(playerControllerProvider);
 
     if (state == AppLifecycleState.paused) {
-      _wasPlayingBeforePause = playerState.isPlaying;
-      if (_wasPlayingBeforePause) {
+      if (!_wasPlayingBeforePause) {
+        _wasPlayingBeforePause = playerState.isPlaying;
+      }
+      if (playerState.isPlaying) {
         player.pause();
         AppLogger.debug('App backgrounded — paused playback');
       }
@@ -90,9 +92,17 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
       if (_wasPlayingBeforePause) {
         player.play();
         AppLogger.debug('App resumed — resumed playback');
-        _wasPlayingBeforePause = false;
       }
+      _wasPlayingBeforePause = false;
     }
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    super.didHaveMemoryPressure();
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    AppLogger.warning('Memory pressure received, clearing image cache');
   }
 
   @override

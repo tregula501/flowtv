@@ -7,7 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../core/utils/logger.dart';
 import '../../core/utils/mpv_buffer_config.dart';
-import 'player_provider.dart' show BufferSize, BufferSizeExtension;
+import '../../core/models/buffer_size.dart';
 
 /// Maximum number of views in multi-view mode
 const int maxMultiViewChannels = 4;
@@ -16,8 +16,8 @@ const int maxMultiViewChannels = 4;
 class MultiViewSlot {
   final int index;
   final Channel? channel;
-  final Player player;
-  final VideoController videoController;
+  final Player? player;
+  final VideoController? videoController;
   final bool isPlaying;
   final bool isBuffering;
   final bool isAudioActive;
@@ -26,8 +26,8 @@ class MultiViewSlot {
   MultiViewSlot({
     required this.index,
     this.channel,
-    required this.player,
-    required this.videoController,
+    this.player,
+    this.videoController,
     this.isPlaying = false,
     this.isBuffering = false,
     this.isAudioActive = false,
@@ -36,18 +36,21 @@ class MultiViewSlot {
 
   MultiViewSlot copyWith({
     Channel? channel,
+    Player? player,
+    VideoController? videoController,
     bool? isPlaying,
     bool? isBuffering,
     bool? isAudioActive,
     String? error,
     bool clearChannel = false,
     bool clearError = false,
+    bool clearPlayer = false,
   }) {
     return MultiViewSlot(
       index: index,
       channel: clearChannel ? null : (channel ?? this.channel),
-      player: player,
-      videoController: videoController,
+      player: clearPlayer ? null : (player ?? this.player),
+      videoController: clearPlayer ? null : (videoController ?? this.videoController),
       isPlaying: isPlaying ?? this.isPlaying,
       isBuffering: isBuffering ?? this.isBuffering,
       isAudioActive: isAudioActive ?? this.isAudioActive,
@@ -86,68 +89,90 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
   // Use medium buffer for multi-view (balance between stability and resources)
   static const BufferSize _bufferSize = BufferSize.medium;
 
-  final List<StreamSubscription> _subscriptions = [];
+  /// Per-slot stream subscriptions so we can cancel them individually
+  final Map<int, List<StreamSubscription>> _slotSubscriptions = {};
 
   @override
   MultiViewState build() {
     // Clean up from any prior build() call (Notifier.build() re-runs on invalidation)
-    for (final sub in _subscriptions) {
-      sub.cancel();
-    }
-    _subscriptions.clear();
-    try {
-      for (final slot in state.slots) {
-        slot.player.dispose();
-      }
-    } catch (_) {
-      // state not yet initialized on first build
-    }
+    _disposeAllPlayers();
 
-    // Initialize slots when building
+    // Initialize slots with null players (lazy initialization)
     final slots = <MultiViewSlot>[];
-
-    // Calculate buffer size: 4MB per second for high-bitrate streams
-    final bufferBytes = _bufferSize.durationSeconds * 4 * 1024 * 1024;
-
     for (int i = 0; i < maxMultiViewChannels; i++) {
-      final player = Player(
-        configuration: PlayerConfiguration(
-          bufferSize: bufferBytes,
-        ),
-      );
-      final videoController = VideoController(player);
-
-      // Set up listeners for each player
-      _setupPlayerListeners(i, player);
-
-      // Apply MPV-specific buffer settings
-      _applyBufferSettings(player, i);
-
       slots.add(MultiViewSlot(
         index: i,
-        player: player,
-        videoController: videoController,
         isAudioActive: i == 0, // First slot has audio by default
-      ),);
+      ));
     }
 
     // Register disposal callback
     ref.onDispose(() {
-      for (final sub in _subscriptions) {
-        sub.cancel();
-      }
-      _subscriptions.clear();
-      for (final slot in state.slots) {
-        slot.player.dispose();
-      }
+      _disposeAllPlayers();
     });
 
-    final initialState = MultiViewState(slots: slots, activeAudioSlot: 0);
+    return MultiViewState(slots: slots, activeAudioSlot: 0);
+  }
 
-    // Schedule audio state update after build
-    Future.microtask(() => _updateAudioState());
+  /// Create a Player and VideoController for a given slot index.
+  /// Returns the (player, videoController) pair.
+  (Player, VideoController) _createPlayerForSlot(int slotIndex) {
+    // Calculate buffer size: 4MB per second for high-bitrate streams
+    final bufferBytes = _bufferSize.durationSeconds * 4 * 1024 * 1024;
 
-    return initialState;
+    final player = Player(
+      configuration: PlayerConfiguration(
+        bufferSize: bufferBytes,
+      ),
+    );
+    final videoController = VideoController(player);
+
+    // Set up listeners for the player
+    _setupPlayerListeners(slotIndex, player);
+
+    // Apply MPV-specific buffer settings
+    _applyBufferSettings(player, slotIndex);
+
+    AppLogger.info('MultiView slot $slotIndex: Player created (lazy init)');
+
+    return (player, videoController);
+  }
+
+  /// Dispose a single slot's player and cancel its subscriptions
+  void _disposeSlotPlayer(int slotIndex) {
+    // Cancel subscriptions for this slot
+    final subs = _slotSubscriptions.remove(slotIndex);
+    if (subs != null) {
+      for (final sub in subs) {
+        sub.cancel();
+      }
+    }
+
+    // Dispose the player if it exists
+    try {
+      final slot = state.slots[slotIndex];
+      slot.player?.dispose();
+    } catch (_) {
+      // state may not be initialized yet
+    }
+  }
+
+  /// Dispose all active players and cancel all subscriptions
+  void _disposeAllPlayers() {
+    for (final entry in _slotSubscriptions.entries) {
+      for (final sub in entry.value) {
+        sub.cancel();
+      }
+    }
+    _slotSubscriptions.clear();
+
+    try {
+      for (final slot in state.slots) {
+        slot.player?.dispose();
+      }
+    } catch (_) {
+      // state not yet initialized on first build
+    }
   }
 
   /// Apply MPV-specific buffer settings for stable streaming
@@ -160,7 +185,9 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
   }
 
   void _setupPlayerListeners(int index, Player player) {
-    _subscriptions.add(
+    final subs = <StreamSubscription>[];
+
+    subs.add(
       player.stream.playing.listen((playing) {
         // When playback starts successfully, clear any previous error
         if (playing) {
@@ -171,13 +198,13 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
       }),
     );
 
-    _subscriptions.add(
+    subs.add(
       player.stream.buffering.listen((buffering) {
         _updateSlot(index, (slot) => slot.copyWith(isBuffering: buffering));
       }),
     );
 
-    _subscriptions.add(
+    subs.add(
       player.stream.error.listen((error) {
         if (error.isNotEmpty) {
           AppLogger.error('MultiView slot $index error: $error');
@@ -185,6 +212,8 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
         }
       }),
     );
+
+    _slotSubscriptions[index] = subs;
   }
 
   void _updateSlot(int index, MultiViewSlot Function(MultiViewSlot) updater) {
@@ -197,7 +226,9 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
         newSlot.isBuffering == oldSlot.isBuffering &&
         newSlot.isAudioActive == oldSlot.isAudioActive &&
         newSlot.error == oldSlot.error &&
-        newSlot.channel == oldSlot.channel) {
+        newSlot.channel == oldSlot.channel &&
+        newSlot.player == oldSlot.player &&
+        newSlot.videoController == oldSlot.videoController) {
       return;
     }
     final newSlots = List<MultiViewSlot>.from(state.slots);
@@ -211,14 +242,21 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
     AppLogger.info('Multi-view enabled');
   }
 
-  /// Disable multi-view mode and stop all players
+  /// Disable multi-view mode and dispose all active players
   Future<void> disableMultiView() async {
-    for (final slot in state.slots) {
-      await slot.player.stop();
+    // Dispose all active players and cancel all subscriptions
+    for (var i = 0; i < state.slots.length; i++) {
+      _disposeSlotPlayer(i);
     }
 
     final newSlots = state.slots
-        .map((slot) => slot.copyWith(clearChannel: true, clearError: true))
+        .map((slot) => slot.copyWith(
+              clearChannel: true,
+              clearError: true,
+              clearPlayer: true,
+              isPlaying: false,
+              isBuffering: false,
+            ))
         .toList();
 
     state = state.copyWith(
@@ -226,27 +264,44 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
       slots: newSlots,
       activeAudioSlot: 0,
     );
-    _updateAudioState();
-    AppLogger.info('Multi-view disabled');
+    AppLogger.info('Multi-view disabled, all players disposed');
   }
 
-  /// Add a channel to a specific slot
+  /// Add a channel to a specific slot (lazy-initializes the player if needed)
   Future<void> setChannelInSlot(int slotIndex, Channel channel) async {
     if (slotIndex < 0 || slotIndex >= state.slots.length) return;
 
     final slot = state.slots[slotIndex];
 
     try {
-      _updateSlot(
-        slotIndex,
-        (s) => s.copyWith(
-          channel: channel,
-          clearError: true,
-          isBuffering: true,
-        ),
-      );
+      // Lazy-initialize player if this slot doesn't have one yet
+      Player player;
+      if (slot.player == null) {
+        final (newPlayer, newController) = _createPlayerForSlot(slotIndex);
+        player = newPlayer;
+        _updateSlot(
+          slotIndex,
+          (s) => s.copyWith(
+            player: newPlayer,
+            videoController: newController,
+            channel: channel,
+            clearError: true,
+            isBuffering: true,
+          ),
+        );
+      } else {
+        player = slot.player!;
+        _updateSlot(
+          slotIndex,
+          (s) => s.copyWith(
+            channel: channel,
+            clearError: true,
+            isBuffering: true,
+          ),
+        );
+      }
 
-      await slot.player.open(Media(channel.streamUrl));
+      await player.open(Media(channel.streamUrl));
       AppLogger.info('MultiView slot $slotIndex: Playing ${channel.name}');
     } catch (e) {
       AppLogger.error('MultiView slot $slotIndex: Failed to play', e);
@@ -254,24 +309,25 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
     }
   }
 
-  /// Clear a slot (stop playback)
+  /// Clear a slot (stop playback, dispose player, free resources)
   Future<void> clearSlot(int slotIndex) async {
     if (slotIndex < 0 || slotIndex >= state.slots.length) return;
 
-    final slot = state.slots[slotIndex];
-    await slot.player.stop();
+    // Dispose the player and cancel subscriptions for this slot
+    _disposeSlotPlayer(slotIndex);
 
     _updateSlot(
       slotIndex,
       (s) => s.copyWith(
         clearChannel: true,
         clearError: true,
+        clearPlayer: true,
         isPlaying: false,
         isBuffering: false,
       ),
     );
 
-    AppLogger.info('MultiView slot $slotIndex: Cleared');
+    AppLogger.info('MultiView slot $slotIndex: Cleared and player disposed');
   }
 
   /// Set which slot has active audio
@@ -291,8 +347,8 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
       final slot = state.slots[i];
       final isActive = i == state.activeAudioSlot;
 
-      // Mute all except active audio slot
-      slot.player.setVolume(isActive ? 100 : 0);
+      // Mute all except active audio slot (only if player exists)
+      slot.player?.setVolume(isActive ? 100 : 0);
 
       newSlots.add(slot.copyWith(isAudioActive: isActive));
     }
@@ -312,9 +368,9 @@ class MultiViewControllerNotifier extends Notifier<MultiViewState> {
     final channel1 = state.slots[slot1].channel;
     final channel2 = state.slots[slot2].channel;
 
-    // Stop both
-    await state.slots[slot1].player.stop();
-    await state.slots[slot2].player.stop();
+    // Stop both (only if players exist)
+    await state.slots[slot1].player?.stop();
+    await state.slots[slot2].player?.stop();
 
     // Swap channels
     if (channel2 != null) {

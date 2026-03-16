@@ -90,8 +90,11 @@ class RecordingManager {
     _initializeFFmpeg();
   }
 
-  /// Initialize FFmpeg service
+  /// Initialize FFmpeg service (desktop only)
   Future<void> _initializeFFmpeg() async {
+    // Skip FFmpeg initialization on mobile — recording is desktop-only
+    if (Platform.isAndroid || Platform.isIOS) return;
+
     final ffmpeg = _ref.read(ffmpegServiceProvider);
     final available = await ffmpeg.initialize();
     if (!available) {
@@ -102,8 +105,11 @@ class RecordingManager {
     }
   }
 
-  /// Start the scheduler to check for recordings that need to start
+  /// Start the scheduler to check for recordings that need to start (desktop only)
   void _startScheduler() {
+    // Don't run the periodic scheduler on mobile — recording is not supported
+    if (Platform.isAndroid || Platform.isIOS) return;
+
     _schedulerTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => _checkScheduledRecordings(),
@@ -112,6 +118,9 @@ class RecordingManager {
 
   /// Check and start any scheduled recordings that are due
   Future<void> _checkScheduledRecordings() async {
+    // Scheduled recordings are not supported on mobile (no FFmpeg)
+    if (Platform.isAndroid || Platform.isIOS) return;
+
     final repo = _ref.read(recordingRepositoryProvider);
     final dueRecordings = await repo.getRecordingsDueToStart();
 
@@ -237,6 +246,12 @@ class RecordingManager {
     Channel channel, {
     Duration duration = const Duration(hours: 1),
   }) async {
+    // Recording requires FFmpeg via Process.start(), which is only available on desktop
+    if (Platform.isAndroid || Platform.isIOS) {
+      AppLogger.warning('Recording is not supported on mobile platforms');
+      return null;
+    }
+
     if (isRecording(channel.id)) {
       AppLogger.warning('Already recording channel: ${channel.name}');
       return _activeRecordings[channel.id]?.recording;

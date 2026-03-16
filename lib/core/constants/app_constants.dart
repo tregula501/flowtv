@@ -3,7 +3,7 @@ class AppConstants {
   AppConstants._();
 
   static const String appName = 'FlowTV';
-  static const String appVersion = '0.3.6';
+  static const String appVersion = '0.3.7';
 
   // Default settings
   static const int defaultBufferDuration = 30; // seconds
@@ -30,10 +30,6 @@ class AppConstants {
   static const double defaultVolume = 1.0;
   static const int seekDuration = 10; // seconds
 
-  // Cache settings
-  static const int maxCachedImages = 500;
-  static const int imageCacheDays = 7;
-
   // Network timeouts
   static const int castConnectionTimeoutSecs = 15;
   static const int m3uFetchTimeoutSecs = 60;
@@ -42,4 +38,8 @@ class AppConstants {
   // Database batch sizes
   static const int epgBatchSize = 1000;
   static const int channelBatchSize = 500;
+
+  // M3U parsing limits
+  static const int maxM3uFileSizeBytes = 50 * 1024 * 1024; // 50MB
+  static const int maxM3uChannelCount = 50000;
 }

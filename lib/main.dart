@@ -12,6 +12,11 @@ import 'data/datasources/local/database_service.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Cap in-memory decoded image cache to prevent memory bloat
+  // when scrolling through large channel lists with logos
+  PaintingBinding.instance.imageCache.maximumSize = 200;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 50 * 1024 * 1024; // 50MB
+
   // Initialize media_kit for video playback
   MediaKit.ensureInitialized();
 

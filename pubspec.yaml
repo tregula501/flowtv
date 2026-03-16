@@ -35,9 +35,7 @@ dependencies:
   path_provider: ^2.1.3
   path: ^1.9.0
   xml: ^6.5.0
-  uuid: ^4.4.0
   collection: ^1.18.0
-  equatable: ^2.0.5
   freezed_annotation: ^3.0.0
   json_annotation: ^4.9.0
 
@@ -56,6 +54,9 @@ dependencies:
   # Secure credential storage
   flutter_secure_storage: ^10.0.0
 
+  # Screen wake lock during playback
+  wakelock_plus: ^1.4.0
+
   # Note: Recording uses FFmpeg via Process (Windows/Desktop).
   # FFmpeg must be installed and available in PATH or app directory.
 
@@ -68,6 +69,7 @@ dev_dependencies:
   drift_dev: ^2.22.1
   freezed: ^3.0.0
   json_serializable: ^6.8.0
+  fake_async: ^1.3.3
   mocktail: ^1.0.3
   integration_test:
     sdk: flutter

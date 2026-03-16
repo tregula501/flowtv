@@ -190,6 +190,11 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
             ),
             maxLines: 2,
           ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.m3uUrlHelperText,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 16),
           TextField(
             controller: _epgUrlController,
@@ -198,7 +203,12 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
               hintText: l10n.epgUrlHint,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
+          Text(
+            l10n.epgUrlHelperText,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 4),
           Text(
             l10n.epgAutoDetectHint,
             style: Theme.of(context).textTheme.bodySmall,
@@ -215,6 +225,11 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            l10n.xtreamHelperText,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: _xtreamNameController,
             decoration: InputDecoration(

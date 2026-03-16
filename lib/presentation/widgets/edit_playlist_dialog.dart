@@ -106,6 +106,11 @@ class _EditPlaylistDialogState extends ConsumerState<EditPlaylistDialog> {
                         hintText: l10n.epgUrlHint,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.epgUrlHelperText,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       l10n.editPlaylistUrlNote,

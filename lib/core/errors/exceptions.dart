@@ -25,16 +25,6 @@ class EpgParseException extends AppException {
   const EpgParseException(super.message, {super.code, super.originalError});
 }
 
-/// Exception for database errors
-class DatabaseException extends AppException {
-  const DatabaseException(super.message, {super.code, super.originalError});
-}
-
-/// Exception for playback errors
-class PlaybackException extends AppException {
-  const PlaybackException(super.message, {super.code, super.originalError});
-}
-
 /// Exception for file operations
 class FileException extends AppException {
   const FileException(super.message, {super.code, super.originalError});
