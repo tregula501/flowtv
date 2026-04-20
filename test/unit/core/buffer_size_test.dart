@@ -18,7 +18,7 @@ void main() {
 
   group('BufferSize.durationSeconds', () {
     test('small returns 1', () {
-      expect(BufferSize.small.durationSeconds, 1);
+      expect(BufferSize.small.durationSeconds, 3);
     });
 
     test('medium returns 5', () {
@@ -46,7 +46,7 @@ void main() {
     }
 
     test('displayNames contain the duration hint', () {
-      expect(BufferSize.small.displayName, contains('1s'));
+      expect(BufferSize.small.displayName, contains('3s'));
       expect(BufferSize.medium.displayName, contains('5s'));
       expect(BufferSize.large.displayName, contains('15s'));
       expect(BufferSize.veryLarge.displayName, contains('30s'));

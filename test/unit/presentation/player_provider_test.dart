@@ -244,7 +244,7 @@ void main() {
   group('BufferSize', () {
     group('displayName', () {
       test('should return correct display names', () {
-        expect(BufferSize.small.displayName, 'Small (1s)');
+        expect(BufferSize.small.displayName, 'Small (3s)');
         expect(BufferSize.medium.displayName, 'Medium (5s)');
         expect(BufferSize.large.displayName, 'Large (15s)');
         expect(BufferSize.veryLarge.displayName, 'Very Large (30s)');
@@ -254,7 +254,7 @@ void main() {
 
     group('durationSeconds', () {
       test('should return correct durations', () {
-        expect(BufferSize.small.durationSeconds, 1);
+        expect(BufferSize.small.durationSeconds, 3);
         expect(BufferSize.medium.durationSeconds, 5);
         expect(BufferSize.large.durationSeconds, 15);
         expect(BufferSize.veryLarge.durationSeconds, 30);

@@ -115,7 +115,7 @@ class AppSettingsTable extends Table {
   TextColumn get defaultQuality => textEnum<VideoQuality>().withDefault(Constant(VideoQuality.auto.name))();
   IntColumn get epgRefreshHours => integer().withDefault(const Constant(6))();
   IntColumn get playlistRefreshHours => integer().withDefault(const Constant(24))();
-  IntColumn get bufferSeconds => integer().withDefault(const Constant(30))();
+  IntColumn get bufferSeconds => integer().withDefault(const Constant(3))();
   BoolColumn get showChannelNumbers => boolean().withDefault(const Constant(true))();
   BoolColumn get showEpgPreview => boolean().withDefault(const Constant(true))();
   BoolColumn get rememberLastChannel => boolean().withDefault(const Constant(true))();

@@ -105,7 +105,7 @@ class CastDeviceSheet extends ConsumerWidget {
                       try {
                         // Stop local player and wait for IPTV server to release the connection
                         await ref.read(playerControllerProvider.notifier).stop();
-                        await Future.delayed(const Duration(seconds: 2));
+                        await Future.delayed(const Duration(seconds: 4));
                         if (!context.mounted) return;
                         final success = await castNotifier.castMedia(
                           url: channel.streamUrl,
@@ -224,7 +224,7 @@ class CastDeviceSheet extends ConsumerWidget {
                             await ref
                                 .read(playerControllerProvider.notifier)
                                 .stop();
-                            await Future.delayed(const Duration(seconds: 2));
+                            await Future.delayed(const Duration(seconds: 4));
                             if (!context.mounted) return;
 
                             final castSuccess = await castNotifier.castMedia(

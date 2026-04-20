@@ -11,7 +11,7 @@ extension BufferSizeExtension on BufferSize {
   String get displayName {
     switch (this) {
       case BufferSize.small:
-        return 'Small (1s)';
+        return 'Small (3s)';
       case BufferSize.medium:
         return 'Medium (5s)';
       case BufferSize.large:
@@ -26,7 +26,7 @@ extension BufferSizeExtension on BufferSize {
   int get durationSeconds {
     switch (this) {
       case BufferSize.small:
-        return 1;
+        return 3;
       case BufferSize.medium:
         return 5;
       case BufferSize.large:
@@ -57,7 +57,7 @@ extension BufferSizeExtension on BufferSize {
   String get description {
     switch (this) {
       case BufferSize.small:
-        return 'Lowest latency, may buffer more';
+        return 'Low latency, may buffer more';
       case BufferSize.medium:
         return 'Balanced latency and stability';
       case BufferSize.large:

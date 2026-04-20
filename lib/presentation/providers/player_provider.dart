@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit/src/player/native/player/player.dart' as native_player;
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:drift/drift.dart' show Value;
@@ -285,7 +286,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   /// Convert seconds to BufferSize enum (nearest match)
   static BufferSize _bufferSizeFromSeconds(int seconds) {
-    if (seconds <= 1) return BufferSize.small;
+    if (seconds <= 3) return BufferSize.small;
     if (seconds <= 5) return BufferSize.medium;
     if (seconds <= 15) return BufferSize.large;
     if (seconds <= 30) return BufferSize.veryLarge;
@@ -503,7 +504,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       state = state.copyWith(
         clearError: true,
         isBuffering: true,
-        isPrebuffering: bufferSeconds > 1,
+        isPrebuffering: false,
         isReconnecting: false,
         bufferedDuration: Duration.zero,
         retryAttempt: 0,
@@ -524,35 +525,20 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
       AppLogger.info('Opening media stream...');
 
-      // Open the stream
+      // Always open with play=true — MPV's cache-pause-initial and
+      // cache-pause-wait settings handle prebuffering natively. Opening
+      // with play=false on live MPEG-TS streams causes the server to
+      // drop the stalled connection.
       if (_player == null) return;
-      await _player!.open(Media(channel.streamUrl), play: bufferSeconds <= 1);
+      await _player!.open(Media(channel.streamUrl), play: true);
 
-      AppLogger.info('Media opened successfully, play=${bufferSeconds <= 1}');
+      AppLogger.info('Media opened successfully, play=true');
 
       // Keep screen awake during playback
       try {
         WakelockPlus.enable();
       } catch (e) {
         AppLogger.warning('Could not enable wakelock: $e');
-      }
-
-      // For buffer sizes > 1 second, wait before playing
-      if (bufferSeconds > 1) {
-        _prebuffer.startPrebuffering(
-          bufferSeconds,
-          onComplete: () {
-            if (!_isDisposed) {
-              state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
-              _player?.play();
-            }
-          },
-          onProgress: (elapsed) {
-            if (!_isDisposed) {
-              state = state.copyWith(bufferedDuration: elapsed);
-            }
-          },
-        );
       }
     } catch (e, stack) {
       AppLogger.error('=== PLAY CHANNEL FAILED ===');
@@ -613,13 +599,25 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     await _player?.pause();
   }
 
-  /// Stop
+  /// Stop playback and release the stream connection.
   Future<void> stop() async {
     _prebuffer.cancelPrebuffering();
     state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
     _retry.cancelRetry(_updateState);
     _currentChannel = null;
-    await _player?.stop();
+
+    // Disable mpv's auto-reconnect before stopping to ensure the HTTP
+    // connection is actually closed, not kept alive for reuse.
+    final player = _player;
+    if (player != null) {
+      try {
+        final nativePlayer = player.platform;
+        if (nativePlayer is native_player.NativePlayer) {
+          await nativePlayer.setProperty('stream-open-filename', '');
+        }
+      } catch (_) {}
+      await player.stop();
+    }
     // Allow screen to sleep when not playing
     try {
       WakelockPlus.disable();

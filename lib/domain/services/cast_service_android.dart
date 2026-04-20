@@ -6,9 +6,17 @@ import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 
 import '../../core/utils/logger.dart';
 import 'cast_types.dart';
+import 'hls_proxy_service.dart';
 
 // Re-export shared types so consumers can import from this file
 export 'cast_types.dart';
+
+/// Result of probing a stream URL to determine its type.
+class _StreamProbe {
+  final String url;
+  final String contentType;
+  const _StreamProbe(this.url, this.contentType);
+}
 
 /// Android/iOS Chromecast service using flutter_chrome_cast
 class CastService implements ICastService {
@@ -43,6 +51,7 @@ class CastService implements ICastService {
   int _retryCount = 0;
   static const _maxRetries = 3;
   Timer? _retryTimer;
+  bool _hasEverPlayed = false; // Guard: only auto-retry after playback started
 
   // Session state
   final _sessionController = StreamController<CastSessionState>.broadcast();
@@ -155,8 +164,9 @@ class CastService implements ICastService {
           switch (status.playerState) {
             case CastMediaPlayerState.playing:
               playbackState = CastPlaybackState.playing;
-              // Stream is playing — reset retry counter
+              // Stream is playing — reset retry counter and mark as started
               _retryCount = 0;
+              _hasEverPlayed = true;
             case CastMediaPlayerState.paused:
               playbackState = CastPlaybackState.paused;
             case CastMediaPlayerState.buffering:
@@ -166,10 +176,20 @@ class CastService implements ICastService {
             case CastMediaPlayerState.idle:
             case CastMediaPlayerState.unknown:
               playbackState = CastPlaybackState.idle;
-              // Auto-retry on stream error (IPTV streams often drop after ~10 min)
+              AppLogger.info(
+                'Cast: Idle state — idleReason=${status.idleReason}, '
+                'hasEverPlayed=$_hasEverPlayed, '
+                'lastMedia=${_lastMedia?.title}, '
+                'retryCount=$_retryCount',
+              );
+              // Auto-retry on stream error, but only if playback previously
+              // started. Without this guard, the initial idle→loading
+              // transition can trigger spurious retries that exhaust attempts
+              // before the stream has a chance to play.
               if (status.idleReason == GoogleCastMediaIdleReason.error &&
                   _lastMedia != null &&
-                  _sessionState.isConnected) {
+                  _sessionState.isConnected &&
+                  _hasEverPlayed) {
                 _scheduleRetry();
               }
           }
@@ -300,6 +320,8 @@ class CastService implements ICastService {
       _retryTimer?.cancel();
       _lastMedia = null;
       _retryCount = 0;
+      _hasEverPlayed = false;
+      await HlsProxyService.instance.stop();
       await GoogleCastSessionManager.instance.endSessionAndStopCasting();
       _sessionState = const CastSessionState();
       _sessionController.add(_sessionState);
@@ -309,56 +331,75 @@ class CastService implements ICastService {
     }
   }
 
-  /// Prepare a stream URL for Chromecast playback.
-  String _prepareCastUrl(String url) {
-    var castUrl = url;
-
-    final lowerUrl = castUrl.toLowerCase();
-    final needsM3u8 = !lowerUrl.contains('.m3u8') &&
-        !lowerUrl.contains('.mpd') &&
-        !lowerUrl.endsWith('.mp4') &&
-        !lowerUrl.endsWith('.ts');
-
-    if (needsM3u8) {
-      if (_xtreamPattern.hasMatch(castUrl) || _streamIdPattern.hasMatch(castUrl)) {
-        AppLogger.info('Cast: Appending .m3u8 for HLS format');
-        castUrl = '$castUrl.m3u8';
-      }
-    }
-
-    if (castUrl.startsWith('https://')) {
-      castUrl = castUrl.replaceFirst('https://', 'http://');
-      AppLogger.info('Cast: Using HTTP to avoid mixed-content redirect issues');
-    }
-
-    return castUrl;
+  /// Detect content type from a URL's extension (no network).
+  String? _contentTypeFromUrl(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('.m3u8')) return 'application/x-mpegurl';
+    if (lower.contains('.mpd')) return 'application/dash+xml';
+    if (lower.endsWith('.mp4') || lower.endsWith('.mov')) return 'video/mp4';
+    if (lower.endsWith('.ts')) return 'video/mp2t';
+    return null;
   }
 
-  /// Detect content type from URL patterns.
-  String _detectContentType(String url, String defaultType) {
-    final lowerUrl = url.toLowerCase();
-
-    if (lowerUrl.contains('.m3u8') || lowerUrl.contains('m3u8')) {
+  /// Map an HTTP Content-Type header to a Cast-friendly MIME type.
+  String? _contentTypeFromHeader(String? header) {
+    if (header == null) return null;
+    final lower = header.toLowerCase();
+    if (lower.contains('mpegurl') || lower.contains('x-mpegurl')) {
       return 'application/x-mpegurl';
     }
-    if (lowerUrl.contains('.mpd')) {
+    if (lower.contains('dash') || lower.contains('mpd')) {
       return 'application/dash+xml';
     }
-    if (lowerUrl.endsWith('.mp4') ||
-        lowerUrl.endsWith('.mkv') ||
-        lowerUrl.endsWith('.avi') ||
-        lowerUrl.endsWith('.mov')) {
-      return 'video/mp4';
+    if (lower.contains('mp2t') || lower.contains('mpeg')) {
+      return 'video/mp2t';
     }
-    if (_xtreamPattern.hasMatch(url)) {
-      AppLogger.info('Cast: Detected Xtream Codes URL pattern, using HLS');
-      return 'application/x-mpegurl';
+    if (lower.contains('mp4')) return 'video/mp4';
+    if (lower.contains('octet-stream')) return null; // ambiguous
+    if (lower.contains('video/')) return lower.split(';').first.trim();
+    return null;
+  }
+
+  /// Probe a URL with a HEAD request, returning the HTTP status and
+  /// Content-Type header. Returns null on network error.
+  Future<(int, String?)?> _headProbe(String url) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final request = await client.headUrl(Uri.parse(url));
+      request.followRedirects = true;
+      final response = await request.close().timeout(
+            const Duration(seconds: 5),
+          );
+      await response.drain<void>();
+      return (response.statusCode, response.headers.contentType?.toString());
+    } catch (e) {
+      AppLogger.info('Cast: HEAD probe failed for ${AppLogger.redactUrl(url)}: $e');
+      return null;
+    } finally {
+      client.close(force: true);
     }
-    if (_streamIdPattern.hasMatch(url)) {
-      AppLogger.info('Cast: URL ends with stream ID, defaulting to HLS');
-      return 'application/x-mpegurl';
+  }
+
+  /// Determine stream URL and content type using heuristic detection only.
+  /// No HEAD probes — they waste the IPTV server's single connection slot.
+  _StreamProbe _detectStreamType(String url, String fallbackType) {
+    // If the URL already has a known media extension, use it as-is.
+    final knownType = _contentTypeFromUrl(url);
+    if (knownType != null) {
+      AppLogger.info('Cast: URL has known extension, type=$knownType');
+      return _StreamProbe(url, knownType);
     }
-    return defaultType;
+
+    // Bare Xtream/stream-ID URLs are almost always MPEG-TS.
+    // The HLS proxy will handle repackaging for Chromecast.
+    if (_xtreamPattern.hasMatch(url) || _streamIdPattern.hasMatch(url)) {
+      AppLogger.info('Cast: Detected stream ID URL, assuming video/mp2t');
+      return _StreamProbe(url, 'video/mp2t');
+    }
+
+    AppLogger.info('Cast: Using fallback type=$fallbackType');
+    return _StreamProbe(url, fallbackType);
   }
 
   /// Schedule an auto-retry after a stream error.
@@ -402,10 +443,31 @@ class CastService implements ICastService {
 
     // Cancel any pending retry for previous media
     _retryTimer?.cancel();
+    _hasEverPlayed = false; // Reset — must reach playing state before retries
 
     try {
-      final castUrl = _prepareCastUrl(media.url);
-      final contentType = _detectContentType(castUrl, media.contentType);
+      final probe = _detectStreamType(media.url, media.contentType);
+      var castUrl = probe.url;
+      var contentType = probe.contentType;
+
+      // If the stream is MPEG-TS, Chromecast can't play it directly.
+      // Start a local HLS proxy that repackages the TS into HLS segments.
+      if (contentType == 'video/mp2t') {
+        AppLogger.info('Cast: TS stream detected — starting HLS proxy');
+        final hlsUrl = await HlsProxyService.instance.start(castUrl);
+        if (hlsUrl != null) {
+          castUrl = hlsUrl;
+          contentType = 'application/x-mpegurl';
+          AppLogger.info('Cast: Using local HLS proxy: $castUrl');
+        } else {
+          AppLogger.error('Cast: HLS proxy failed to start, trying raw URL');
+        }
+      } else {
+        // Not using the proxy — make sure it's stopped
+        if (HlsProxyService.instance.isRunning) {
+          await HlsProxyService.instance.stop();
+        }
+      }
 
       AppLogger.info('Cast: Loading media:');
       AppLogger.info('  Title: ${media.title}');
@@ -513,6 +575,8 @@ class CastService implements ICastService {
     _retryTimer?.cancel();
     _lastMedia = null;
     _retryCount = 0;
+    _hasEverPlayed = false;
+    HlsProxyService.instance.stop();
     _discoveryDebounce?.cancel();
     _deviceSubscription?.cancel();
     _sessionSubscription?.cancel();
