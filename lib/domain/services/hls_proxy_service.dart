@@ -523,6 +523,29 @@ class HlsProxyService {
     data[off + 4] = ((pts << 1) & 0xFE) | 0x01;
   }
 
+  /// Extract the last PTS from video PES packets in segment data.
+  int _extractLastPts(Uint8List data) {
+    int lastPts = 0;
+    for (var i = 0; i + _tsPacketSize <= data.length; i += _tsPacketSize) {
+      if (data[i] != 0x47) continue;
+      final pusi = (data[i + 1] & 0x40) != 0;
+      if (!pusi) continue;
+
+      var ps = i + 4;
+      final af = (data[i + 3] >> 4) & 0x03;
+      if (af >= 2) ps += 1 + data[i + 4];
+      if (ps + 13 >= data.length) continue;
+
+      if (data[ps] == 0x00 && data[ps + 1] == 0x00 && data[ps + 2] == 0x01) {
+        final flags = data[ps + 7];
+        if ((flags & 0x80) != 0) {
+          lastPts = _readPts(data, ps + 9);
+        }
+      }
+    }
+    return lastPts;
+  }
+
   /// Extract the first PTS from video PES packets in segment data.
   int _extractFirstPts(Uint8List data) {
     for (var i = 0; i + _tsPacketSize <= data.length; i += _tsPacketSize) {
@@ -710,13 +733,18 @@ class HlsProxyService {
     }
     header.add(videoBytes);
 
-    // Add silent AAC audio packets synced to remapped video PTS
-    final remappedPts = _extractFirstPts(videoBytes);
-    final estimatedDuration = _estimatedBytesPerSec > 0
-        ? videoBytes.length / _estimatedBytesPerSec
-        : _targetSegmentSecs.toDouble();
-    final numAudioFrames = (estimatedDuration * 44100 / 1024).ceil();
-    final audioPackets = _buildSilentAudioPackets(numAudioFrames, pts: remappedPts);
+    // Generate silent AAC audio matching the ACTUAL video PTS duration.
+    // Using byte-estimated duration creates gaps at segment boundaries
+    // because audio ends early within each segment.
+    final firstVideoPts = _extractFirstPts(videoBytes);
+    final lastVideoPts = _extractLastPts(videoBytes);
+    final videoPtsDuration = lastVideoPts > firstVideoPts
+        ? lastVideoPts - firstVideoPts
+        : (_targetSegmentSecs * 90000); // fallback
+    // Add one extra frame's worth to cover the last video frame
+    final audioDurationTicks = videoPtsDuration + 3000; // ~33ms extra
+    final numAudioFrames = (audioDurationTicks / _audioPtsIncrement).ceil();
+    final audioPackets = _buildSilentAudioPackets(numAudioFrames, pts: firstVideoPts);
     header.add(audioPackets);
 
     _segmentIndex++;
@@ -813,21 +841,15 @@ class HlsProxyService {
       ..writeln('#EXT-X-MEDIA-SEQUENCE:$mediaSequence')
       ..writeln('#EXT-X-INDEPENDENT-SEGMENTS');
 
-    // Base time for EXT-X-PROGRAM-DATE-TIME
-    final baseTime = DateTime.now().subtract(
-      Duration(seconds: (sortedKeys.length * _targetSegmentSecs)),
-    );
-
     for (var i = 0; i < sortedKeys.length; i++) {
       final seq = sortedKeys[i];
       final dur = _estimatedBytesPerSec > 0
           ? (_segments[seq]!.length / _estimatedBytesPerSec)
               .clamp(1.0, 30.0)
           : _targetSegmentSecs.toDouble();
-
-      // EXT-X-PROGRAM-DATE-TIME helps Chromecast merge manifest refreshes
-      final segTime = baseTime.add(Duration(seconds: i * _targetSegmentSecs));
-      sb.writeln('#EXT-X-PROGRAM-DATE-TIME:${segTime.toUtc().toIso8601String()}');
+      // Mark each segment as a discontinuity — our PTS values restart
+      // per segment and may have small gaps at boundaries.
+      if (i > 0) sb.writeln('#EXT-X-DISCONTINUITY');
       sb
         ..writeln('#EXTINF:${dur.toStringAsFixed(3)},')
         ..writeln('seg_$seq.ts');
