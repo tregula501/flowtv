@@ -18,7 +18,7 @@ class HlsProxyService {
   HlsProxyService._();
 
   static const _targetSegmentSecs = 6;
-  static const _maxSegments = 6; // balance memory vs Chromecast buffer needs
+  static const _maxSegments = 8; // Chromecast needs ≥6 for stable seek window
   static const _initialSegments = 2;
   static const _tsPacketSize = 188;
   static const _minSegmentBytes = 512 * 1024;
@@ -27,14 +27,20 @@ class HlsProxyService {
 
   // Silent AAC-LC frame: ADTS header (7 bytes) + silent 1024-sample frame
   // Profile: AAC-LC, Sample rate: 44100Hz, Channels: 2 (stereo)
+  // Raw AAC data: CPE (channel pair element) with zero spectral data + END
+  // Total frame_length = 13 (7 header + 6 raw data)
   static final _silentAacFrame = Uint8List.fromList([
     // ADTS header: syncword=0xFFF, id=0(MPEG4), layer=0, protection=1(no CRC),
-    // profile=1(AAC-LC), sampling_freq=4(44100), private=0, channels=2,
-    // frame_length=14 (7 header + 7 data)
-    0xFF, 0xF1, 0x50, 0x80, 0x03, 0x80, 0xFC,
-    // Minimal silent AAC frame data (SCE + END)
-    0x21, 0x10, 0x04, 0x60, 0x8C, 0x1C, 0x00,
+    // profile=1(AAC-LC), sampling_freq_index=4(44100), channel_config=2(stereo),
+    // frame_length=13, buffer_fullness=0x7FF(VBR), num_raw_blocks=0
+    0xFF, 0xF1, 0x50, 0x80, 0x01, 0xBF, 0xFC,
+    // CPE with zero spectral data (silent stereo 1024 samples)
+    0x21, 0x10, 0x04, 0x60, 0x8C, 0x1C,
   ]);
+
+  // Audio PTS increment per AAC frame: 1024 samples at 90kHz clock
+  // = 1024 / 44100 * 90000 = 2089.795... ≈ 2090 ticks
+  static const _audioPtsIncrement = 2090;
 
   HttpServer? _server;
   HttpClient? _httpClient;
@@ -59,7 +65,14 @@ class HlsProxyService {
   final _audioPids = <int>{}; // audio PIDs to filter out
   int _videoPid = -1; // video PID to keep
 
+  // PTS remapping: subtract _ptsOffset from all PTS values so they
+  // start near zero. Huge PTS values (5+ billion from long-running
+  // live streams) can cause 32-bit overflow in some Cast player internals.
+  int _ptsOffset = -1; // -1 = not yet captured
+  int _segmentIndex = 0; // for EXT-X-PROGRAM-DATE-TIME
+
   int _totalBytesReceived = 0;
+  int _totalVideoBytes = 0; // bytes after filtering (video only)
   Stopwatch? _stopwatch;
   double _estimatedBytesPerSec = 0;
   bool _bitrateEstimated = false;
@@ -134,6 +147,7 @@ class HlsProxyService {
     _segments.clear();
     _nextSequence = 0;
     _totalBytesReceived = 0;
+    _totalVideoBytes = 0;
     _estimatedBytesPerSec = 0;
     _bitrateEstimated = false;
     _stopwatch = null;
@@ -146,6 +160,8 @@ class HlsProxyService {
     _pmtPid = -1;
     _audioPids.clear();
     _videoPid = -1;
+    _ptsOffset = -1;
+    _segmentIndex = 0;
     AppLogger.info('HLS proxy: Stopped');
   }
 
@@ -208,12 +224,16 @@ class HlsProxyService {
 
     if (!_bitrateEstimated) {
       final elapsed = _stopwatch!.elapsedMilliseconds;
-      if (elapsed >= 3000 && _totalBytesReceived > 0) {
-        _estimatedBytesPerSec = _totalBytesReceived * 1000.0 / elapsed;
+      // Use video-only bytes for bitrate estimation since we filter out
+      // audio. Using total bytes would overestimate, causing EXTINF
+      // durations to be 3-5x too long (Chromecast freezes on playback).
+      if (elapsed >= 3000 && _totalVideoBytes > 0) {
+        _estimatedBytesPerSec = _totalVideoBytes * 1000.0 / elapsed;
         _bitrateEstimated = true;
         AppLogger.info(
-          'HLS proxy: Estimated bitrate '
-          '${(_estimatedBytesPerSec * 8 / 1000000).toStringAsFixed(1)} Mbps',
+          'HLS proxy: Estimated video bitrate '
+          '${(_estimatedBytesPerSec * 8 / 1000000).toStringAsFixed(1)} Mbps '
+          '(total stream: ${(_totalBytesReceived * 8000.0 / elapsed / 1000000).toStringAsFixed(1)} Mbps)',
         );
       }
     }
@@ -272,6 +292,7 @@ class HlsProxyService {
 
       _segmentBuffer.add(packet);
       _segmentBytes += _tsPacketSize;
+      _totalVideoBytes += _tsPacketSize;
     }
 
     if (offset < data.length) {
@@ -456,6 +477,52 @@ class HlsProxyService {
     return crc;
   }
 
+  /// Remap PTS/DTS values in a PES header by subtracting _ptsOffset.
+  void _remapPesTimestamps(Uint8List data, int tsOffset) {
+    var ps = tsOffset + 4;
+    final af = (data[tsOffset + 3] >> 4) & 0x03;
+    if (af >= 2) ps += 1 + data[tsOffset + 4];
+    if (ps + 9 >= data.length) return;
+
+    if (data[ps] != 0x00 || data[ps + 1] != 0x00 || data[ps + 2] != 0x01) {
+      return; // not a PES header
+    }
+
+    final flags = data[ps + 7];
+    final hasPts = (flags & 0x80) != 0;
+    final hasDts = (flags & 0x40) != 0;
+
+    if (hasPts && ps + 14 <= data.length) {
+      final pts = _readPts(data, ps + 9);
+      final remapped = (pts - _ptsOffset).clamp(0, (1 << 33) - 1);
+      _writePts(data, ps + 9, remapped, hasDts ? 0x03 : 0x02);
+
+      if (hasDts && ps + 19 <= data.length) {
+        final dts = _readPts(data, ps + 14);
+        final remappedDts = (dts - _ptsOffset).clamp(0, (1 << 33) - 1);
+        _writePts(data, ps + 14, remappedDts, 0x01);
+      }
+    }
+  }
+
+  /// Read a 33-bit PTS/DTS value from 5 bytes.
+  static int _readPts(Uint8List data, int off) {
+    return ((data[off] & 0x0E) << 29) |
+        (data[off + 1] << 22) |
+        ((data[off + 2] & 0xFE) << 14) |
+        (data[off + 3] << 7) |
+        (data[off + 4] >> 1);
+  }
+
+  /// Write a 33-bit PTS/DTS value into 5 bytes.
+  static void _writePts(Uint8List data, int off, int pts, int marker) {
+    data[off] = (marker << 4) | ((pts >> 29) & 0x0E) | 0x01;
+    data[off + 1] = (pts >> 22) & 0xFF;
+    data[off + 2] = ((pts >> 14) & 0xFE) | 0x01;
+    data[off + 3] = (pts >> 7) & 0xFF;
+    data[off + 4] = ((pts << 1) & 0xFE) | 0x01;
+  }
+
   /// Extract the first PTS from video PES packets in segment data.
   int _extractFirstPts(Uint8List data) {
     for (var i = 0; i + _tsPacketSize <= data.length; i += _tsPacketSize) {
@@ -497,78 +564,77 @@ class HlsProxyService {
     ];
   }
 
-  /// Build TS packets containing silent AAC audio frames wrapped in PES.
+  /// Build TS packets containing silent AAC audio frames, each in its own PES
+  /// packet with an incrementing PTS. Chromecast requires per-frame PTS to
+  /// maintain A/V sync; a single PES with all frames causes audio timeline
+  /// confusion and playback cuts after ~3 segments.
   Uint8List _buildSilentAudioPackets(int numFrames, {int pts = 0}) {
-    // Build PES payload: multiple ADTS frames
-    final aacData = BytesBuilder();
-    for (var i = 0; i < numFrames; i++) {
-      aacData.add(_silentAacFrame);
-    }
-    final aacPayload = aacData.takeBytes();
-
-    // PES header: start code (3) + stream_id (1) + length (2) + flags (3)
-    final pesHeaderLen = 9 + 5; // 9 base + 5 for PTS
-    final pesPayload = BytesBuilder();
-    // PES start code
-    pesPayload.add([0x00, 0x00, 0x01]);
-    // Stream ID: 0xC0 (audio stream 0)
-    pesPayload.add([0xC0]);
-    // PES packet length (0 = unbounded for video, but for audio set it)
-    final pesLen = 3 + 5 + aacPayload.length; // flags(3) + PTS(5) + data
-    pesPayload.add([(pesLen >> 8) & 0xFF, pesLen & 0xFF]);
-    // PES flags: marker(10) + PTS_DTS_flags(10=PTS only) + rest zeros
-    pesPayload.add([0x80, 0x80, 0x05]);
-    // PTS matching the video stream's PTS for A/V sync
-    pesPayload.add(_encodePts(pts, 0x02));
-    pesPayload.add(aacPayload);
-
-    final fullPayload = pesPayload.takeBytes();
-
-    // Pack into 188-byte TS packets
-    final packets = BytesBuilder();
-    var offset = 0;
+    final allPackets = BytesBuilder();
     var audioCC = 0;
-    var first = true;
+    var currentPts = pts;
 
-    while (offset < fullPayload.length) {
-      final pkt = Uint8List(_tsPacketSize);
-      pkt[0] = 0x47; // sync
-      pkt[1] = (first ? 0x40 : 0x00) | ((_silentAudioPid >> 8) & 0x1F);
-      pkt[2] = _silentAudioPid & 0xFF;
-      pkt[3] = 0x10 | (audioCC & 0x0F); // payload only, CC
-      audioCC++;
-      first = false;
+    for (var frame = 0; frame < numFrames; frame++) {
+      // Build a PES packet for this single ADTS frame
+      final aacPayload = _silentAacFrame;
+      final pesLen = 3 + 5 + aacPayload.length; // flags(3) + PTS(5) + data
 
-      final payloadSpace = _tsPacketSize - 4;
-      final remaining = fullPayload.length - offset;
-      final toCopy = remaining < payloadSpace ? remaining : payloadSpace;
+      final pesPacket = BytesBuilder();
+      pesPacket.add([0x00, 0x00, 0x01]); // PES start code
+      pesPacket.add([0xC0]); // Stream ID: audio stream 0
+      pesPacket.add([(pesLen >> 8) & 0xFF, pesLen & 0xFF]);
+      pesPacket.add([0x80, 0x80, 0x05]); // PTS only
+      pesPacket.add(_encodePts(currentPts, 0x02));
+      pesPacket.add(aacPayload);
 
-      // If this is the last packet and there's leftover space, add adaptation field
-      if (toCopy < payloadSpace) {
-        final stuffLen = payloadSpace - toCopy - 1;
-        pkt[3] |= 0x20; // adaptation field + payload
-        pkt[4] = stuffLen > 0 ? stuffLen : 0;
-        if (stuffLen > 0) {
-          pkt[5] = 0x00; // adaptation flags
-          for (var i = 6; i < 5 + stuffLen; i++) {
-            pkt[i] = 0xFF; // stuffing
+      final fullPayload = pesPacket.takeBytes();
+
+      // Pack this single-frame PES into TS packets
+      var offset = 0;
+      var first = true;
+
+      while (offset < fullPayload.length) {
+        final pkt = Uint8List(_tsPacketSize);
+        pkt[0] = 0x47; // sync
+        pkt[1] = (first ? 0x40 : 0x00) | ((_silentAudioPid >> 8) & 0x1F);
+        pkt[2] = _silentAudioPid & 0xFF;
+        pkt[3] = 0x10 | (audioCC & 0x0F); // payload only, CC
+        audioCC++;
+        first = false;
+
+        const payloadSpace = _tsPacketSize - 4;
+        final remaining = fullPayload.length - offset;
+        final toCopy = remaining < payloadSpace ? remaining : payloadSpace;
+
+        // If payload doesn't fill the TS packet, add adaptation field stuffing
+        if (toCopy < payloadSpace) {
+          final stuffLen = payloadSpace - toCopy - 1;
+          pkt[3] |= 0x20; // adaptation field + payload
+          pkt[4] = stuffLen > 0 ? stuffLen : 0;
+          if (stuffLen > 0) {
+            pkt[5] = 0x00; // adaptation flags
+            for (var i = 6; i < 5 + stuffLen; i++) {
+              pkt[i] = 0xFF; // stuffing
+            }
+          }
+          final dataStart = 5 + (stuffLen > 0 ? stuffLen : 0);
+          for (var i = 0; i < toCopy; i++) {
+            pkt[dataStart + i] = fullPayload[offset + i];
+          }
+        } else {
+          for (var i = 0; i < toCopy; i++) {
+            pkt[4 + i] = fullPayload[offset + i];
           }
         }
-        final dataStart = 5 + (stuffLen > 0 ? stuffLen : 0);
-        for (var i = 0; i < toCopy; i++) {
-          pkt[dataStart + i] = fullPayload[offset + i];
-        }
-      } else {
-        for (var i = 0; i < toCopy; i++) {
-          pkt[4 + i] = fullPayload[offset + i];
-        }
+
+        offset += toCopy;
+        allPackets.add(pkt);
       }
 
-      offset += toCopy;
-      packets.add(pkt);
+      // Advance PTS for next frame: 1024 samples at 90kHz
+      currentPts += _audioPtsIncrement;
     }
 
-    return Uint8List.fromList(packets.takeBytes());
+    return Uint8List.fromList(allPackets.takeBytes());
   }
 
   bool _isRandomAccessPoint(List<int> packet) {
@@ -610,10 +676,23 @@ class HlsProxyService {
       header.add(videoOnlyPmt);
     }
 
-    // Renumber video packet CCs starting from 0
+    // Renumber CCs and remap PTS values to start near zero.
+    // Large PTS (5+ billion from long-running live streams) can cause
+    // 32-bit overflow in the Chromecast's internal player (Shaka).
     final videoBytes = contentBytes is Uint8List
         ? contentBytes
         : Uint8List.fromList(contentBytes);
+
+    // Capture PTS offset from the very first segment
+    if (_ptsOffset < 0) {
+      final firstPts = _extractFirstPts(videoBytes);
+      // Start at 90000 (1 second) to give some headroom
+      _ptsOffset = firstPts > 90000 ? firstPts - 90000 : 0;
+      AppLogger.info('HLS proxy: PTS offset set to $_ptsOffset '
+          '(original PTS=${firstPts}, remapped to ${firstPts - _ptsOffset})');
+    }
+
+    // Remap all PTS/DTS in video PES headers and renumber CCs
     var cc = 0;
     for (var i = 0; i + _tsPacketSize <= videoBytes.length; i += _tsPacketSize) {
       if (videoBytes[i] != 0x47) continue;
@@ -622,17 +701,25 @@ class HlsProxyService {
         videoBytes[i + 3] = (videoBytes[i + 3] & 0xF0) | (cc & 0x0F);
         cc++;
       }
+
+      // Remap PTS/DTS in PES headers
+      final pusi = (videoBytes[i + 1] & 0x40) != 0;
+      if (pusi && hasPayload) {
+        _remapPesTimestamps(videoBytes, i);
+      }
     }
     header.add(videoBytes);
 
-    // Add silent AAC audio packets synced to video PTS
-    final videoPts = _extractFirstPts(videoBytes);
+    // Add silent AAC audio packets synced to remapped video PTS
+    final remappedPts = _extractFirstPts(videoBytes);
     final estimatedDuration = _estimatedBytesPerSec > 0
         ? videoBytes.length / _estimatedBytesPerSec
         : _targetSegmentSecs.toDouble();
     final numAudioFrames = (estimatedDuration * 44100 / 1024).ceil();
-    final audioPackets = _buildSilentAudioPackets(numAudioFrames, pts: videoPts);
+    final audioPackets = _buildSilentAudioPackets(numAudioFrames, pts: remappedPts);
     header.add(audioPackets);
+
+    _segmentIndex++;
 
     final segment = Uint8List.fromList(header.takeBytes());
 
@@ -723,13 +810,24 @@ class HlsProxyService {
       ..writeln('#EXTM3U')
       ..writeln('#EXT-X-VERSION:3')
       ..writeln('#EXT-X-TARGETDURATION:$targetDuration')
-      ..writeln('#EXT-X-MEDIA-SEQUENCE:$mediaSequence');
+      ..writeln('#EXT-X-MEDIA-SEQUENCE:$mediaSequence')
+      ..writeln('#EXT-X-INDEPENDENT-SEGMENTS');
 
-    for (final seq in sortedKeys) {
+    // Base time for EXT-X-PROGRAM-DATE-TIME
+    final baseTime = DateTime.now().subtract(
+      Duration(seconds: (sortedKeys.length * _targetSegmentSecs)),
+    );
+
+    for (var i = 0; i < sortedKeys.length; i++) {
+      final seq = sortedKeys[i];
       final dur = _estimatedBytesPerSec > 0
           ? (_segments[seq]!.length / _estimatedBytesPerSec)
               .clamp(1.0, 30.0)
           : _targetSegmentSecs.toDouble();
+
+      // EXT-X-PROGRAM-DATE-TIME helps Chromecast merge manifest refreshes
+      final segTime = baseTime.add(Duration(seconds: i * _targetSegmentSecs));
+      sb.writeln('#EXT-X-PROGRAM-DATE-TIME:${segTime.toUtc().toIso8601String()}');
       sb
         ..writeln('#EXTINF:${dur.toStringAsFixed(3)},')
         ..writeln('seg_$seq.ts');
