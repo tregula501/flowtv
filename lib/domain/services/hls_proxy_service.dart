@@ -214,9 +214,9 @@ class HlsProxyService {
             _onData,
             onError: (Object e) =>
                 AppLogger.error('HLS proxy: Upstream error — $e'),
-            onDone: () async {
+            onDone: () {
               AppLogger.info('HLS proxy: Upstream closed');
-              await _flushSegment();
+              _flushSegment();
             },
           );
           return;
@@ -259,7 +259,7 @@ class HlsProxyService {
   // TS packet processing
   // ---------------------------------------------------------------------------
 
-  Future<void> _processPackets() async {
+  void _processPackets() {
     final data = _packetBuffer.takeBytes();
     var offset = 0;
 
@@ -309,7 +309,7 @@ class HlsProxyService {
 
       if ((hasKeyframe && _segmentBytes >= _minSegmentBytes && _shouldSplit()) ||
           _segmentBytes >= _maxSegmentBytes) {
-        await _flushSegment();
+        _flushSegment();
       }
 
       _segmentBuffer.add(packet);
@@ -787,7 +787,7 @@ class HlsProxyService {
     return estimatedSecs >= _targetSegmentSecs;
   }
 
-  Future<void> _flushSegment() async {
+  void _flushSegment() {
     if (_segmentBytes == 0) return;
 
     final contentBytes = _segmentBuffer.takeBytes();
@@ -853,25 +853,11 @@ class HlsProxyService {
     final audioDurationTicks = videoPtsDuration + 3000;
     final numSilentFrames = (audioDurationTicks / _audioPtsIncrement).ceil();
 
-    Uint8List audioPackets;
-    if (_transcodeAvailable && _ac3Buffer.length > 0) {
-      // Transcode collected AC-3 data to real AAC
-      final ac3Data = Uint8List.fromList(_ac3Buffer.takeBytes());
-      final aacFrames = await AudioTranscodeService.instance.transcode(ac3Data);
-      if (aacFrames.isNotEmpty) {
-        audioPackets = _buildAacAudioPackets(aacFrames, pts: firstVideoPts);
-        AppLogger.debug(
-          'HLS proxy: Transcoded ${ac3Data.length} AC-3 bytes → '
-          '${aacFrames.length} AAC frames',
-        );
-      } else {
-        // Transcoding returned nothing — use silent fallback
-        audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
-      }
-    } else {
-      _ac3Buffer.clear(); // discard if not transcoding
-      audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
-    }
+    // Use silent AAC. Real transcoding (AC-3 → AAC via MediaCodec) is
+    // available but disabled pending ADTS validation.
+    // TODO: Re-enable _transcodeAvailable path once AAC output is validated.
+    _ac3Buffer.clear();
+    final audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
     header.add(audioPackets);
 
     _segmentIndex++;
@@ -974,9 +960,9 @@ class HlsProxyService {
           ? (_segments[seq]!.length / _estimatedBytesPerSec)
               .clamp(1.0, 30.0)
           : _targetSegmentSecs.toDouble();
-      // Mark each segment as a discontinuity — our PTS values restart
-      // per segment and may have small gaps at boundaries.
-      if (i > 0) sb.writeln('#EXT-X-DISCONTINUITY');
+      // No discontinuity tags — PTS values are continuous across segments
+      // thanks to remapping. Adding discontinuity between every segment
+      // causes the Chromecast to refuse to fetch segments.
       sb
         ..writeln('#EXTINF:${dur.toStringAsFixed(3)},')
         ..writeln('seg_$seq.ts');
