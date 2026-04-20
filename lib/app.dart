@@ -10,6 +10,7 @@ import 'presentation/providers/theme_provider.dart';
 import 'presentation/providers/epg_provider.dart';
 import 'presentation/providers/player_provider.dart';
 import 'presentation/providers/connectivity_provider.dart';
+import 'presentation/providers/playlist_provider.dart';
 import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/home/mobile_home_screen.dart';
 
@@ -61,6 +62,7 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
     // Start EPG auto-refresh after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(epgManagerProvider).startAutoRefresh();
+      _autoRefreshEmptyPlaylists();
     });
   }
 
@@ -70,6 +72,26 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
     // Stop EPG auto-refresh when app closes
     ref.read(epgManagerProvider).stopAutoRefresh();
     super.dispose();
+  }
+
+  /// Auto-refresh any active playlist that has 0 channels.
+  /// This handles the case where a playlist was injected into the DB
+  /// (e.g. by a deploy script) without channel data.
+  Future<void> _autoRefreshEmptyPlaylists() async {
+    // Wait briefly for the playlists stream to emit its first value
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final playlist = ref.read(activePlaylistProvider);
+    if (playlist == null || playlist.channelCount > 0) return;
+
+    AppLogger.info('Active playlist "${playlist.name}" has 0 channels — auto-refreshing');
+    try {
+      await ref.read(playlistManagerProvider).refreshPlaylist(playlist.id);
+      AppLogger.info('Auto-refresh complete for "${playlist.name}"');
+    } catch (e) {
+      AppLogger.error('Auto-refresh failed for "${playlist.name}": $e');
+    }
   }
 
   @override

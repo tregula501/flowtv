@@ -182,14 +182,16 @@ class CastService implements ICastService {
                 'lastMedia=${_lastMedia?.title}, '
                 'retryCount=$_retryCount',
               );
-              // Auto-retry on stream error, but only if playback previously
-              // started. Without this guard, the initial idle→loading
-              // transition can trigger spurious retries that exhaust attempts
-              // before the stream has a chance to play.
+              // Only retry ONCE before playback starts (Chromecast often
+              // needs a re-load after initial buffering). After playback
+              // has started, do NOT retry — the idle errors are transient
+              // buffering gaps, and calling loadMedia again resets the
+              // player causing visible freezes.
               if (status.idleReason == GoogleCastMediaIdleReason.error &&
                   _lastMedia != null &&
                   _sessionState.isConnected &&
-                  _hasEverPlayed) {
+                  !_hasEverPlayed &&
+                  _retryCount == 0) {
                 _scheduleRetry();
               }
           }
@@ -419,7 +421,11 @@ class CastService implements ICastService {
     }
 
     _retryCount++;
-    final delay = Duration(seconds: 2 * _retryCount); // 2s, 4s, 6s backoff
+    // First retry is instant — Chromecast often needs a re-load after initial
+    // buffering. Subsequent retries use backoff.
+    final delay = _retryCount == 1
+        ? Duration.zero
+        : Duration(seconds: 2 * _retryCount); // 4s, 6s backoff
     AppLogger.info(
       'Cast: Stream error — retrying in ${delay.inSeconds}s '
       '(attempt $_retryCount/$_maxRetries)',
