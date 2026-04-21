@@ -16,10 +16,10 @@ import java.nio.ByteBuffer
 class AudioTranscoder {
     companion object {
         private const val TAG = "AudioTranscoder"
-        private const val SAMPLE_RATE = 44100
+        private const val SAMPLE_RATE = 48000 // match AC-3 decoder output
         private const val CHANNEL_COUNT = 2 // stereo output
         private const val AAC_BITRATE = 128000
-        private const val TIMEOUT_US = 10000L // 10ms
+        private const val TIMEOUT_US = 10000L // 10ms — fewer loops is more efficient than many 1ms loops
 
         /** Check if AC-3 decoding is supported on this device. */
         fun isAc3Supported(): Boolean {
@@ -52,6 +52,9 @@ class AudioTranscoder {
             }
             Log.i(TAG, "Using AC-3 decoder: $decoderName")
 
+            // Priority 1 = batch/offline mode: process at max throughput, no throttling
+            decoderFormat.setInteger(MediaFormat.KEY_PRIORITY, 1)
+
             decoder = MediaCodec.createByCodecName(decoderName)
             decoder!!.configure(decoderFormat, null, null, 0)
             decoder!!.start()
@@ -68,6 +71,7 @@ class AudioTranscoder {
                 android.media.MediaCodecInfo.CodecProfileLevel.AACObjectLC
             )
             encoderFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
+            encoderFormat.setInteger(MediaFormat.KEY_PRIORITY, 1) // batch/offline mode
 
             encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
             encoder!!.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
@@ -85,45 +89,101 @@ class AudioTranscoder {
 
     /**
      * Feed AC-3 audio data and get back AAC ADTS frames.
-     * Returns a list of complete ADTS frames, or empty if no output yet.
+     * Two-pass approach:
+     *   Pass 1: Decode ALL AC-3 → accumulate raw PCM in memory
+     *   Pass 2: Feed PCM to encoder in exact-sized chunks → collect AAC
+     * This avoids buffer pressure issues where decoder/encoder compete.
      */
     fun transcode(ac3Data: ByteArray): List<ByteArray> {
         if (!isStarted) return emptyList()
         outputFrames.clear()
 
         try {
-            // Feed AC-3 in chunks, draining decoder→encoder after each feed.
-            // MediaCodec input buffers are small (~4-16KB), so we must feed
-            // incrementally and drain between feeds to avoid stalling.
+            // === PASS 1: Decode all AC-3 to PCM ===
+            val allPcm = java.io.ByteArrayOutputStream()
+            val dec = decoder ?: return emptyList()
+            val bufferInfo = MediaCodec.BufferInfo()
+
+            // Feed all AC-3 data to decoder
             var offset = 0
             while (offset < ac3Data.size) {
-                val chunkSize = feedDecoder(ac3Data, offset)
-                if (chunkSize > 0) {
-                    offset += chunkSize
-                } else {
-                    // No input buffer available — drain and retry
-                    offset += 0
+                val inputIndex = dec.dequeueInputBuffer(TIMEOUT_US)
+                if (inputIndex >= 0) {
+                    val inputBuffer = dec.getInputBuffer(inputIndex) ?: break
+                    inputBuffer.clear()
+                    val remaining = ac3Data.size - offset
+                    val size = minOf(remaining, inputBuffer.remaining())
+                    inputBuffer.put(ac3Data, offset, size)
+                    dec.queueInputBuffer(inputIndex, 0, size, 0, 0)
+                    offset += size
                 }
 
-                // Drain decoder → PCM → feed to encoder
-                drainDecoderToEncoder()
+                // Drain decoded PCM
+                while (true) {
+                    val outIdx = dec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
+                    if (outIdx >= 0) {
+                        val pcmBuf = dec.getOutputBuffer(outIdx) ?: break
+                        val pcm = ByteArray(bufferInfo.size)
+                        pcmBuf.position(bufferInfo.offset)
+                        pcmBuf.get(pcm, 0, bufferInfo.size)
+                        dec.releaseOutputBuffer(outIdx, false)
+                        allPcm.write(pcm)
+                    } else if (outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        Log.i(TAG, "Decoder output format: ${dec.outputFormat}")
+                    } else {
+                        break
+                    }
+                }
+            }
 
-                // Drain encoder → AAC ADTS frames
-                drainEncoder()
-
-                // If we couldn't feed and couldn't drain, break to avoid infinite loop
-                if (chunkSize <= 0) {
-                    drainDecoderToEncoder()
-                    drainEncoder()
+            // Final decoder drain
+            for (i in 0..20) {
+                val outIdx = dec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
+                if (outIdx >= 0) {
+                    val pcmBuf = dec.getOutputBuffer(outIdx) ?: break
+                    val pcm = ByteArray(bufferInfo.size)
+                    pcmBuf.position(bufferInfo.offset)
+                    pcmBuf.get(pcm, 0, bufferInfo.size)
+                    dec.releaseOutputBuffer(outIdx, false)
+                    allPcm.write(pcm)
+                } else if (outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    continue
+                } else {
                     break
                 }
             }
 
-            // Final drain pass to flush remaining buffered data
-            for (i in 0..5) {
-                drainDecoderToEncoder()
+            val pcmData = allPcm.toByteArray()
+            Log.i(TAG, "Decoded ${ac3Data.size} bytes AC-3 → ${pcmData.size} bytes PCM")
+
+            // === PASS 2: Encode PCM to AAC in exact chunks ===
+            val enc = encoder ?: return emptyList()
+            val chunkSize = 1024 * CHANNEL_COUNT * 2 // 4096 bytes = one AAC frame's worth
+            var pcmOffset = 0
+
+            while (pcmOffset < pcmData.size) {
+                // Feed one chunk to encoder
+                val encInIdx = enc.dequeueInputBuffer(TIMEOUT_US)
+                if (encInIdx >= 0) {
+                    val encBuf = enc.getInputBuffer(encInIdx) ?: break
+                    encBuf.clear()
+                    val remaining = pcmData.size - pcmOffset
+                    val size = minOf(chunkSize, remaining, encBuf.remaining())
+                    encBuf.put(pcmData, pcmOffset, size)
+                    enc.queueInputBuffer(encInIdx, 0, size, 0, 0)
+                    pcmOffset += size
+                }
+
+                // Drain encoder output
                 drainEncoder()
             }
+
+            // Final encoder drain
+            for (i in 0..30) {
+                drainEncoder()
+            }
+
+            Log.i(TAG, "Encoded ${pcmData.size} bytes PCM → ${outputFrames.size} AAC frames")
         } catch (e: Exception) {
             Log.e(TAG, "Transcode error: ${e.message}")
         }
@@ -147,62 +207,7 @@ class AudioTranscoder {
         Log.i(TAG, "Audio transcode pipeline stopped")
     }
 
-    /** Feed AC-3 data starting at [offset]. Returns number of bytes consumed, or 0 if no buffer available. */
-    private fun feedDecoder(data: ByteArray, offset: Int): Int {
-        val dec = decoder ?: return 0
-        val inputIndex = dec.dequeueInputBuffer(TIMEOUT_US)
-        if (inputIndex >= 0) {
-            val inputBuffer = dec.getInputBuffer(inputIndex) ?: return 0
-            inputBuffer.clear()
-            val remaining = data.size - offset
-            val size = minOf(remaining, inputBuffer.remaining())
-            inputBuffer.put(data, offset, size)
-            dec.queueInputBuffer(inputIndex, 0, size, 0, 0)
-            return size
-        }
-        return 0
-    }
 
-    private fun drainDecoderToEncoder() {
-        val dec = decoder ?: return
-        val enc = encoder ?: return
-        val bufferInfo = MediaCodec.BufferInfo()
-
-        while (true) {
-            val outputIndex = dec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
-            when {
-                outputIndex >= 0 -> {
-                    val pcmBuffer = dec.getOutputBuffer(outputIndex) ?: break
-                    val pcmData = ByteArray(bufferInfo.size)
-                    pcmBuffer.position(bufferInfo.offset)
-                    pcmBuffer.get(pcmData, 0, bufferInfo.size)
-                    dec.releaseOutputBuffer(outputIndex, false)
-
-                    // Feed PCM to encoder
-                    if (pcmData.isNotEmpty()) {
-                        feedEncoder(pcmData, bufferInfo.presentationTimeUs)
-                    }
-                }
-                outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    val newFormat = dec.outputFormat
-                    Log.i(TAG, "Decoder output format: $newFormat")
-                }
-                else -> break // INFO_TRY_AGAIN_LATER or other
-            }
-        }
-    }
-
-    private fun feedEncoder(pcmData: ByteArray, presentationTimeUs: Long) {
-        val enc = encoder ?: return
-        val inputIndex = enc.dequeueInputBuffer(TIMEOUT_US)
-        if (inputIndex >= 0) {
-            val inputBuffer = enc.getInputBuffer(inputIndex) ?: return
-            inputBuffer.clear()
-            val size = minOf(pcmData.size, inputBuffer.remaining())
-            inputBuffer.put(pcmData, 0, size)
-            enc.queueInputBuffer(inputIndex, 0, size, presentationTimeUs, 0)
-        }
-    }
 
     private fun drainEncoder() {
         val enc = encoder ?: return
@@ -244,8 +249,8 @@ class AudioTranscoder {
         adts[0] = 0xFF.toByte()
         adts[1] = 0xF1.toByte() // MPEG-4, Layer 0, no CRC
 
-        // Profile (AAC-LC=1), SampleRate (44100=4), Channel (2)
-        adts[2] = ((1 shl 6) or (4 shl 2) or (0 shl 1) or (0)).toByte() // 0x50
+        // Profile (AAC-LC=1), SampleRate (48000=3), Channel (2)
+        adts[2] = ((1 shl 6) or (3 shl 2) or (0 shl 1) or (0)).toByte()
         adts[3] = ((2 shl 6) or (frameLength shr 11 and 0x03)).toByte()
         adts[4] = ((frameLength shr 3) and 0xFF).toByte()
         adts[5] = (((frameLength and 0x07) shl 5) or 0x1F).toByte()
