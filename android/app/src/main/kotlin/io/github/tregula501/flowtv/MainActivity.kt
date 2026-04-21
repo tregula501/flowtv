@@ -11,7 +11,10 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        // Run transcode handler on a background thread so the blocking
+        // MediaCodec decode/encode loop doesn't stall the Android main thread.
+        val taskQueue = flutterEngine.dartExecutor.binaryMessenger.makeBackgroundTaskQueue()
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL, io.flutter.plugin.common.StandardMethodCodec.INSTANCE, taskQueue).setMethodCallHandler { call, result ->
             when (call.method) {
                 "isSupported" -> {
                     result.success(AudioTranscoder.isAc3Supported())

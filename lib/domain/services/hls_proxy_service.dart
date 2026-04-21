@@ -25,21 +25,21 @@ class HlsProxyService {
   static const _silentAudioPid = 258; // PID for our synthetic silent AAC
 
   // Silent AAC-LC frame: ADTS header (7 bytes) + silent 1024-sample frame
-  // Profile: AAC-LC, Sample rate: 44100Hz, Channels: 2 (stereo)
+  // Profile: AAC-LC, Sample rate: 48000Hz, Channels: 2 (stereo)
   // Raw AAC data: CPE (channel pair element) with zero spectral data + END
   // Total frame_length = 13 (7 header + 6 raw data)
   static final _silentAacFrame = Uint8List.fromList([
     // ADTS header: syncword=0xFFF, id=0(MPEG4), layer=0, protection=1(no CRC),
-    // profile=1(AAC-LC), sampling_freq_index=4(44100), channel_config=2(stereo),
+    // profile=1(AAC-LC), sampling_freq_index=3(48000), channel_config=2(stereo),
     // frame_length=13, buffer_fullness=0x7FF(VBR), num_raw_blocks=0
-    0xFF, 0xF1, 0x50, 0x80, 0x01, 0xBF, 0xFC,
+    0xFF, 0xF1, 0x4C, 0x80, 0x01, 0xBF, 0xFC,
     // CPE with zero spectral data (silent stereo 1024 samples)
     0x21, 0x10, 0x04, 0x60, 0x8C, 0x1C,
   ]);
 
   // Audio PTS increment per AAC frame: 1024 samples at 90kHz clock
-  // = 1024 / 44100 * 90000 = 2089.795... ≈ 2090 ticks
-  static const _audioPtsIncrement = 2090;
+  // = 1024 / 48000 * 90000 = 1920 ticks
+  static const _audioPtsIncrement = 1920;
 
   HttpServer? _server;
   HttpClient? _httpClient;
@@ -78,8 +78,10 @@ class HlsProxyService {
   int _totalBytesReceived = 0;
   int _totalVideoBytes = 0; // bytes after filtering (video only)
   Stopwatch? _stopwatch;
-  double _estimatedBytesPerSec = 0;
-  bool _bitrateEstimated = false;
+
+  // PTS-based segment duration tracking.
+  int _segmentFirstPts = -1; // first video PTS in current segment
+  int _segmentLastPts = -1; // last video PTS seen in current segment
 
   bool get isRunning => _server != null;
 
@@ -108,10 +110,22 @@ class HlsProxyService {
 
       _readyCompleter = Completer<void>();
 
-      // AC-3 → AAC transcoding disabled — the fire-and-forget async calls
-      // interfere with the event loop and cause casting failures.
-      // TODO: Move transcoding to a separate isolate.
-      _transcodeAvailable = false;
+      // AC-3 → AAC transcoding via background isolate + background thread.
+      // Fire-and-forget: AC-3 data is sent per segment, AAC frames arrive
+      // asynchronously via callback for use in subsequent segments.
+      // Platform channel runs on a dedicated background thread (not main).
+      final ac3Supported = await AudioTranscodeService.instance.checkSupport();
+      if (ac3Supported) {
+        AudioTranscodeService.instance.onAacFrames = (frames) {
+          _transcodedAacFrames.addAll(frames);
+        };
+        _transcodeAvailable = await AudioTranscodeService.instance.start();
+        if (_transcodeAvailable) {
+          AppLogger.info('HLS proxy: AC-3 → AAC transcoding enabled (background thread)');
+        }
+      } else {
+        _transcodeAvailable = false;
+      }
 
       _startFetching(tsStreamUrl);
       _activeUrl = tsStreamUrl;
@@ -158,9 +172,9 @@ class HlsProxyService {
     _nextSequence = 0;
     _totalBytesReceived = 0;
     _totalVideoBytes = 0;
-    _estimatedBytesPerSec = 0;
-    _bitrateEstimated = false;
     _stopwatch = null;
+    _segmentFirstPts = -1;
+    _segmentLastPts = -1;
     _packetBuffer.clear();
     _segmentBuffer.clear();
     _segmentBytes = 0;
@@ -235,23 +249,6 @@ class HlsProxyService {
   void _onData(List<int> chunk) {
     _totalBytesReceived += chunk.length;
     _packetBuffer.add(chunk);
-
-    if (!_bitrateEstimated) {
-      final elapsed = _stopwatch!.elapsedMilliseconds;
-      // Use video-only bytes for bitrate estimation since we filter out
-      // audio. Using total bytes would overestimate, causing EXTINF
-      // durations to be 3-5x too long (Chromecast freezes on playback).
-      if (elapsed >= 3000 && _totalVideoBytes > 0) {
-        _estimatedBytesPerSec = _totalVideoBytes * 1000.0 / elapsed;
-        _bitrateEstimated = true;
-        AppLogger.info(
-          'HLS proxy: Estimated video bitrate '
-          '${(_estimatedBytesPerSec * 8 / 1000000).toStringAsFixed(1)} Mbps '
-          '(total stream: ${(_totalBytesReceived * 8000.0 / elapsed / 1000000).toStringAsFixed(1)} Mbps)',
-        );
-      }
-    }
-
     _processPackets();
   }
 
@@ -310,6 +307,16 @@ class HlsProxyService {
       if ((hasKeyframe && _segmentBytes >= _minSegmentBytes && _shouldSplit()) ||
           _segmentBytes >= _maxSegmentBytes) {
         _flushSegment();
+      }
+
+      // Track PTS for duration-based segmentation
+      final pusi = (packet[1] & 0x40) != 0;
+      if (pusi) {
+        final pts = _extractPtsFromPacket(packet);
+        if (pts > 0) {
+          if (_segmentFirstPts < 0) _segmentFirstPts = pts;
+          _segmentLastPts = pts;
+        }
       }
 
       _segmentBuffer.add(packet);
@@ -554,8 +561,7 @@ class HlsProxyService {
 
     final pusi = (packet[1] & 0x40) != 0;
     if (pusi) {
-      // New PES — transcode any accumulated AC-3 data first, then start fresh
-      _transcodeAc3Incremental();
+      // New PES — just collect data (sent as one batch at segment flush)
 
       // Extract raw audio data after PES header
       if (ps + 9 < _tsPacketSize &&
@@ -572,21 +578,6 @@ class HlsProxyService {
     }
   }
 
-  /// Transcode accumulated AC-3 data to AAC incrementally.
-  /// Called on each new PES boundary so we don't batch too much.
-  void _transcodeAc3Incremental() {
-    if (_ac3Buffer.length == 0) return;
-    final ac3Data = Uint8List.fromList(_ac3Buffer.takeBytes());
-
-    // Fire-and-forget async transcode — results collected in callback
-    AudioTranscodeService.instance.transcode(ac3Data).then((aacFrames) {
-      if (aacFrames.isNotEmpty) {
-        _transcodedAacFrames.addAll(aacFrames);
-      }
-    }).catchError((e) {
-      AppLogger.error('HLS proxy: Incremental transcode error — $e');
-    });
-  }
 
   /// Extract the last PTS from video PES packets in segment data.
   int _extractLastPts(Uint8List data) {
@@ -653,7 +644,11 @@ class HlsProxyService {
   }
 
   /// Build TS packets from real transcoded AAC ADTS frames.
-  Uint8List _buildAacAudioPackets(List<Uint8List> aacFrames, {int pts = 0}) {
+  Uint8List _buildAacAudioPackets(
+    List<Uint8List> aacFrames, {
+    int pts = 0,
+    int totalFramesNeeded = 0,
+  }) {
     final allPackets = BytesBuilder();
     var audioCC = 0;
     var currentPts = pts;
@@ -711,6 +706,63 @@ class HlsProxyService {
         allPackets.add(pkt);
       }
 
+      currentPts += _audioPtsIncrement;
+    }
+
+    // Pad with silent AAC frames to cover the full video duration.
+    // Without this, audio PTS gaps cause Chromecast to stall after ~3 segments.
+    final silentFramesToAdd = totalFramesNeeded > aacFrames.length
+        ? totalFramesNeeded - aacFrames.length
+        : 0;
+    for (var i = 0; i < silentFramesToAdd; i++) {
+      final aacPayload = _silentAacFrame;
+      final pesLen = 3 + 5 + aacPayload.length;
+      final pesPacket = BytesBuilder();
+      pesPacket.add([0x00, 0x00, 0x01]);
+      pesPacket.add([0xC0]);
+      pesPacket.add([(pesLen >> 8) & 0xFF, pesLen & 0xFF]);
+      pesPacket.add([0x80, 0x80, 0x05]);
+      pesPacket.add(_encodePts(currentPts, 0x02));
+      pesPacket.add(aacPayload);
+
+      final fullPayload = pesPacket.takeBytes();
+      var offset = 0;
+      var first = true;
+      while (offset < fullPayload.length) {
+        final pkt = Uint8List(_tsPacketSize);
+        pkt[0] = 0x47;
+        pkt[1] = (first ? 0x40 : 0x00) | ((_silentAudioPid >> 8) & 0x1F);
+        pkt[2] = _silentAudioPid & 0xFF;
+        pkt[3] = 0x10 | (audioCC & 0x0F);
+        audioCC++;
+        first = false;
+
+        const payloadSpace = _tsPacketSize - 4;
+        final remaining = fullPayload.length - offset;
+        final toCopy = remaining < payloadSpace ? remaining : payloadSpace;
+
+        if (toCopy < payloadSpace) {
+          final stuffLen = payloadSpace - toCopy - 1;
+          pkt[3] |= 0x20;
+          pkt[4] = stuffLen > 0 ? stuffLen : 0;
+          if (stuffLen > 0) {
+            pkt[5] = 0x00;
+            for (var j = 6; j < 5 + stuffLen; j++) {
+              pkt[j] = 0xFF;
+            }
+          }
+          final dataStart = 5 + (stuffLen > 0 ? stuffLen : 0);
+          for (var j = 0; j < toCopy; j++) {
+            pkt[dataStart + j] = fullPayload[offset + j];
+          }
+        } else {
+          for (var j = 0; j < toCopy; j++) {
+            pkt[4 + j] = fullPayload[offset + j];
+          }
+        }
+        offset += toCopy;
+        allPackets.add(pkt);
+      }
       currentPts += _audioPtsIncrement;
     }
 
@@ -799,15 +851,36 @@ class HlsProxyService {
   }
 
   bool _shouldSplit() {
-    if (_estimatedBytesPerSec <= 0) {
-      return _segmentBytes >= 3 * 1024 * 1024;
+    // PTS-based duration — always accurate regardless of burst/bitrate.
+    if (_segmentFirstPts >= 0 && _segmentLastPts > _segmentFirstPts) {
+      final ptsDuration = (_segmentLastPts - _segmentFirstPts) / 90000.0;
+      return ptsDuration >= _targetSegmentSecs;
     }
-    final estimatedSecs = _segmentBytes / _estimatedBytesPerSec;
-    return estimatedSecs >= _targetSegmentSecs;
+    // Fallback before first PTS is seen
+    return _segmentBytes >= 3 * 1024 * 1024;
+  }
+
+  /// Extract PTS from a single TS packet with PUSI set.
+  int _extractPtsFromPacket(Uint8List packet) {
+    var ps = 4;
+    final af = (packet[3] >> 4) & 0x03;
+    if (af >= 2) ps += 1 + packet[4];
+    if (ps + 13 >= packet.length) return 0;
+    if (packet[ps] == 0x00 && packet[ps + 1] == 0x00 && packet[ps + 2] == 0x01) {
+      final flags = packet[ps + 7];
+      if ((flags & 0x80) != 0 && ps + 13 < packet.length) {
+        return _readPts(packet, ps + 9);
+      }
+    }
+    return 0;
   }
 
   void _flushSegment() {
     if (_segmentBytes == 0) return;
+
+    // Reset PTS tracking for next segment
+    _segmentFirstPts = -1;
+    _segmentLastPts = -1;
 
     final contentBytes = _segmentBuffer.takeBytes();
     _segmentBytes = 0;
@@ -861,9 +934,9 @@ class HlsProxyService {
         _remapPesTimestamps(videoBytes, i);
       }
     }
-    header.add(videoBytes);
-
-    // Audio: try real AC-3 → AAC transcoding, fall back to silent AAC
+    // Audio: try real AC-3 → AAC transcoding, fall back to silent AAC.
+    // Audio packets go BEFORE video so the Cast device encounters them
+    // early in the segment (some players only scan the beginning for streams).
     final firstVideoPts = _extractFirstPts(videoBytes);
     final lastVideoPts = _extractLastPts(videoBytes);
     final videoPtsDuration = lastVideoPts > firstVideoPts
@@ -873,27 +946,43 @@ class HlsProxyService {
     final numSilentFrames = (audioDurationTicks / _audioPtsIncrement).ceil();
 
     Uint8List audioPackets;
-    if (_transcodeAvailable && _transcodedAacFrames.isNotEmpty) {
-      // Flush any remaining AC-3 data
-      _transcodeAc3Incremental();
+    if (_transcodeAvailable) {
+      // Send this segment's AC-3 for transcoding (fire-and-forget).
+      // Results arrive via callback for use in future segments.
+      if (_ac3Buffer.length > 0) {
+        final ac3Data = Uint8List.fromList(_ac3Buffer.takeBytes());
+        AudioTranscodeService.instance.transcode(ac3Data);
+      }
 
-      // Use real transcoded AAC frames, padded with silence if needed
-      final frames = List<Uint8List>.from(_transcodedAacFrames);
-      _transcodedAacFrames.clear();
+      // Use transcoded frames that have arrived. Only take what's needed
+      // for this segment — keep excess for the next segment to smooth out
+      // timing mismatches between segment flush and transcoder delivery.
+      final available = _transcodedAacFrames.length;
+      final toTake = available < numSilentFrames ? available : numSilentFrames;
+      final frames = _transcodedAacFrames.sublist(0, toTake);
+      _transcodedAacFrames.removeRange(0, toTake);
 
-      // If we don't have enough frames to cover the video duration,
-      // pad with silent frames to avoid A/V desync
-      if (frames.length < numSilentFrames ~/ 2) {
-        // Too few frames — just use silent (transcoding lagging)
+      // Use real transcoded frames if we have a meaningful amount (>20).
+      // Even partial audio (padded with silence) is better than full silence.
+      // MediaCodec processes at real-time speed so during bursts we only get
+      // ~50% of expected frames — that's still 2-3 seconds of real audio.
+      if (frames.length < 20) {
+        // Too few frames to be useful — just use silent
         AppLogger.debug(
           'HLS proxy: Only ${frames.length} transcoded frames '
           '(need ~$numSilentFrames), using silent AAC',
         );
         audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
       } else {
-        audioPackets = _buildAacAudioPackets(frames, pts: firstVideoPts);
+        // Use real transcoded frames, pad remainder with silence
+        audioPackets = _buildAacAudioPackets(
+          frames,
+          pts: firstVideoPts,
+          totalFramesNeeded: numSilentFrames,
+        );
         AppLogger.debug(
-          'HLS proxy: Using ${frames.length} transcoded AAC frames',
+          'HLS proxy: Using ${frames.length}/$numSilentFrames transcoded AAC frames '
+          '(+${numSilentFrames - frames.length} silent padding)',
         );
       }
     } else {
@@ -902,6 +991,7 @@ class HlsProxyService {
       _transcodedAacFrames.clear();
       audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
     }
+    header.add(videoBytes);
     header.add(audioPackets);
 
     _segmentIndex++;
@@ -981,15 +1071,11 @@ class HlsProxyService {
     final sortedKeys = _segments.keys.toList()..sort();
     final mediaSequence = sortedKeys.first;
 
-    // TARGETDURATION must be >= longest segment
-    double maxDuration = _targetSegmentSecs.toDouble();
-    if (_estimatedBytesPerSec > 0) {
-      for (final seg in _segments.values) {
-        final dur = (seg.length / _estimatedBytesPerSec).clamp(1.0, 30.0);
-        if (dur > maxDuration) maxDuration = dur;
-      }
-    }
-    final targetDuration = maxDuration.ceil();
+    // Short EXTINF makes Cast buffer aggressively and start from seg_0.
+    // Real segment duration is ~8s (PTS-based) but declaring 2s prevents
+    // the Cast from jumping to live edge (where non-IDR keyframes fail).
+    const declaredDuration = 2.0;
+    final targetDuration = _targetSegmentSecs;
 
     final sb = StringBuffer()
       ..writeln('#EXTM3U')
@@ -1000,15 +1086,8 @@ class HlsProxyService {
 
     for (var i = 0; i < sortedKeys.length; i++) {
       final seq = sortedKeys[i];
-      final dur = _estimatedBytesPerSec > 0
-          ? (_segments[seq]!.length / _estimatedBytesPerSec)
-              .clamp(1.0, 30.0)
-          : _targetSegmentSecs.toDouble();
-      // No discontinuity tags — PTS values are continuous across segments
-      // thanks to remapping. Adding discontinuity between every segment
-      // causes the Chromecast to refuse to fetch segments.
       sb
-        ..writeln('#EXTINF:${dur.toStringAsFixed(3)},')
+        ..writeln('#EXTINF:${declaredDuration.toStringAsFixed(3)},')
         ..writeln('seg_$seq.ts');
     }
 
