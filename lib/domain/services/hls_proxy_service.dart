@@ -18,7 +18,7 @@ class HlsProxyService {
   HlsProxyService._();
 
   static const _targetSegmentSecs = 6;
-  static const _maxSegments = 8; // Chromecast needs ≥6 for stable seek window
+  static const _maxSegments = 4; // Small window prevents Cast jumping to non-IDR live edge
   static const _initialSegments = 2;
   static const _tsPacketSize = 188;
   static const _minSegmentBytes = 512 * 1024;
@@ -49,6 +49,7 @@ class HlsProxyService {
   String? _wifiIp;
 
   final _segments = <int, Uint8List>{};
+  final _segmentDurations = <int, double>{}; // sequence → PTS duration in seconds
   int _nextSequence = 0;
   Completer<void>? _readyCompleter;
 
@@ -161,6 +162,7 @@ class HlsProxyService {
     _activeUrl = null;
     _wifiIp = null;
     _segments.clear();
+    _segmentDurations.clear();
     _nextSequence = 0;
     _totalBytesReceived = 0;
     _totalVideoBytes = 0;
@@ -891,7 +893,12 @@ class HlsProxyService {
   void _flushSegment() async {
     if (_segmentBytes == 0) return;
 
-    // Reset PTS tracking for next segment
+    // Capture PTS duration before resetting
+    double segDuration = _targetSegmentSecs.toDouble();
+    if (_segmentFirstPts >= 0 && _segmentLastPts > _segmentFirstPts) {
+      segDuration = ((_segmentLastPts - _segmentFirstPts) / 90000.0)
+          .clamp(1.0, 30.0);
+    }
     _segmentFirstPts = -1;
     _segmentLastPts = -1;
 
@@ -960,19 +967,15 @@ class HlsProxyService {
 
     Uint8List audioPackets;
     if (_transcodeAvailable && _ac3Buffer.length > 0) {
-      // Build a mini MPEG-TS with PAT+PMT+audio packets for FFmpeg.
-      // FFmpeg needs PAT/PMT to identify the audio stream.
+      // Transcode this segment's audio via FFmpeg (~500ms, in sync).
       final tsBuilder = BytesBuilder();
       if (_lastPat != null) tsBuilder.add(_lastPat!);
       if (_lastPmt != null) tsBuilder.add(_lastPmt!);
       tsBuilder.add(_ac3Buffer.takeBytes());
       final ac3TsData = Uint8List.fromList(tsBuilder.takeBytes());
-
-      // Transcode via FFmpeg subprocess (<500ms for 8s of audio).
       final aacAdts = await FfmpegTranscodeService.instance.transcode(ac3TsData);
 
       if (aacAdts.isNotEmpty) {
-        // Parse ADTS byte stream into individual frames for PES wrapping
         final frames = _parseAdtsFrames(aacAdts);
         audioPackets = _buildAacAudioPackets(
           frames,
@@ -1000,15 +1003,18 @@ class HlsProxyService {
 
     final seq = _nextSequence++;
     _segments[seq] = segment;
+    _segmentDurations[seq] = segDuration;
 
     while (_segments.length > _maxSegments) {
       final oldest = _segments.keys.reduce((a, b) => a < b ? a : b);
       _segments.remove(oldest);
+      _segmentDurations.remove(oldest);
     }
 
     AppLogger.debug(
       'HLS proxy: Segment $seq — '
-      '${(segment.length / 1024).toStringAsFixed(0)} KB '
+      '${(segment.length / 1024).toStringAsFixed(0)} KB, '
+      '${segDuration.toStringAsFixed(1)}s '
       '(${_segments.length} in buffer)',
     );
 
@@ -1071,11 +1077,15 @@ class HlsProxyService {
     final sortedKeys = _segments.keys.toList()..sort();
     final mediaSequence = sortedKeys.first;
 
-    // Short EXTINF makes Cast buffer aggressively and start from seg_0.
-    // Real segment duration is ~8s (PTS-based) but declaring 2s prevents
-    // the Cast from jumping to live edge (where non-IDR keyframes fail).
-    const declaredDuration = 2.0;
-    final targetDuration = _targetSegmentSecs;
+    // Accurate EXTINF from PTS duration. Combined with maxSegments=4,
+    // the seek window is small enough (~24-32s) that the Cast starts
+    // from the beginning rather than jumping to a non-IDR live edge.
+    double maxDuration = _targetSegmentSecs.toDouble();
+    for (final seq in sortedKeys) {
+      final dur = _segmentDurations[seq] ?? _targetSegmentSecs.toDouble();
+      if (dur > maxDuration) maxDuration = dur;
+    }
+    final targetDuration = maxDuration.ceil();
 
     final sb = StringBuffer()
       ..writeln('#EXTM3U')
@@ -1086,8 +1096,9 @@ class HlsProxyService {
 
     for (var i = 0; i < sortedKeys.length; i++) {
       final seq = sortedKeys[i];
+      final dur = _segmentDurations[seq] ?? _targetSegmentSecs.toDouble();
       sb
-        ..writeln('#EXTINF:${declaredDuration.toStringAsFixed(3)},')
+        ..writeln('#EXTINF:${dur.toStringAsFixed(3)},')
         ..writeln('seg_$seq.ts');
     }
 
