@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import '../../core/utils/logger.dart';
 import 'audio_transcode_service.dart';
+import 'ffmpeg_transcode_service.dart';
 
 /// A local HTTP server that reads a remote MPEG-TS stream and serves it as
 /// live HLS for Chromecast. Segments are split at keyframe (RAI) boundaries.
@@ -110,21 +111,12 @@ class HlsProxyService {
 
       _readyCompleter = Completer<void>();
 
-      // AC-3 → AAC transcoding via background isolate + background thread.
-      // Fire-and-forget: AC-3 data is sent per segment, AAC frames arrive
-      // asynchronously via callback for use in subsequent segments.
-      // Platform channel runs on a dedicated background thread (not main).
-      final ac3Supported = await AudioTranscodeService.instance.checkSupport();
-      if (ac3Supported) {
-        AudioTranscodeService.instance.onAacFrames = (frames) {
-          _transcodedAacFrames.addAll(frames);
-        };
-        _transcodeAvailable = await AudioTranscodeService.instance.start();
-        if (_transcodeAvailable) {
-          AppLogger.info('HLS proxy: AC-3 → AAC transcoding enabled (background thread)');
-        }
-      } else {
-        _transcodeAvailable = false;
+      // AC-3 → AAC transcoding via FFmpeg subprocess.
+      // Processes 8 seconds of audio in <500ms (50x+ realtime).
+      // Called synchronously at segment flush — fast enough to not block.
+      _transcodeAvailable = await FfmpegTranscodeService.instance.init();
+      if (_transcodeAvailable) {
+        AppLogger.info('HLS proxy: AC-3 → AAC transcoding enabled (ffmpeg)');
       }
 
       _startFetching(tsStreamUrl);
@@ -291,10 +283,10 @@ class HlsProxyService {
         continue; // don't include in segment
       }
 
-      // Collect AC-3 audio PES payloads for transcoding
+      // Collect audio TS packets for transcoding
       if (_audioPids.contains(pid)) {
         if (_transcodeAvailable) {
-          _collectAc3Payload(packet);
+          _ac3Buffer.add(packet); // keep raw TS packets for FFmpeg
         }
         continue; // don't include AC-3 packets in segment
       }
@@ -643,6 +635,27 @@ class HlsProxyService {
     ];
   }
 
+  /// Parse a raw ADTS byte stream into individual ADTS frames.
+  List<Uint8List> _parseAdtsFrames(Uint8List adtsStream) {
+    final frames = <Uint8List>[];
+    var offset = 0;
+    while (offset + 7 <= adtsStream.length) {
+      // ADTS sync word: 0xFFF
+      if (adtsStream[offset] != 0xFF || (adtsStream[offset + 1] & 0xF0) != 0xF0) {
+        offset++;
+        continue;
+      }
+      // Frame length from ADTS header (13 bits across bytes 3-5)
+      final frameLength = ((adtsStream[offset + 3] & 0x03) << 11) |
+          (adtsStream[offset + 4] << 3) |
+          ((adtsStream[offset + 5] >> 5) & 0x07);
+      if (frameLength < 7 || offset + frameLength > adtsStream.length) break;
+      frames.add(adtsStream.sublist(offset, offset + frameLength));
+      offset += frameLength;
+    }
+    return frames;
+  }
+
   /// Build TS packets from real transcoded AAC ADTS frames.
   Uint8List _buildAacAudioPackets(
     List<Uint8List> aacFrames, {
@@ -875,7 +888,7 @@ class HlsProxyService {
     return 0;
   }
 
-  void _flushSegment() {
+  void _flushSegment() async {
     if (_segmentBytes == 0) return;
 
     // Reset PTS tracking for next segment
@@ -946,49 +959,36 @@ class HlsProxyService {
     final numSilentFrames = (audioDurationTicks / _audioPtsIncrement).ceil();
 
     Uint8List audioPackets;
-    if (_transcodeAvailable) {
-      // Send this segment's AC-3 for transcoding (fire-and-forget).
-      // Results arrive via callback for use in future segments.
-      if (_ac3Buffer.length > 0) {
-        final ac3Data = Uint8List.fromList(_ac3Buffer.takeBytes());
-        AudioTranscodeService.instance.transcode(ac3Data);
-      }
+    if (_transcodeAvailable && _ac3Buffer.length > 0) {
+      // Build a mini MPEG-TS with PAT+PMT+audio packets for FFmpeg.
+      // FFmpeg needs PAT/PMT to identify the audio stream.
+      final tsBuilder = BytesBuilder();
+      if (_lastPat != null) tsBuilder.add(_lastPat!);
+      if (_lastPmt != null) tsBuilder.add(_lastPmt!);
+      tsBuilder.add(_ac3Buffer.takeBytes());
+      final ac3TsData = Uint8List.fromList(tsBuilder.takeBytes());
 
-      // Use transcoded frames that have arrived. Only take what's needed
-      // for this segment — keep excess for the next segment to smooth out
-      // timing mismatches between segment flush and transcoder delivery.
-      final available = _transcodedAacFrames.length;
-      final toTake = available < numSilentFrames ? available : numSilentFrames;
-      final frames = _transcodedAacFrames.sublist(0, toTake);
-      _transcodedAacFrames.removeRange(0, toTake);
+      // Transcode via FFmpeg subprocess (<500ms for 8s of audio).
+      final aacAdts = await FfmpegTranscodeService.instance.transcode(ac3TsData);
 
-      // Use real transcoded frames if we have a meaningful amount (>20).
-      // Even partial audio (padded with silence) is better than full silence.
-      // MediaCodec processes at real-time speed so during bursts we only get
-      // ~50% of expected frames — that's still 2-3 seconds of real audio.
-      if (frames.length < 20) {
-        // Too few frames to be useful — just use silent
-        AppLogger.debug(
-          'HLS proxy: Only ${frames.length} transcoded frames '
-          '(need ~$numSilentFrames), using silent AAC',
-        );
-        audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
-      } else {
-        // Use real transcoded frames, pad remainder with silence
+      if (aacAdts.isNotEmpty) {
+        // Parse ADTS byte stream into individual frames for PES wrapping
+        final frames = _parseAdtsFrames(aacAdts);
         audioPackets = _buildAacAudioPackets(
           frames,
           pts: firstVideoPts,
           totalFramesNeeded: numSilentFrames,
         );
         AppLogger.debug(
-          'HLS proxy: Using ${frames.length}/$numSilentFrames transcoded AAC frames '
-          '(+${numSilentFrames - frames.length} silent padding)',
+          'HLS proxy: FFmpeg produced ${frames.length}/$numSilentFrames AAC frames',
         );
+      } else {
+        audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
+        AppLogger.debug('HLS proxy: FFmpeg returned no data, using silent AAC');
       }
     } else {
       // Silent AAC fallback
       _ac3Buffer.clear();
-      _transcodedAacFrames.clear();
       audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
     }
     header.add(videoBytes);
