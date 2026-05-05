@@ -18,7 +18,7 @@ class HlsProxyService {
   HlsProxyService._();
 
   static const _targetSegmentSecs = 6;
-  static const _maxSegments = 4; // Small window prevents Cast jumping to non-IDR live edge
+  static const _maxSegments = 6; // Enough runway to survive slow segment downloads without eviction
   static const _initialSegments = 2;
   static const _tsPacketSize = 188;
   static const _minSegmentBytes = 512 * 1024;
@@ -184,6 +184,7 @@ class HlsProxyService {
     _ac3Buffer.clear();
     _transcodedAacFrames.clear();
     AudioTranscodeService.instance.stop();
+    FfmpegTranscodeService.instance.stopProcess();
     AppLogger.info('HLS proxy: Stopped');
   }
 
@@ -501,6 +502,36 @@ class HlsProxyService {
   }
 
   /// Remap PTS/DTS values in a PES header by subtracting _ptsOffset.
+  /// Remap PCR in a TS packet's adaptation field by subtracting _ptsOffset.
+  /// PCR is the master clock Cast uses — must match remapped PTS/DTS.
+  void _remapPcr(Uint8List data, int i) {
+    final afLen = data[i + 4];
+    if (afLen < 7) return; // need at least flags + 6 bytes for PCR
+    final afFlags = data[i + 5];
+    if ((afFlags & 0x10) == 0) return; // PCR_flag not set
+
+    // PCR is 6 bytes starting at i+6:
+    // [0..4] = PCR base (33 bits) + marker + PCR ext (9 bits)
+    // PCR base bits: b[0]<<25 | b[1]<<17 | b[2]<<9 | b[3]<<1 | b[4]>>7
+    final b = data;
+    final pcrBase = ((b[i + 6] & 0xFF) << 25) |
+        ((b[i + 7] & 0xFF) << 17) |
+        ((b[i + 8] & 0xFF) << 9) |
+        ((b[i + 9] & 0xFF) << 1) |
+        ((b[i + 10] >> 7) & 0x01);
+    final pcrExt = ((b[i + 10] & 0x01) << 8) | (b[i + 11] & 0xFF);
+
+    final remapped = (pcrBase - _ptsOffset) & 0x1FFFFFFFF; // 33-bit wraparound
+
+    // Write remapped PCR back
+    b[i + 6] = (remapped >> 25) & 0xFF;
+    b[i + 7] = (remapped >> 17) & 0xFF;
+    b[i + 8] = (remapped >> 9) & 0xFF;
+    b[i + 9] = (remapped >> 1) & 0xFF;
+    b[i + 10] = (((remapped & 0x01) << 7) | 0x7E | ((pcrExt >> 8) & 0x01));
+    b[i + 11] = pcrExt & 0xFF;
+  }
+
   void _remapPesTimestamps(Uint8List data, int tsOffset) {
     var ps = tsOffset + 4;
     final af = (data[tsOffset + 3] >> 4) & 0x03;
@@ -938,14 +969,22 @@ class HlsProxyService {
           '(original PTS=${firstPts}, remapped to ${firstPts - _ptsOffset})');
     }
 
-    // Remap all PTS/DTS in video PES headers and renumber CCs
+    // Remap all PTS/DTS/PCR in video packets and renumber CCs.
+    // PCR must also be remapped — Cast uses PCR as the master clock.
+    // If PCR is billions of ticks ahead of remapped PTS, Cast stalls.
     var cc = 0;
     for (var i = 0; i + _tsPacketSize <= videoBytes.length; i += _tsPacketSize) {
       if (videoBytes[i] != 0x47) continue;
+      final hasAdaptation = (videoBytes[i + 3] & 0x20) != 0;
       final hasPayload = (videoBytes[i + 3] & 0x10) != 0;
       if (hasPayload) {
         videoBytes[i + 3] = (videoBytes[i + 3] & 0xF0) | (cc & 0x0F);
         cc++;
+      }
+
+      // Remap PCR in adaptation field
+      if (hasAdaptation && _ptsOffset > 0) {
+        _remapPcr(videoBytes, i);
       }
 
       // Remap PTS/DTS in PES headers
@@ -967,13 +1006,14 @@ class HlsProxyService {
 
     Uint8List audioPackets;
     if (_transcodeAvailable && _ac3Buffer.length > 0) {
-      // Transcode this segment's audio via FFmpeg (~500ms, in sync).
+      final ffmpegStart = DateTime.now();
       final tsBuilder = BytesBuilder();
       if (_lastPat != null) tsBuilder.add(_lastPat!);
       if (_lastPmt != null) tsBuilder.add(_lastPmt!);
       tsBuilder.add(_ac3Buffer.takeBytes());
       final ac3TsData = Uint8List.fromList(tsBuilder.takeBytes());
       final aacAdts = await FfmpegTranscodeService.instance.transcode(ac3TsData);
+      final ffmpegMs = DateTime.now().difference(ffmpegStart).inMilliseconds;
 
       if (aacAdts.isNotEmpty) {
         final frames = _parseAdtsFrames(aacAdts);
@@ -983,7 +1023,8 @@ class HlsProxyService {
           totalFramesNeeded: numSilentFrames,
         );
         AppLogger.debug(
-          'HLS proxy: FFmpeg produced ${frames.length}/$numSilentFrames AAC frames',
+          'HLS proxy: FFmpeg ${ffmpegMs}ms → ${frames.length}/$numSilentFrames AAC frames '
+          '(${(ac3TsData.length / 1024).toStringAsFixed(0)}KB in)',
         );
       } else {
         audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
@@ -994,8 +1035,9 @@ class HlsProxyService {
       _ac3Buffer.clear();
       audioPackets = _buildSilentAudioPackets(numSilentFrames, pts: firstVideoPts);
     }
-    header.add(videoBytes);
+    // Audio before video so Cast's demuxer encounters audio early in the segment
     header.add(audioPackets);
+    header.add(videoBytes);
 
     _segmentIndex++;
 
@@ -1066,6 +1108,11 @@ class HlsProxyService {
   }
 
   void _serveManifest(HttpRequest request) {
+    final sortedSegs = _segments.keys.toList()..sort();
+    AppLogger.debug(
+      'HLS proxy: Manifest request — segs=${sortedSegs.join(",")}, '
+      'durations=${sortedSegs.map((s) => _segmentDurations[s]?.toStringAsFixed(1) ?? "?").join(",")}',
+    );
     if (_segments.isEmpty) {
       request.response
         ..statusCode = HttpStatus.serviceUnavailable
