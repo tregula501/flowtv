@@ -160,7 +160,13 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
         focusNode: _keyboardFocusNode,
         onKeyEvent: _handleKeyEvent,
         autofocus: true,
-        child: Scaffold(
+        child: Builder(
+          builder: (context) {
+            // Keep the video edge-to-edge but offset the control overlays
+            // so they clear system status bar / nav bar / cutouts on devices
+            // that render edge-to-edge (Android 15+, foldables like ZFold6).
+            final mediaPadding = MediaQuery.of(context).padding;
+            return Scaffold(
           backgroundColor: Colors.black,
           body: GestureDetector(
             onTap: () => setState(() => _controlsVisible = !_controlsVisible),
@@ -222,8 +228,14 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                     ),
                   ),
 
-                // Top bar with channel info and close button
-                IgnorePointer(
+                // Top bar with channel info and close button. Offset by the
+                // system top inset (status bar / cutout) so the overlay sits
+                // flush below it on edge-to-edge devices.
+                Positioned(
+                  top: mediaPadding.top,
+                  left: mediaPadding.left,
+                  right: mediaPadding.right,
+                  child: IgnorePointer(
                   ignoring: !_controlsVisible,
                   child: AnimatedOpacity(
                     opacity: _controlsVisible ? 1.0 : 0.0,
@@ -290,12 +302,15 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                   ),
                 ),
                 ),
+                ),
 
-                // Bottom controls
+                // Bottom controls. Lift by the system bottom inset (nav bar /
+                // gesture area) so play/pause/volume/fullscreen remain visible
+                // on edge-to-edge devices (Android 15+, foldables like ZFold6).
                 Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
+                  left: mediaPadding.left,
+                  right: mediaPadding.right,
+                  bottom: mediaPadding.bottom,
                   child: IgnorePointer(
                     ignoring: !_controlsVisible,
                     child: AnimatedOpacity(
@@ -373,6 +388,8 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
             ),
           ),
           ),
+            );
+          },
         ),
       ),
     );
