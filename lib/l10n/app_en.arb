@@ -70,6 +70,8 @@
   "playlists": "Playlists",
   "failedToLoadPlaylists": "Failed to load playlists. Please restart the app.",
   "failedToLoadPlaylistsShort": "Failed to load playlists",
+  "refreshPlaylistsOnLaunch": "Refresh playlists on launch",
+  "refreshPlaylistsOnLaunchSubtitle": "Automatically refresh stale playlists when the app starts",
 
   "tvGuideEpg": "TV Guide (EPG)",
   "tvGuide": "TV Guide",

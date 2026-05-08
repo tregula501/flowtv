@@ -62,6 +62,83 @@ final playlistManagerProvider = Provider<PlaylistManager>((ref) {
   return PlaylistManager(ref);
 });
 
+/// "Refresh playlists on launch" toggle — persists to AppSettings.
+class RefreshPlaylistsOnLaunchNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    _loadFromDatabase();
+    return true; // default ON until DB value loads
+  }
+
+  Future<void> _loadFromDatabase() async {
+    try {
+      final db = DatabaseService.instance;
+      final settings = await (db.select(db.appSettingsTable)..limit(1)).getSingle();
+      if (state != settings.refreshPlaylistsOnLaunch) {
+        state = settings.refreshPlaylistsOnLaunch;
+      }
+    } catch (e) {
+      AppLogger.warning(
+        'Could not load refreshPlaylistsOnLaunch from database: $e',
+      );
+    }
+  }
+
+  void setEnabled(bool enabled) {
+    state = enabled;
+    _persistToDatabase(enabled);
+  }
+
+  Future<void> _persistToDatabase(bool enabled) async {
+    try {
+      final db = DatabaseService.instance;
+      await (db.update(db.appSettingsTable)..where((t) => t.id.equals(1)))
+          .write(AppSettingsTableCompanion(
+        refreshPlaylistsOnLaunch: Value(enabled),
+      ));
+    } catch (e) {
+      AppLogger.warning(
+        'Could not save refreshPlaylistsOnLaunch to database: $e',
+      );
+    }
+  }
+}
+
+/// "Refresh playlists on launch" setting (default true).
+final refreshPlaylistsOnLaunchProvider =
+    NotifierProvider<RefreshPlaylistsOnLaunchNotifier, bool>(
+  RefreshPlaylistsOnLaunchNotifier.new,
+);
+
+/// Playlist refresh TTL in hours (default 24) — backed by AppSettings.
+class PlaylistRefreshHoursNotifier extends Notifier<int> {
+  @override
+  int build() {
+    _loadFromDatabase();
+    return 24; // default until DB value loads
+  }
+
+  Future<void> _loadFromDatabase() async {
+    try {
+      final db = DatabaseService.instance;
+      final settings = await (db.select(db.appSettingsTable)..limit(1)).getSingle();
+      if (state != settings.playlistRefreshHours) {
+        state = settings.playlistRefreshHours;
+      }
+    } catch (e) {
+      AppLogger.warning(
+        'Could not load playlistRefreshHours from database: $e',
+      );
+    }
+  }
+}
+
+/// Playlist refresh TTL in hours (read from AppSettings, default 24).
+final playlistRefreshHoursProvider =
+    NotifierProvider<PlaylistRefreshHoursNotifier, int>(
+  PlaylistRefreshHoursNotifier.new,
+);
+
 class PlaylistManager {
   final Ref _ref;
   final M3uParser _parser = M3uParser();
@@ -327,6 +404,59 @@ class PlaylistManager {
     await SecureStorage.deleteCredentials(playlistId);
 
     AppLogger.info('Deleted playlist: $playlistId');
+  }
+
+  /// Refresh every playlist whose [lastRefresh] is older than [ttlHours].
+  ///
+  /// Refreshes are run sequentially (not in parallel) to avoid hammering the
+  /// network or overlapping Drift writes. Per-playlist failures are logged
+  /// and swallowed so one bad playlist doesn't abort the rest.
+  Future<void> refreshAllPlaylistsIfStale(int ttlHours) async {
+    if (ttlHours <= 0) {
+      AppLogger.info('Playlist refresh-on-launch: TTL <= 0, skipping');
+      return;
+    }
+
+    final playlists = await _db.select(_db.playlists).get();
+    if (playlists.isEmpty) {
+      AppLogger.info('Playlist refresh-on-launch: no playlists in database');
+      return;
+    }
+
+    final now = DateTime.now();
+    int refreshed = 0;
+    int skipped = 0;
+
+    for (final playlist in playlists) {
+      final lastRefresh = playlist.lastRefresh ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final hoursSince = now.difference(lastRefresh).inHours;
+      if (hoursSince < ttlHours) {
+        skipped++;
+        AppLogger.info(
+          'Playlist refresh-on-launch: "${playlist.name}" is fresh '
+          '($hoursSince h < $ttlHours h), skipping',
+        );
+        continue;
+      }
+
+      AppLogger.info(
+        'Playlist refresh-on-launch: refreshing "${playlist.name}" '
+        '($hoursSince h since last refresh)',
+      );
+      try {
+        await refreshPlaylist(playlist.id);
+        refreshed++;
+      } catch (e) {
+        AppLogger.warning(
+          'Playlist refresh-on-launch: failed to refresh "${playlist.name}": $e',
+        );
+      }
+    }
+
+    AppLogger.info(
+      'Playlist refresh-on-launch: complete '
+      '($refreshed refreshed, $skipped skipped, ${playlists.length} total)',
+    );
   }
 
   /// Refresh playlist from source with optional progress callback
