@@ -24,45 +24,47 @@ class SettingsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(l10n.settings),
       ),
-      body: ListView(
-        children: [
-          _buildSection(
-            context,
-            l10n.appearance,
-            [
-              _buildThemeTile(context, ref),
-            ],
-          ),
-          _buildSection(
-            context,
-            l10n.playlists,
-            [
-              _buildRefreshOnLaunchTile(context, ref),
-              _buildPlaylistsTile(context, ref),
-            ],
-          ),
-          _buildSection(
-            context,
-            l10n.tvGuideEpg,
-            [
-              _buildEpgTile(context, ref),
-            ],
-          ),
-          _buildSection(
-            context,
-            'Playback',
-            [
-              _buildBufferSizeTile(context, ref),
-            ],
-          ),
-          _buildSection(
-            context,
-            l10n.about,
-            [
-              _buildAboutTile(context),
-            ],
-          ),
-        ],
+      body: SafeArea(
+        child: ListView(
+          children: [
+            _buildSection(
+              context,
+              l10n.appearance,
+              [
+                _buildThemeTile(context, ref),
+              ],
+            ),
+            _buildSection(
+              context,
+              l10n.playlists,
+              [
+                _buildRefreshOnLaunchTile(context, ref),
+                _buildPlaylistsTile(context, ref),
+              ],
+            ),
+            _buildSection(
+              context,
+              l10n.tvGuideEpg,
+              [
+                _buildEpgTile(context, ref),
+              ],
+            ),
+            _buildSection(
+              context,
+              'Playback',
+              [
+                _buildBufferSizeTile(context, ref),
+              ],
+            ),
+            _buildSection(
+              context,
+              l10n.about,
+              [
+                _buildAboutTile(context),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
