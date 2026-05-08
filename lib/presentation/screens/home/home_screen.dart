@@ -132,81 +132,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onKeyEvent: _handleKeyEvent,
       autofocus: true,
       child: Scaffold(
-        body: playlistsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => Center(
-            child: Text(l10n.failedToLoadPlaylists),
-          ),
-          data: (playlists) {
-            if (playlists.isEmpty) {
-              return _buildEmptyState(context);
-            }
+        body: SafeArea(
+          child: playlistsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, _) => Center(
+              child: Text(l10n.failedToLoadPlaylists),
+            ),
+            data: (playlists) {
+              if (playlists.isEmpty) {
+                return _buildEmptyState(context);
+              }
 
-            return Row(
-              children: [
-                // Category sidebar (responsive width)
-                SizedBox(
-                  width: _sidebarWidth(context),
-                  child: const CategorySidebar(),
-                ),
-
-                // Vertical divider
-                const VerticalDivider(width: 1),
-
-                // Main content area
-                Expanded(
-                  child: Column(
-                    children: [
-                      // App bar
-                      _buildAppBar(context, activePlaylist?.name ?? l10n.appTitle),
-
-                      // Recently watched + channel grid
-                      const Expanded(
-                        child: _ChannelContent(),
-                      ),
-                    ],
+              return Row(
+                children: [
+                  // Category sidebar (responsive width)
+                  SizedBox(
+                    width: _sidebarWidth(context),
+                    child: const CategorySidebar(),
                   ),
-                ),
 
-                // Video player panel (if channel selected)
-                if (currentChannel != null) ...[
-                  // Resizable divider
-                  MouseRegion(
-                    cursor: SystemMouseCursors.resizeColumn,
-                    child: GestureDetector(
-                      onHorizontalDragUpdate: (details) {
-                        setState(() {
-                          _playerPanelWidth -= details.delta.dx;
-                          _playerPanelWidth = _playerPanelWidth.clamp(
-                            _minPlayerWidth,
-                            _maxPlayerWidth,
-                          );
-                        });
-                      },
-                      child: Container(
-                        width: 8,
-                        color: Colors.transparent,
-                        child: Center(
-                          child: Container(
-                            width: 4,
-                            margin: const EdgeInsets.symmetric(vertical: 20),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).dividerColor,
-                              borderRadius: BorderRadius.circular(2),
+                  // Vertical divider
+                  const VerticalDivider(width: 1),
+
+                  // Main content area
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // App bar
+                        _buildAppBar(context, activePlaylist?.name ?? l10n.appTitle),
+
+                        // Recently watched + channel grid
+                        const Expanded(
+                          child: _ChannelContent(),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Video player panel (if channel selected)
+                  if (currentChannel != null) ...[
+                    // Resizable divider
+                    MouseRegion(
+                      cursor: SystemMouseCursors.resizeColumn,
+                      child: GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          setState(() {
+                            _playerPanelWidth -= details.delta.dx;
+                            _playerPanelWidth = _playerPanelWidth.clamp(
+                              _minPlayerWidth,
+                              _maxPlayerWidth,
+                            );
+                          });
+                        },
+                        child: Container(
+                          width: 8,
+                          color: Colors.transparent,
+                          child: Center(
+                            child: Container(
+                              width: 4,
+                              margin: const EdgeInsets.symmetric(vertical: 20),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).dividerColor,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(
-                    width: _playerPanelWidth,
-                    child: const PlayerScreen(),
-                  ),
+                    SizedBox(
+                      width: _playerPanelWidth,
+                      child: const PlayerScreen(),
+                    ),
+                  ],
                 ],
-              ],
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
