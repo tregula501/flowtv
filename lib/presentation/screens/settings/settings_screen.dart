@@ -37,6 +37,7 @@ class SettingsScreen extends ConsumerWidget {
             context,
             l10n.playlists,
             [
+              _buildRefreshOnLaunchTile(context, ref),
               _buildPlaylistsTile(context, ref),
             ],
           ),
@@ -126,6 +127,23 @@ class SettingsScreen extends ConsumerWidget {
           }
         },
       ),
+    );
+  }
+
+  Widget _buildRefreshOnLaunchTile(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final enabled = ref.watch(refreshPlaylistsOnLaunchProvider);
+
+    return SwitchListTile(
+      secondary: const Icon(Icons.refresh),
+      title: Text(l10n.refreshPlaylistsOnLaunch),
+      subtitle: Text(l10n.refreshPlaylistsOnLaunchSubtitle),
+      value: enabled,
+      onChanged: (value) {
+        ref
+            .read(refreshPlaylistsOnLaunchProvider.notifier)
+            .setEnabled(value);
+      },
     );
   }
 

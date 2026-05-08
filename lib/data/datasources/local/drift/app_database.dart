@@ -115,6 +115,7 @@ class AppSettingsTable extends Table {
   TextColumn get defaultQuality => textEnum<VideoQuality>().withDefault(Constant(VideoQuality.auto.name))();
   IntColumn get epgRefreshHours => integer().withDefault(const Constant(6))();
   IntColumn get playlistRefreshHours => integer().withDefault(const Constant(24))();
+  BoolColumn get refreshPlaylistsOnLaunch => boolean().withDefault(const Constant(true))();
   IntColumn get bufferSeconds => integer().withDefault(const Constant(3))();
   BoolColumn get showChannelNumbers => boolean().withDefault(const Constant(true))();
   BoolColumn get showEpgPreview => boolean().withDefault(const Constant(true))();
@@ -142,7 +143,7 @@ class AppDatabase extends _$AppDatabase {
 
   // Bump this when you change the schema. Add a migration step below.
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
@@ -220,6 +221,13 @@ class AppDatabase extends _$AppDatabase {
           await customStatement(
             'CREATE INDEX IF NOT EXISTS idx_epg_end_time '
             'ON epg_programs (end_time)',
+          );
+        }
+        if (from < 6) {
+          // v5 -> v6: Add refreshPlaylistsOnLaunch toggle (default true).
+          await m.addColumn(
+            appSettingsTable,
+            appSettingsTable.refreshPlaylistsOnLaunch,
           );
         }
       },
