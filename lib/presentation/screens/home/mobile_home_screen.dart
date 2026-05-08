@@ -84,12 +84,18 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
             ),
         ],
       ),
-      body: playlistsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: Text(l10n.failedToLoadPlaylists),
+      body: SafeArea(
+        // Bottom is handled by Scaffold via the BottomNavigationBar; the body
+        // only needs protection from top status bar / cutouts and from
+        // horizontal cutouts on foldables (e.g. ZFold6 inner display).
+        bottom: false,
+        child: playlistsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => Center(
+            child: Text(l10n.failedToLoadPlaylists),
+          ),
+          data: (playlists) => _buildBody(playlists.isEmpty),
         ),
-        data: (playlists) => _buildBody(playlists.isEmpty),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -607,12 +613,15 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
     final l10n = AppLocalizations.of(context)!;
     final channel = widget.channel;
     final playerNotifier = ref.read(playerControllerProvider.notifier);
+    // Keep the video edge-to-edge (immersive) but offset the control overlays
+    // so they clear system status bar / nav bar / cutouts on devices that
+    // render edge-to-edge (Android 15+, foldables like ZFold6).
+    final mediaPadding = MediaQuery.of(context).padding;
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          children: [
+      body: Stack(
+        children: [
             // Video player — swipe up/down to switch channels,
             // tap to toggle play/pause (unchanged behaviour).
             Positioned.fill(
@@ -744,11 +753,13 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                 ),
               ),
 
-            // Top bar with back button, channel name, and cast button
+            // Top bar with back button, channel name, and cast button.
+            // Offset by the system top inset (status bar / cutout) so the
+            // overlay sits flush below it on edge-to-edge devices.
             Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
+              top: mediaPadding.top,
+              left: mediaPadding.left,
+              right: mediaPadding.right,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 decoration: const BoxDecoration(
@@ -796,11 +807,13 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
               ),
             ),
 
-            // Bottom controls
+            // Bottom controls. Lift by the system bottom inset (nav bar /
+            // gesture area) so play/pause/volume/refresh remain visible on
+            // edge-to-edge devices (Android 15+, foldables like ZFold6).
             Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
+              bottom: mediaPadding.bottom,
+              left: mediaPadding.left,
+              right: mediaPadding.right,
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
@@ -848,8 +861,7 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
               ),
             ),
 
-          ],
-        ),
+        ],
       ),
     );
   }
