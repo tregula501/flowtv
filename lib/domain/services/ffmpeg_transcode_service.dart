@@ -137,18 +137,37 @@ class FfmpegTranscodeService {
     }
 
     try {
+      // Discard any leftover output from prior calls so the bytes we
+      // return correspond only to this segment's input. Without this,
+      // accumulated output across segment boundaries causes audio
+      // payload from prior segments to be muxed against the current
+      // segment's PTS — drifting past the Cast SDK's A/V sync
+      // tolerance after ~2-3 segments and stalling playback.
+      _outputBuffer.clear();
+
       // Write data to FFmpeg's stdin
       _process!.stdin.add(tsData);
       await _process!.stdin.flush();
 
-      // Give FFmpeg a moment to process and produce output
-      // 200ms is enough for FFmpeg to process 8s of audio at 50x+ realtime
-      await Future.delayed(const Duration(milliseconds: 200));
+      // Poll for stable output: bail when the buffer length stops
+      // growing for 2 consecutive 50ms ticks (or after a 1s timeout
+      // cap). Replaces a fixed 200ms sleep so fast streams return
+      // earlier and slow streams have up to 1s of headroom.
+      var lastLen = -1;
+      for (var i = 0; i < 20; i++) {
+        await Future.delayed(const Duration(milliseconds: 50));
+        if (_outputBuffer.length == lastLen && lastLen > 0) break;
+        lastLen = _outputBuffer.length;
+      }
 
       // Collect whatever output has accumulated
       if (_outputBuffer.length > 0) {
         return _outputBuffer.takeBytes();
       }
+      AppLogger.warning(
+        'FfmpegTranscode: 0 bytes returned for ${tsData.length}-byte '
+        'input segment after stability poll',
+      );
       return Uint8List(0);
     } catch (e) {
       AppLogger.error('FfmpegTranscode: transcode failed — $e');
