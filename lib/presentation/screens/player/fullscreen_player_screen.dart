@@ -36,6 +36,10 @@ class _FullscreenPlayerScreenState
     final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
     final playerController = ref.read(playerControllerProvider.notifier);
     final currentChannel = ref.watch(currentChannelProvider);
+    // Keep the video edge-to-edge but offset the control overlays so they
+    // clear system status bar / nav bar / cutouts on devices that render
+    // edge-to-edge (Android 15+, foldables like ZFold6).
+    final mediaPadding = MediaQuery.of(context).padding;
 
     if (currentChannel == null) {
       return Scaffold(
@@ -217,12 +221,14 @@ class _FullscreenPlayerScreenState
                   ),
                 ),
 
-              // Top bar with channel info (animated)
+              // Top bar with channel info (animated). Offset by the system
+              // top inset (status bar / cutout) so the overlay sits flush
+              // below it on edge-to-edge devices.
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 200),
-                top: _showControls ? 0 : -80,
-                left: 0,
-                right: 0,
+                top: _showControls ? mediaPadding.top : -80,
+                left: mediaPadding.left,
+                right: mediaPadding.right,
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -288,12 +294,15 @@ class _FullscreenPlayerScreenState
                 ),
               ),
 
-              // Bottom controls (animated)
+              // Bottom controls (animated). Lift by the system bottom inset
+              // (nav bar / gesture area) so play/pause/volume/refresh remain
+              // visible on edge-to-edge devices (Android 15+, foldables like
+              // ZFold6).
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 200),
-                bottom: _showControls ? 0 : -80,
-                left: 0,
-                right: 0,
+                bottom: _showControls ? mediaPadding.bottom : -80,
+                left: mediaPadding.left,
+                right: mediaPadding.right,
                 child: const VideoPlayerControls(),
               ),
             ],
