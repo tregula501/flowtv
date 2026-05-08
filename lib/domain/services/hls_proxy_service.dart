@@ -2,9 +2,124 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:meta/meta.dart';
+
 import '../../core/utils/logger.dart';
 import 'audio_transcode_service.dart';
 import 'ffmpeg_transcode_service.dart';
+
+/// Lightweight view of a network interface for IP picking. Used so the
+/// picker logic can be unit-tested without depending on `dart:io`'s
+/// `NetworkInterface`.
+typedef NetworkInterfaceView = ({String name, List<String> ipv4Addresses});
+
+/// Result of [pickWifiInterface]: the chosen interface plus a list of
+/// per-interface scores, suitable for diagnostic logging.
+typedef WifiPickResult = ({
+  NetworkInterfaceView? chosen,
+  List<({NetworkInterfaceView iface, int score, bool rejected})> scored,
+});
+
+// Negative-name patterns: interfaces whose names start with any of these
+// are rejected outright (cellular, virtual, tunnel, etc).
+const _kRejectedNamePrefixes = <String>[
+  'lo',
+  'docker',
+  'veth',
+  'rmnet',
+  'dummy',
+  'ifb',
+  'tun',
+  'ppp',
+  'bond',
+];
+
+// Positive-name patterns: strong indicator that an interface is the
+// physical Wi-Fi or Ethernet adapter we want.
+const _kPositiveNamePrefixes = <String>[
+  'wlan',
+  'wlp',
+  'en',
+  'eth',
+  'wifi',
+];
+
+bool _isRejectedName(String name) {
+  final lower = name.toLowerCase();
+  for (final prefix in _kRejectedNamePrefixes) {
+    if (lower.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+bool _isPositiveName(String name) {
+  final lower = name.toLowerCase();
+  for (final prefix in _kPositiveNamePrefixes) {
+    if (lower.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+bool _isRfc1918(String ip) {
+  final parts = ip.split('.');
+  if (parts.length != 4) return false;
+  final o1 = int.tryParse(parts[0]);
+  final o2 = int.tryParse(parts[1]);
+  if (o1 == null || o2 == null) return false;
+  if (o1 == 10) return true;
+  if (o1 == 172 && o2 >= 16 && o2 <= 31) return true;
+  if (o1 == 192 && o2 == 168) return true;
+  return false;
+}
+
+/// Pick the interface most likely to be the LAN Wi-Fi/Ethernet adapter.
+///
+/// Scoring (only applied to non-rejected interfaces):
+/// - +100 if the name starts with `wlan`/`wlp`/`en`/`eth`/`wifi`.
+/// - +50 if the interface has at least one RFC1918 IPv4 address.
+///
+/// Rejected by name prefix (case-insensitive): `lo`, `docker`, `veth`,
+/// `rmnet`, `dummy`, `ifb`, `tun`, `ppp`, `bond`.
+///
+/// Returns the highest-scoring interface. Ties are broken by preferring
+/// an interface that has an RFC1918 address; remaining ties resolve by
+/// lexicographic name order. Returns `null` if no interface scores > 0
+/// (caller may fall back to a different strategy).
+@visibleForTesting
+WifiPickResult pickWifiInterface(List<NetworkInterfaceView> interfaces) {
+  final scored = <({NetworkInterfaceView iface, int score, bool rejected})>[];
+
+  for (final iface in interfaces) {
+    if (_isRejectedName(iface.name)) {
+      scored.add((iface: iface, score: 0, rejected: true));
+      continue;
+    }
+    var score = 0;
+    if (_isPositiveName(iface.name)) score += 100;
+    if (iface.ipv4Addresses.any(_isRfc1918)) score += 50;
+    scored.add((iface: iface, score: score, rejected: false));
+  }
+
+  final candidates =
+      scored.where((s) => !s.rejected && s.score > 0).toList();
+  if (candidates.isEmpty) {
+    return (chosen: null, scored: scored);
+  }
+
+  candidates.sort((a, b) {
+    // Primary: higher score wins.
+    final byScore = b.score.compareTo(a.score);
+    if (byScore != 0) return byScore;
+    // Secondary: prefer the one with an RFC1918 address.
+    final aPrivate = a.iface.ipv4Addresses.any(_isRfc1918);
+    final bPrivate = b.iface.ipv4Addresses.any(_isRfc1918);
+    if (aPrivate != bPrivate) return bPrivate ? 1 : -1;
+    // Tertiary: lexicographic name order for determinism.
+    return a.iface.name.compareTo(b.iface.name);
+  });
+
+  return (chosen: candidates.first.iface, scored: scored);
+}
 
 /// A local HTTP server that reads a remote MPEG-TS stream and serves it as
 /// live HLS for Chromecast. Segments are split at keyframe (RAI) boundaries.
@@ -76,6 +191,12 @@ class HlsProxyService {
   // live streams) can cause 32-bit overflow in some Cast player internals.
   int _ptsOffset = -1; // -1 = not yet captured
   int _segmentIndex = 0; // for EXT-X-PROGRAM-DATE-TIME
+
+  // Set the first time _remapPcr sees a PCR base that is smaller than
+  // _ptsOffset (so the subtraction would wrap into 33-bit space and emit
+  // a nonsense PCR). Used to rate-limit the warning log to once per cast
+  // session. Reset by stop().
+  bool _pcrUnderflowWarned = false;
 
   int _totalBytesReceived = 0;
   int _totalVideoBytes = 0; // bytes after filtering (video only)
@@ -180,6 +301,7 @@ class HlsProxyService {
     _videoPid = -1;
     _ptsOffset = -1;
     _segmentIndex = 0;
+    _pcrUnderflowWarned = false;
     _transcodeAvailable = false;
     _ac3Buffer.clear();
     _transcodedAacFrames.clear();
@@ -520,6 +642,20 @@ class HlsProxyService {
         ((b[i + 9] & 0xFF) << 1) |
         ((b[i + 10] >> 7) & 0x01);
     final pcrExt = ((b[i + 10] & 0x01) << 8) | (b[i + 11] & 0xFF);
+
+    // Defensive: if PCR base sits before the captured PTS offset,
+    // subtracting would wrap into a bogus 33-bit value and confuse Cast's
+    // clock. Leave the PCR un-remapped for that packet — better a small
+    // local clock discontinuity than a deliberately wrong PCR.
+    if (_ptsOffset >= 0 && pcrBase < _ptsOffset) {
+      if (!_pcrUnderflowWarned) {
+        _pcrUnderflowWarned = true;
+        AppLogger.warning(
+          'HLS proxy: PCR underflow vs PTS offset; leaving PCR un-remapped.',
+        );
+      }
+      return;
+    }
 
     final remapped = (pcrBase - _ptsOffset) & 0x1FFFFFFFF; // 33-bit wraparound
 
@@ -1188,15 +1324,57 @@ class HlsProxyService {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
       );
+
+      // Adapt to the testable view used by [pickWifiInterface].
+      final views = <NetworkInterfaceView>[
+        for (final iface in interfaces)
+          (
+            name: iface.name,
+            ipv4Addresses: [
+              for (final a in iface.addresses)
+                if (!a.isLoopback) a.address,
+            ],
+          ),
+      ];
+
+      final result = pickWifiInterface(views);
+
+      // Diagnostic: log every interface, its score, and whether it was
+      // rejected by name. Helps debug remote reports from users on
+      // unusual carriers / VPNs / split-tunnel setups.
+      final summary = result.scored
+          .map(
+            (s) => '${s.iface.name}'
+                '${s.iface.ipv4Addresses.isEmpty ? "" : "=${s.iface.ipv4Addresses.join(",")}"}'
+                '${s.rejected ? "[rejected]" : "[score=${s.score}]"}',
+          )
+          .join('; ');
+
+      if (result.chosen != null && result.chosen!.ipv4Addresses.isNotEmpty) {
+        final addr = result.chosen!.ipv4Addresses.first;
+        AppLogger.info(
+          'HLS proxy: Using IP $addr (${result.chosen!.name}). '
+          'Interfaces: $summary',
+        );
+        return addr;
+      }
+
+      // Nothing scored > 0. Fall back to the prior behavior so we don't
+      // regress users on home networks with unusual interface naming:
+      // first non-loopback IPv4 from any interface that isn't `lo`,
+      // `docker`, or `veth`.
+      AppLogger.error(
+        'HLS proxy: No interface scored as Wi-Fi/Ethernet. '
+        'Falling back to first non-loopback IPv4. Interfaces: $summary',
+      );
       for (final iface in interfaces) {
         final name = iface.name.toLowerCase();
         if (name.contains('lo') && !name.contains('wl')) continue;
         if (name.contains('docker') || name.contains('veth')) continue;
-
         for (final addr in iface.addresses) {
           if (!addr.isLoopback) {
-            AppLogger.info(
-              'HLS proxy: Using IP ${addr.address} (${iface.name})',
+            AppLogger.warning(
+              'HLS proxy: Fallback IP ${addr.address} (${iface.name})',
             );
             return addr.address;
           }
