@@ -133,8 +133,8 @@ class HlsProxyService {
   HlsProxyService._();
 
   static const _targetSegmentSecs = 6;
-  static const _maxSegments = 6; // Enough runway to survive slow segment downloads without eviction
-  static const _initialSegments = 2;
+  static const _maxSegments = 8; // Extra runway absorbs transcoder jitter without eviction
+  static const _initialSegments = 3;
   static const _tsPacketSize = 188;
   static const _minSegmentBytes = 512 * 1024;
   static const _maxSegmentBytes = 10 * 1024 * 1024; // 10MB cap
