@@ -1185,6 +1185,29 @@ class HlsProxyService {
 
   Future<String?> _getWifiIp() async {
     try {
+      // Diagnostics: enumerate every non-loopback IPv4 / IPv6 address on every
+      // interface so we can tell from logs whether the picker chose an
+      // interface that's actually reachable from the cast device, or whether
+      // a tether/cellular interface (e.g. rmnet*) is masking the Wi-Fi one.
+      String? chosen;
+      String? chosenIface;
+      final summary = <String>[];
+      try {
+        final allInterfaces = await NetworkInterface.list(
+          includeLoopback: false,
+          type: InternetAddressType.any,
+        );
+        for (final iface in allInterfaces) {
+          for (final addr in iface.addresses) {
+            summary.add('${iface.name} ${addr.address}');
+          }
+        }
+      } catch (e) {
+        AppLogger.warning(
+          'HLS proxy: failed to enumerate interfaces for diagnostics — $e',
+        );
+      }
+
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
       );
@@ -1195,13 +1218,20 @@ class HlsProxyService {
 
         for (final addr in iface.addresses) {
           if (!addr.isLoopback) {
-            AppLogger.info(
-              'HLS proxy: Using IP ${addr.address} (${iface.name})',
-            );
-            return addr.address;
+            chosen = addr.address;
+            chosenIface = iface.name;
+            break;
           }
         }
+        if (chosen != null) break;
       }
+
+      AppLogger.info(
+        'HLS proxy: Network interfaces: ${summary.isEmpty ? "(none)" : summary.join(", ")}; '
+        'using ${chosen ?? "(none)"}'
+        '${chosenIface != null ? " ($chosenIface)" : ""} for cast proxy',
+      );
+      return chosen;
     } catch (e) {
       AppLogger.error('HLS proxy: Failed to get WiFi IP — $e');
     }

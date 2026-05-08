@@ -18,6 +18,10 @@ class FfmpegTranscodeService {
   String? _ffmpegPath;
   bool _initialized = false;
   Process? _process;
+  // Diagnostics: surfaced when the persistent subprocess dies unexpectedly so
+  // transcode() can log a single WARN per dead process rather than continuing
+  // to write into a closed pipe. Set by the exit listener in startProcess().
+  int? _processExitCode;
   final _outputBuffer = BytesBuilder();
   StreamSubscription<List<int>>? _stdoutSub;
   StreamSubscription<String>? _stderrSub;
@@ -53,15 +57,31 @@ class FfmpegTranscodeService {
 
       _ffmpegPath = ffmpegFile.path;
 
-      // Verify it runs
-      final result = await Process.run(_ffmpegPath!, ['-version']);
-      if (result.exitCode == 0) {
-        final version = (result.stdout as String).split('\n').first;
-        AppLogger.info('FfmpegTranscode: Ready — $version');
-        _initialized = true;
-        return true;
-      } else {
-        AppLogger.error('FfmpegTranscode: Binary failed: ${result.stderr}');
+      // Verify it runs. Capture both stdout and stderr so binary-incompatibility
+      // problems (wrong ARM variant, missing deps, etc.) are visible in logs
+      // rather than silently failing init.
+      try {
+        final result = await Process.run(_ffmpegPath!, ['-version']);
+        final stdoutText = (result.stdout as String);
+        final stderrText = (result.stderr as String);
+        if (result.exitCode == 0) {
+          final version = stdoutText.split('\n').first;
+          AppLogger.info('FfmpegTranscode: Ready — $version');
+          _initialized = true;
+          return true;
+        } else {
+          AppLogger.error(
+            'FfmpegTranscode: Binary probe failed '
+            '(path=$_ffmpegPath, exitCode=${result.exitCode}). '
+            'stderr: $stderrText',
+          );
+          return false;
+        }
+      } on ProcessException catch (e) {
+        AppLogger.error(
+          'FfmpegTranscode: ProcessException running -version '
+          '(path=$_ffmpegPath): $e',
+        );
         return false;
       }
     } catch (e) {
@@ -106,10 +126,12 @@ class FfmpegTranscodeService {
       });
 
       // Monitor process exit
+      _processExitCode = null;
       _process!.exitCode.then((code) {
         if (code != 0) {
           AppLogger.error('FfmpegTranscode: Process exited with code $code');
         }
+        _processExitCode = code;
         _process = null;
       });
 
@@ -129,6 +151,23 @@ class FfmpegTranscodeService {
   /// data written in previous calls — this is fine since we parse frames).
   Future<Uint8List> transcode(Uint8List tsData) async {
     if (tsData.isEmpty) return Uint8List(0);
+
+    // Diagnostics: detect a silently-dead persistent process before reusing it.
+    // We do NOT auto-restart here — just surface the failure in logs so a
+    // mid-stream FFmpeg crash is visible. The existing fallback path returns
+    // empty data and the caller continues without transcoded audio.
+    // _processExitCode is set by the exit listener in startProcess() the
+    // moment the subprocess terminates, before _process is nulled out — so
+    // checking it lets us distinguish "never started" from "died mid-stream".
+    if (_processExitCode != null) {
+      AppLogger.warning(
+        'FfmpegTranscode: FFmpeg subprocess exited unexpectedly '
+        '(code=$_processExitCode), will not transcode this segment',
+      );
+      _process = null;
+      _processExitCode = null;
+      return Uint8List(0);
+    }
 
     // Start process on first call
     if (_process == null) {
@@ -165,6 +204,9 @@ class FfmpegTranscodeService {
     _stderrSub?.cancel();
     _stderrSub = null;
     _outputBuffer.clear();
+    // Clear so a subsequent intentional restart isn't flagged as an unexpected
+    // death by transcode()'s diagnostics check.
+    _processExitCode = null;
 
     if (_process != null) {
       try {
