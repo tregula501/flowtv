@@ -130,10 +130,12 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
           ),
         ],
       ),
-      body: channelsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(child: Text(l10n.failedToLoadChannels)),
-        data: (channels) => _buildEpgGrid(context, channels),
+      body: SafeArea(
+        child: channelsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => Center(child: Text(l10n.failedToLoadChannels)),
+          data: (channels) => _buildEpgGrid(context, channels),
+        ),
       ),
     );
   }
