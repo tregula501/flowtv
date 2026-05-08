@@ -63,6 +63,7 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(epgManagerProvider).startAutoRefresh();
       _autoRefreshEmptyPlaylists();
+      _autoRefreshPlaylistsOnLaunch();
     });
   }
 
@@ -72,6 +73,39 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
     // Stop EPG auto-refresh when app closes
     ref.read(epgManagerProvider).stopAutoRefresh();
     super.dispose();
+  }
+
+  /// Refresh all playlists whose lastRefresh is older than the configured
+  /// TTL (AppSettings.playlistRefreshHours, default 24h) on cold start.
+  /// Skipped when offline or when the user has disabled the toggle.
+  Future<void> _autoRefreshPlaylistsOnLaunch() async {
+    // Match the existing 2s settle delay for the playlists stream / DB warmup.
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final enabled = ref.read(refreshPlaylistsOnLaunchProvider);
+    if (!enabled) {
+      AppLogger.info('Refresh-on-launch disabled in settings — skipping');
+      return;
+    }
+
+    // Skip when offline. Treat loading/error states as "don't refresh" to
+    // avoid hammering on a flaky network at startup.
+    final connectivity = ref.read(connectivityProvider);
+    final online = connectivity.maybeWhen(data: (c) => c, orElse: () => false);
+    if (!online) {
+      AppLogger.info('Offline at launch — skipping playlist refresh');
+      return;
+    }
+
+    final ttlHours = ref.read(playlistRefreshHoursProvider);
+    try {
+      await ref
+          .read(playlistManagerProvider)
+          .refreshAllPlaylistsIfStale(ttlHours);
+    } catch (e) {
+      AppLogger.error('Refresh-on-launch failed: $e');
+    }
   }
 
   /// Auto-refresh any active playlist that has 0 channels.
