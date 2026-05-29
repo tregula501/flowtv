@@ -37,7 +37,7 @@ dependencies:
   xml: ^6.5.0
   collection: ^1.18.0
   freezed_annotation: ^3.0.0
-  json_annotation: ^4.9.0
+  json_annotation: ^4.12.0
   meta: ^1.12.0
 
   # UI Components
