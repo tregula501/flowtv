@@ -42,6 +42,10 @@ windows/flutter/generated_plugins.cmake
 *.apk
 *.aab
 *.ipa
+*.zip
+# Release binaries belong in GitHub Releases, not the repo tree.
+dist/*.zip
+dist/*.apk
 
 # Test
 coverage/
