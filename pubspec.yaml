@@ -50,7 +50,7 @@ dependencies:
   window_manager: ^0.5.1
 
   # Chromecast support (Android/iOS)
-  flutter_chrome_cast: ^1.2.8
+  flutter_chrome_cast: ^1.4.6
 
   # Secure credential storage
   flutter_secure_storage: ^10.0.0
