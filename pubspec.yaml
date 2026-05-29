@@ -23,7 +23,7 @@ dependencies:
 
   # Database - Drift (SQL)
   drift: ^2.22.1
-  sqlite3_flutter_libs: ^0.5.28
+  sqlite3_flutter_libs: ^0.6.0+eol
 
   # Networking
   dio: ^5.4.3+1
