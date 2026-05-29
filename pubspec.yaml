@@ -56,7 +56,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
 
   # Screen wake lock during playback
-  wakelock_plus: ^1.4.0
+  wakelock_plus: ^1.6.1
 
   # Note: Recording uses FFmpeg via Process (Windows/Desktop).
   # FFmpeg must be installed and available in PATH or app directory.
