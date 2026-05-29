@@ -1,0 +1,41 @@
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly sweep so newly-disclosed issues surface even without new commits.
+    - cron: "27 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  # Scan the full git history for committed secrets (API keys, tokens, etc.).
+  # CodeQL is intentionally not used: it has no Dart language support.
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so gitleaks can scan every commit
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # No license needed for personal/public repositories.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Block PRs that introduce dependencies with known vulnerabilities.
+  # Requires the repository dependency graph to be enabled (free for public repos).
+  dependency-review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
