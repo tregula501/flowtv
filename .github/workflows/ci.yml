@@ -45,7 +45,7 @@ jobs:
       - run: dart run build_runner build --delete-conflicting-outputs
       # Retry build up to 3 times due to media_kit download issues
       - name: Build Windows (with retry)
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 15
           max_attempts: 3
