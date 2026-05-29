@@ -53,7 +53,7 @@ dependencies:
   flutter_chrome_cast: ^1.2.8
 
   # Secure credential storage
-  flutter_secure_storage: ^10.0.0
+  flutter_secure_storage: ^10.3.1
 
   # Screen wake lock during playback
   wakelock_plus: ^1.4.0
