@@ -25,12 +25,15 @@ PKG="io.github.tregula501.flowtv"
 DEVICE_DB_DIR="/data/data/$PKG/app_flutter/flowtv"
 DEVICE_DB="$DEVICE_DB_DIR/flowtv.db"
 
-# Playlist to inject
-PL_NAME="MyBunny Sports"
-PL_URL="https://tv123.me/iptv/890448/9sS3jthTJ4/sports"
-PL_EPG="https://epg.mybunny.tv/ipt/890448/9sS3jthTJ4/sports"
-PL_TYPE="m3u"
-BUFFER_SECONDS=3
+# Playlist to inject. Provide your own via environment variables so no
+# subscription credentials are committed to the repo, e.g.:
+#   export FLOWTV_PL_URL="https://provider.example/iptv/<account>/<token>/sports"
+#   export FLOWTV_PL_EPG="https://provider.example/epg/<account>/<token>/sports"
+PL_NAME="${FLOWTV_PL_NAME:-Test Playlist}"
+PL_URL="${FLOWTV_PL_URL:?set FLOWTV_PL_URL to your playlist M3U URL before running}"
+PL_EPG="${FLOWTV_PL_EPG:-}"
+PL_TYPE="${FLOWTV_PL_TYPE:-m3u}"
+BUFFER_SECONDS="${FLOWTV_BUFFER_SECONDS:-3}"
 
 # Temp directory on host for pulling/pushing the DB
 TMPDIR_HOST="$(mktemp -d)"
