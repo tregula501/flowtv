@@ -343,46 +343,6 @@ class CastService implements ICastService {
     return null;
   }
 
-  /// Map an HTTP Content-Type header to a Cast-friendly MIME type.
-  String? _contentTypeFromHeader(String? header) {
-    if (header == null) return null;
-    final lower = header.toLowerCase();
-    if (lower.contains('mpegurl') || lower.contains('x-mpegurl')) {
-      return 'application/x-mpegurl';
-    }
-    if (lower.contains('dash') || lower.contains('mpd')) {
-      return 'application/dash+xml';
-    }
-    if (lower.contains('mp2t') || lower.contains('mpeg')) {
-      return 'video/mp2t';
-    }
-    if (lower.contains('mp4')) return 'video/mp4';
-    if (lower.contains('octet-stream')) return null; // ambiguous
-    if (lower.contains('video/')) return lower.split(';').first.trim();
-    return null;
-  }
-
-  /// Probe a URL with a HEAD request, returning the HTTP status and
-  /// Content-Type header. Returns null on network error.
-  Future<(int, String?)?> _headProbe(String url) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 5);
-    try {
-      final request = await client.headUrl(Uri.parse(url));
-      request.followRedirects = true;
-      final response = await request.close().timeout(
-            const Duration(seconds: 5),
-          );
-      await response.drain<void>();
-      return (response.statusCode, response.headers.contentType?.toString());
-    } catch (e) {
-      AppLogger.info('Cast: HEAD probe failed for ${AppLogger.redactUrl(url)}: $e');
-      return null;
-    } finally {
-      client.close(force: true);
-    }
-  }
-
   /// Determine stream URL and content type using heuristic detection only.
   /// No HEAD probes — they waste the IPTV server's single connection slot.
   _StreamProbe _detectStreamType(String url, String fallbackType) {
