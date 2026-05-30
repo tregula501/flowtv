@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
+// ignore: implementation_imports
 import 'package:media_kit/src/player/native/player/player.dart' as native_player;
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -498,8 +499,6 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
       // Store current channel for auto-retry
       _currentChannel = channel;
-
-      final bufferSeconds = _currentBufferSize.durationSeconds;
 
       state = state.copyWith(
         clearError: true,

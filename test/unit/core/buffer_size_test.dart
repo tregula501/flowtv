@@ -105,7 +105,7 @@ void main() {
   group('BufferSize ordering', () {
     test('durationSeconds are strictly increasing from small to extraLarge',
         () {
-      final sizes = BufferSize.values;
+      const sizes = BufferSize.values;
       for (int i = 0; i < sizes.length - 1; i++) {
         expect(
           sizes[i].durationSeconds,
@@ -119,7 +119,7 @@ void main() {
     });
 
     test('minBufferBeforeResume values are non-decreasing', () {
-      final sizes = BufferSize.values;
+      const sizes = BufferSize.values;
       for (int i = 0; i < sizes.length - 1; i++) {
         expect(
           sizes[i].minBufferBeforeResume,
