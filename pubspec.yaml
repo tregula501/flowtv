@@ -14,7 +14,7 @@ dependencies:
 
   # State Management
   flutter_riverpod: ^3.1.0
-  riverpod_annotation: ^4.0.0
+  riverpod_annotation: ^4.0.3
 
   # Video Player - media_kit with FFmpeg/libmpv
   media_kit: ^1.2.6
