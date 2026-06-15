@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/playlist_provider.dart';
 import '../../core/extensions/string_extensions.dart';
+import '../../core/themes/motion.dart';
 import '../../l10n/app_localizations.dart';
 
 class AddPlaylistDialog extends ConsumerStatefulWidget {
@@ -52,11 +54,11 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Dialog(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    final reduceMotion = context.reduceMotion;
+    final Widget dialogBody = Container(
+      constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
           children: [
             // Header
             Container(
@@ -105,30 +107,43 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
               ),
             ),
 
-            // Error message
-            if (_error != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.error_outline,
-                      color: Theme.of(context).colorScheme.error,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+            // Error message — animate reveal so it doesn't jolt the layout.
+            AnimatedSize(
+              duration: MotionTokens.base,
+              curve: MotionTokens.standard,
+              alignment: Alignment.topCenter,
+              child: _error == null
+                  ? const SizedBox(width: double.infinity)
+                  : Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .error
+                          .withValues(alpha: 0.1),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.error,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
+                    )
+                      .animate()
+                      .fadeIn(duration: MotionTokens.base)
+                      .slideY(begin: -0.2, end: 0, duration: MotionTokens.base),
+            ),
 
             // Actions
             Container(
@@ -163,7 +178,18 @@ class _AddPlaylistDialogState extends ConsumerState<AddPlaylistDialog>
             ),
           ],
         ),
-      ),
+    );
+
+    return Dialog(
+      child: reduceMotion
+          ? dialogBody
+          : dialogBody
+              .animate()
+              .fadeIn(duration: const Duration(milliseconds: 160))
+              .scale(
+                begin: const Offset(0.96, 0.96),
+                end: const Offset(1, 1),
+              ),
     );
   }
 

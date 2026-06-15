@@ -8,6 +8,8 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../../core/themes/motion.dart';
+
 /// A standalone popup player window for playing a stream in a separate window.
 /// This is used by the desktop_multi_window package to create independent player windows.
 class PopupPlayerWindow extends StatefulWidget {
@@ -28,12 +30,12 @@ class PopupPlayerWindow extends StatefulWidget {
   State<PopupPlayerWindow> createState() => _PopupPlayerWindowState();
 }
 
-class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
+class _PopupPlayerWindowState extends State<PopupPlayerWindow>
+    with SingleTickerProviderStateMixin {
   late final Player _player;
   late final VideoController _videoController;
   final _keyboardFocusNode = FocusNode();
   final List<StreamSubscription> _subscriptions = [];
-  bool _isPlaying = false;
   bool _isBuffering = true;
   bool _isMuted = false;
   double _volume = 1.0;
@@ -41,9 +43,16 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
   bool _controlsVisible = true;
   bool _isFullscreen = false;
 
+  // Drives the play <-> pause icon morph. 1.0 = pause icon, 0.0 = play icon.
+  late final AnimationController _playPauseController;
+
   @override
   void initState() {
     super.initState();
+    _playPauseController = AnimationController(
+      vsync: this,
+      duration: MotionTokens.base,
+    );
     _initPlayer();
   }
 
@@ -58,7 +67,13 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
     // Listen to player state (store subscriptions for cleanup)
     _subscriptions.add(
       _player.stream.playing.listen((playing) {
-        if (mounted) setState(() => _isPlaying = playing);
+        if (mounted) {
+          if (playing) {
+            _playPauseController.forward();
+          } else {
+            _playPauseController.reverse();
+          }
+        }
       }),
     );
 
@@ -94,6 +109,7 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
       sub.cancel();
     }
     _keyboardFocusNode.dispose();
+    _playPauseController.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -184,49 +200,59 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                   ),
                 ),
 
-                // Buffering indicator
-                if (_isBuffering)
-                  const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
+                // Buffering indicator — cross-faded
+                AnimatedSwitcher(
+                  duration: MotionTokens.base,
+                  child: _isBuffering
+                      ? const Center(
+                          key: ValueKey('buffer'),
+                          child: CircularProgressIndicator(color: Colors.white),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('nobuffer')),
+                ),
 
-                // Error overlay
-                if (_error != null)
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      margin: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.white, size: 48),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Playback Error',
-                            style: TextStyle(color: Colors.white, fontSize: 18),
+                // Error overlay — cross-faded
+                AnimatedSwitcher(
+                  duration: MotionTokens.base,
+                  child: _error != null
+                      ? Center(
+                          key: const ValueKey('error'),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            margin: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.8),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.white, size: 48),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Playback Error',
+                                  style: TextStyle(color: Colors.white, fontSize: 18),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _error!,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    setState(() => _error = null);
+                                    _player.open(Media(widget.streamUrl));
+                                  },
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _error!,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: () {
-                              setState(() => _error = null);
-                              _player.open(Media(widget.streamUrl));
-                            },
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                        )
+                      : const SizedBox.shrink(key: ValueKey('noerror')),
+                ),
 
                 // Top bar with channel info and close button. Offset by the
                 // system top inset (status bar / cutout) so the overlay sits
@@ -239,7 +265,7 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                   ignoring: !_controlsVisible,
                   child: AnimatedOpacity(
                     opacity: _controlsVisible ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
+                    duration: MotionTokens.base,
                     child: Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -315,7 +341,7 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                     ignoring: !_controlsVisible,
                     child: AnimatedOpacity(
                       opacity: _controlsVisible ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 200),
+                      duration: MotionTokens.base,
                       child: Container(
                         padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -330,10 +356,11 @@ class _PopupPlayerWindowState extends State<PopupPlayerWindow> {
                       ),
                       child: Row(
                         children: [
-                          // Play/Pause
+                          // Play/Pause (morphing icon)
                           IconButton(
-                            icon: Icon(
-                              _isPlaying ? Icons.pause : Icons.play_arrow,
+                            icon: AnimatedIcon(
+                              icon: AnimatedIcons.play_pause,
+                              progress: _playPauseController,
                               color: Colors.white,
                             ),
                             tooltip: 'Play/Pause',

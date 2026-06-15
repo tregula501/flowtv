@@ -4,10 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../../core/themes/motion.dart';
 import '../../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../../l10n/app_localizations.dart';
 import '../../providers/multiview_provider.dart';
 import '../../providers/channel_provider.dart';
+import '../../widgets/common/entrance.dart';
+import '../../widgets/common/skeleton.dart';
 
 class MultiViewScreen extends ConsumerStatefulWidget {
   const MultiViewScreen({super.key});
@@ -262,7 +265,9 @@ class _MultiViewTileState extends State<_MultiViewTile> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
-        child: Container(
+        child: AnimatedContainer(
+        duration: MotionTokens.fast,
+        curve: MotionTokens.toggle,
         decoration: BoxDecoration(
           border: Border.all(
             color: widget.slot.isAudioActive
@@ -291,60 +296,86 @@ class _MultiViewTileState extends State<_MultiViewTile> {
             // Error overlay
             if (widget.slot.error != null) _buildErrorOverlay(),
 
-            // Controls overlay (on hover)
-            if (_isHovered || widget.slot.channel == null)
-              _buildControlsOverlay(),
+            // Controls overlay (on hover) — cross-fades in/out without ever
+            // touching the Video sibling above.
+            Positioned.fill(
+              child: AnimatedSwitcher(
+                duration: MotionTokens.fast,
+                switchInCurve: MotionTokens.toggle,
+                switchOutCurve: MotionTokens.toggle,
+                child: (_isHovered || widget.slot.channel == null)
+                    ? _buildControlsOverlay()
+                    : const SizedBox.shrink(),
+              ),
+            ),
 
             // Slot number badge
             Positioned(
               top: 8,
               left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: widget.slot.isAudioActive
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.black54,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${widget.slot.index + 1}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+              child: AnimatedSwitcher(
+                duration: MotionTokens.fast,
+                switchInCurve: MotionTokens.toggle,
+                switchOutCurve: MotionTokens.toggle,
+                child: Container(
+                  // Key on audio-active so the badge cross-fades when audio
+                  // routing changes for this slot.
+                  key: ValueKey(widget.slot.isAudioActive),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: widget.slot.isAudioActive
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.black54,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${widget.slot.index + 1}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    if (widget.slot.isAudioActive) ...[
-                      const SizedBox(width: 4),
-                      const Icon(Icons.volume_up, color: Colors.white, size: 16),
+                      if (widget.slot.isAudioActive) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.volume_up, color: Colors.white, size: 16),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
 
             // Channel name
-            if (widget.slot.channel != null)
-              Positioned(
-                bottom: 8,
-                left: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    widget.slot.channel!.name,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+            Positioned(
+              bottom: 8,
+              left: 8,
+              right: 8,
+              child: AnimatedSwitcher(
+                duration: MotionTokens.fast,
+                switchInCurve: MotionTokens.toggle,
+                switchOutCurve: MotionTokens.toggle,
+                child: widget.slot.channel != null
+                    ? Container(
+                        key: ValueKey(widget.slot.channel!.name),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          widget.slot.channel!.name,
+                          style:
+                              const TextStyle(color: Colors.white, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
+            ),
           ],
         ),
       ),
@@ -355,6 +386,9 @@ class _MultiViewTileState extends State<_MultiViewTile> {
   Widget _buildEmptySlot() {
     final l10n = AppLocalizations.of(context)!;
     return Container(
+      // Keyed so this placeholder keeps a stable identity and cross-fades under
+      // the Video sibling without ever rebuilding it.
+      key: const ValueKey('multiview-empty-slot'),
       color: Colors.grey.shade900,
       child: Center(
         child: Column(
@@ -364,7 +398,7 @@ class _MultiViewTileState extends State<_MultiViewTile> {
               Icons.tv_off,
               size: 48,
               color: Colors.grey.shade600,
-            ),
+            ).animatedReveal(context),
             const SizedBox(height: 8),
             Text(
               l10n.slot(widget.slot.index + 1),
@@ -549,7 +583,7 @@ class _ChannelPickerSheetState extends ConsumerState<_ChannelPickerSheet> {
         // Channel list
         Expanded(
           child: channelsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const SkeletonList(itemCount: 8, leadingSize: 40),
             error: (_, _) => Center(child: Text(l10n.failedToLoadChannels)),
             data: (channels) {
               final filteredChannels = _filterChannels(channels);

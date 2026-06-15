@@ -6,6 +6,9 @@ import '../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../providers/channel_provider.dart';
 import '../providers/player_provider.dart';
 import '../../l10n/app_localizations.dart';
+import '../../core/themes/motion.dart';
+import 'common/entrance.dart';
+import 'common/skeleton.dart';
 
 class ChannelGrid extends ConsumerWidget {
   const ChannelGrid({super.key});
@@ -62,7 +65,7 @@ class ChannelGrid extends ConsumerWidget {
           onFavoriteToggle: () {
             ref.read(channelManagerProvider).toggleFavorite(channel.id);
           },
-        );
+        ).animatedEntrance(context, index: index);
       },
     );
   }
@@ -88,21 +91,46 @@ class ChannelTile extends StatefulWidget {
 
 class _ChannelTileState extends State<ChannelTile> {
   bool _isHovered = false;
+  bool _isPressed = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Combined press + hover scale: press wins (0.97), then hover lift (1.03).
+    final double scale = _isPressed ? 0.97 : (_isHovered ? 1.03 : 1.0);
+    // Hover and keyboard/D-pad focus share the same highlighted border.
+    final bool highlighted = _isHovered || _isFocused;
+
     return Semantics(
       label: '${widget.channel.name}${widget.channel.isFavorite ? ', favorite' : ''}${widget.isPlaying ? ', now playing' : ''}',
       button: true,
-      child: MouseRegion(
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) {
+          if (mounted) setState(() => _isFocused = value);
+        },
+        actions: <Type, Action<Intent>>{
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
+          ),
+        },
+        child: MouseRegion(
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: GestureDetector(
           onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          onTapDown: (_) => setState(() => _isPressed = true),
+          onTapUp: (_) => setState(() => _isPressed = false),
+          onTapCancel: () => setState(() => _isPressed = false),
+        child: AnimatedScale(
+          scale: scale,
+          duration: MotionTokens.instant,
+          child: AnimatedContainer(
+          duration: MotionTokens.fast,
           decoration: BoxDecoration(
             color: widget.isPlaying
                 ? theme.colorScheme.primary.withValues(alpha: 0.15)
@@ -111,7 +139,7 @@ class _ChannelTileState extends State<ChannelTile> {
             border: Border.all(
               color: widget.isPlaying
                   ? theme.colorScheme.primary
-                  : _isHovered
+                  : highlighted
                       ? theme.colorScheme.primary.withValues(alpha: 0.5)
                       : theme.dividerColor,
               width: widget.isPlaying ? 2 : 1,
@@ -196,7 +224,7 @@ class _ChannelTileState extends State<ChannelTile> {
                         ),
                       ],
                     ),
-                  ),
+                  ).livePulse(context),
                 ),
 
               // Locked indicator
@@ -213,6 +241,8 @@ class _ChannelTileState extends State<ChannelTile> {
             ],
           ),
         ),
+        ),
+        ),
       ),
       ),
     );
@@ -223,7 +253,9 @@ class _ChannelTileState extends State<ChannelTile> {
       return CachedNetworkImage(
         imageUrl: widget.channel.logoUrl!,
         fit: BoxFit.contain,
-        placeholder: (context, url) => _buildPlaceholder(theme),
+        fadeInDuration: const Duration(milliseconds: 350),
+        placeholder: (context, url) =>
+            const ShimmerLogoPlaceholder(borderRadius: 8),
         errorWidget: (context, url, error) => _buildPlaceholder(theme),
       );
     }

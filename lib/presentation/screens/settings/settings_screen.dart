@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/theme_provider.dart';
@@ -11,6 +12,7 @@ import '../../widgets/add_playlist_dialog.dart';
 import '../../widgets/edit_playlist_dialog.dart';
 import '../../../core/extensions/datetime_extensions.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/themes/motion.dart';
 import '../../../l10n/app_localizations.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -112,7 +114,12 @@ class SettingsScreen extends ConsumerWidget {
     };
 
     return ListTile(
-      leading: Icon(icon),
+      leading: AnimatedSwitcher(
+        duration: MotionTokens.base,
+        transitionBuilder: (child, animation) =>
+            ScaleTransition(scale: animation, child: child),
+        child: Icon(icon, key: ValueKey(themeMode)),
+      ),
       title: Text(l10n.theme),
       subtitle: Text(label),
       trailing: DropdownButton<ThemeMode>(
@@ -167,44 +174,63 @@ class SettingsScreen extends ConsumerWidget {
       ),
       data: (playlists) => Column(
         children: [
-          // Show progress bar when loading
-          if (progressState.isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          progressState.phase,
-                          style: const TextStyle(fontStyle: FontStyle.italic),
+          // Show progress bar when loading — animate expand/collapse so it
+          // doesn't jump the layout when loading starts/stops.
+          AnimatedSize(
+            duration: MotionTokens.base,
+            curve: MotionTokens.standard,
+            alignment: Alignment.topCenter,
+            child: progressState.isLoading
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                progressState.phase,
+                                style: const TextStyle(
+                                    fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                  if (progressState.total > 0) ...[
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: progressState.progress,
-                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        if (progressState.total > 0) ...[
+                          const SizedBox(height: 8),
+                          TweenAnimationBuilder<double>(
+                            duration: MotionTokens.base,
+                            curve: MotionTokens.toggle,
+                            tween: Tween<double>(
+                                end: progressState.progress),
+                            builder: (context, value, _) =>
+                                LinearProgressIndicator(
+                              value: value,
+                              backgroundColor: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${progressState.current} / ${progressState.total}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${progressState.current} / ${progressState.total}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ],
-              ),
-            ),
+                  ).animate().fadeIn(duration: MotionTokens.base)
+                : const SizedBox(width: double.infinity),
+          ),
           ...playlists.map((playlist) => ListTile(
                 leading: Icon(
                   playlist.isActive ? Icons.check_circle : Icons.circle_outlined,
@@ -306,25 +332,41 @@ class SettingsScreen extends ConsumerWidget {
                   onPressed: () => ref.read(epgManagerProvider).fetchEpg(),
                 ),
         ),
-        if (progressState.isLoading && progressState.total > 0)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LinearProgressIndicator(
-                  value: progressState.progress,
-                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${progressState.current} / ${progressState.total}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
+        // Animate the EPG progress block expanding/collapsing rather than
+        // jumping the layout when a fetch starts/stops.
+        AnimatedSize(
+          duration: MotionTokens.base,
+          curve: MotionTokens.standard,
+          alignment: Alignment.topCenter,
+          child: (progressState.isLoading && progressState.total > 0)
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TweenAnimationBuilder<double>(
+                        duration: MotionTokens.base,
+                        curve: MotionTokens.toggle,
+                        tween: Tween<double>(end: progressState.progress),
+                        builder: (context, value, _) =>
+                            LinearProgressIndicator(
+                          value: value,
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${progressState.current} / ${progressState.total}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ).animate().fadeIn(duration: MotionTokens.base)
+              : const SizedBox(width: double.infinity),
+        ),
         ListTile(
           leading: const Icon(Icons.timer),
           title: Text(l10n.epgAutoRefreshInterval),

@@ -17,6 +17,10 @@ import '../epg_guide/epg_guide_screen.dart';
 import '../multiview/multiview_screen.dart';
 import '../settings/settings_screen.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/navigation/transitions.dart';
+import '../../widgets/common/entrance.dart';
+import '../../widgets/common/skeleton.dart';
+import '../../widgets/common/app_error_view.dart';
 import '../../../l10n/app_localizations.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -134,9 +138,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Scaffold(
         body: SafeArea(
           child: playlistsAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, _) => Center(
-              child: Text(l10n.failedToLoadPlaylists),
+            loading: () => Row(
+              children: [
+                SizedBox(
+                  width: _sidebarWidth(context),
+                  child: const CategorySidebar(),
+                ),
+                const VerticalDivider(width: 1),
+                const Expanded(
+                  child: SkeletonChannelGrid(),
+                ),
+              ],
+            ),
+            error: (_, _) => AppErrorView(
+              message: l10n.failedToLoadPlaylists,
+              onRetry: () => ref.invalidate(playlistsProvider),
             ),
             data: (playlists) {
               if (playlists.isEmpty) {
@@ -281,7 +297,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const MultiViewScreen()),
+                fadeThroughRoute(const MultiViewScreen()),
               );
             },
           ),
@@ -293,7 +309,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const EpgGuideScreen()),
+                fadeThroughRoute(const EpgGuideScreen()),
               );
             },
           ),
@@ -305,7 +321,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                fadeThroughRoute(const SettingsScreen()),
               );
             },
           ),
@@ -324,25 +340,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Icons.live_tv,
             size: 80,
             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-          ),
+          ).animatedReveal(context),
           const SizedBox(height: 24),
-          Text(
-            l10n.welcomeTitle,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            l10n.welcomeSubtitle,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton.icon(
-            onPressed: () => _showAddPlaylistDialog(context),
-            icon: const Icon(Icons.add),
-            label: Text(l10n.addPlaylist),
-          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                l10n.welcomeTitle,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.welcomeSubtitle,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () => _showAddPlaylistDialog(context),
+                icon: const Icon(Icons.add),
+                label: Text(l10n.addPlaylist),
+              ),
+            ],
+          ).animatedReveal(context, delay: const Duration(milliseconds: 150)),
         ],
       ),
     );
@@ -526,7 +547,7 @@ class _ChannelContent extends ConsumerWidget {
                   onFavoriteToggle: () {
                     ref.read(channelManagerProvider).toggleFavorite(channel.id);
                   },
-                );
+                ).animatedEntrance(context, index: index);
               },
               childCount: channels.length,
             ),
@@ -583,6 +604,8 @@ class _RecentChannelChip extends StatelessWidget {
                         ? CachedNetworkImage(
                             imageUrl: channel.logoUrl!,
                             fit: BoxFit.contain,
+                            fadeInDuration: const Duration(milliseconds: 350),
+                            placeholder: (_, _) => const ShimmerLogoPlaceholder(),
                             errorWidget: (_, _, _) => Icon(
                               Icons.tv,
                               size: 24,

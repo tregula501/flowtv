@@ -1,15 +1,20 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/themes/motion.dart';
 import '../../../data/datasources/local/drift/app_database.dart' show Channel, EpgProgram;
 import '../../providers/channel_provider.dart';
 import '../../providers/epg_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../../core/extensions/datetime_extensions.dart';
 import '../../../core/extensions/epg_program_extensions.dart';
+import '../../widgets/common/entrance.dart';
+import '../../widgets/common/skeleton.dart';
 
 class EpgGuideScreen extends ConsumerStatefulWidget {
   const EpgGuideScreen({super.key});
@@ -26,6 +31,14 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   late DateTime _startTime;
   bool _isSyncingVerticalScroll = false;
   bool _isSyncingHorizontalScroll = false;
+
+  /// Live "now" reference, refreshed every minute so isLive highlighting and
+  /// program progress bars stay accurate instead of going stale.
+  late DateTime _now;
+  Timer? _nowTicker;
+
+  /// Guards the one-shot auto scroll-to-now after the first data load.
+  bool _didInitialScroll = false;
 
   static const double _timeSlotWidth = AppConstants.epgTimeSlotWidth;
   static const double _channelColumnWidth = AppConstants.epgChannelColumnWidth;
@@ -48,13 +61,22 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
     _timeHeaderController.addListener(_onTimeHeaderScroll);
     _programHorizontalController.addListener(_onProgramHorizontalScroll);
 
-    _startTime = DateTime.now().subtract(const Duration(hours: 1));
+    _now = DateTime.now();
+    _startTime = _now.subtract(const Duration(hours: 1));
     _startTime = DateTime(
       _startTime.year,
       _startTime.month,
       _startTime.day,
       _startTime.hour,
     );
+
+    // Tick the live "now" reference every minute so isLive highlighting, live
+    // progress bars and the NOW line keep advancing instead of freezing at
+    // first build. Cheap setState on a non-streaming screen.
+    _nowTicker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
+    });
   }
 
   void _onChannelListScroll() {
@@ -87,6 +109,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
 
   @override
   void dispose() {
+    _nowTicker?.cancel();
     _channelListController.removeListener(_onChannelListScroll);
     _programGridController.removeListener(_onProgramGridScroll);
     _timeHeaderController.removeListener(_onTimeHeaderScroll);
@@ -132,7 +155,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
       ),
       body: SafeArea(
         child: channelsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => _buildEpgSkeleton(),
           error: (_, _) => Center(child: Text(l10n.failedToLoadChannels)),
           data: (channels) => _buildEpgGrid(context, channels),
         ),
@@ -148,7 +171,7 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
     );
 
     return epgDataAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => _buildEpgSkeleton(),
       error: (_, _) => Center(child: Text(l10n.failedToLoadGuide)),
       data: (epgData) => Column(
         children: [
@@ -174,6 +197,77 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
                   child: _buildProgramsGrid(channels, epgData),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// EPG-shaped loading placeholder: a time-header bar plus channel rows, each
+  /// row a logo + name block followed by staggered program blocks. Mirrors the
+  /// real grid metrics so the transition into loaded content is seamless.
+  Widget _buildEpgSkeleton() {
+    return Skeleton(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Time header bar.
+          const Padding(
+            padding: EdgeInsets.fromLTRB(8, 8, 8, 4),
+            child: ShimmerBox(width: double.infinity, height: 14),
+          ),
+          Expanded(
+            child: ListView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              itemCount: 8,
+              itemBuilder: (context, index) => const SizedBox(
+                height: _rowHeight,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      // Channel column: logo + name bar.
+                      SizedBox(
+                        width: _channelColumnWidth - 16,
+                        child: Row(
+                          children: [
+                            ShimmerBox(width: 40, height: 40),
+                            SizedBox(width: 8),
+                            Expanded(child: ShimmerBox(height: 12)),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      // Program blocks of varying widths.
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: ShimmerBox(height: double.infinity),
+                            ),
+                            SizedBox(width: 4),
+                            Expanded(
+                              flex: 3,
+                              child: ShimmerBox(height: double.infinity),
+                            ),
+                            SizedBox(width: 4),
+                            Expanded(
+                              flex: 2,
+                              child: ShimmerBox(height: double.infinity),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ],
@@ -289,19 +383,52 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
     List<Channel> channels,
     Map<String, List<EpgProgram>> epgData,
   ) {
+    // Once data is first available, center the timeline on "now".
+    if (!_didInitialScroll && channels.isNotEmpty) {
+      _didInitialScroll = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _scrollToNow();
+      });
+    }
+
+    // px-per-minute matches the program blocks (see _buildProgramBlock).
+    const pixelsPerMinute = _timeSlotWidth / 60;
+    final nowOffset =
+        _now.difference(_startTime).inMinutes * pixelsPerMinute;
+    final showNowLine = nowOffset >= 0 && nowOffset <= _timeSlotWidth * _hoursToShow;
+
     return SingleChildScrollView(
       controller: _programHorizontalController,
       scrollDirection: Axis.horizontal,
       child: SizedBox(
         width: _timeSlotWidth * _hoursToShow,
-        child: ListView.builder(
-          controller: _programGridController,
-          itemCount: channels.length,
-          itemBuilder: (context, index) {
-            final channel = channels[index];
-            final programs = epgData[channel.epgId] ?? [];
-            return _buildProgramRow(channel, programs);
-          },
+        child: Stack(
+          children: [
+            ListView.builder(
+              controller: _programGridController,
+              itemCount: channels.length,
+              itemBuilder: (context, index) {
+                final channel = channels[index];
+                final programs = epgData[channel.epgId] ?? [];
+                return _buildProgramRow(channel, programs);
+              },
+            ),
+
+            // Thin live "now" line spanning the full timeline height. Sibling
+            // overlay above the rows — does not restructure the grid.
+            if (showNowLine)
+              Positioned(
+                left: nowOffset,
+                top: 0,
+                bottom: 0,
+                width: 2,
+                child: IgnorePointer(
+                  child: Container(
+                    color: Theme.of(context).colorScheme.error,
+                  ).livePulse(context),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -432,15 +559,19 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
     final targetOffset = (offset - 100).clamp(0.0, double.infinity);
 
     // Scroll both time header and program grid
-    _timeHeaderController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
-    _programHorizontalController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+    if (_timeHeaderController.hasClients) {
+      _timeHeaderController.animateTo(
+        targetOffset,
+        duration: MotionTokens.emphasized,
+        curve: MotionTokens.exit,
+      );
+    }
+    if (_programHorizontalController.hasClients) {
+      _programHorizontalController.animateTo(
+        targetOffset,
+        duration: MotionTokens.emphasized,
+        curve: MotionTokens.exit,
+      );
+    }
   }
 }

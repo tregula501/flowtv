@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/themes/app_theme.dart';
+import 'core/themes/motion.dart';
 import 'core/utils/logger.dart';
 import 'l10n/app_localizations.dart';
 import 'presentation/providers/theme_provider.dart';
@@ -214,35 +215,67 @@ class _ConnectivityBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final connectivityAsync = ref.watch(connectivityProvider);
 
-    return connectivityAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, _) => const SizedBox.shrink(),
-      data: (isConnected) {
-        if (isConnected) return const SizedBox.shrink();
-        final l10n = AppLocalizations.of(context);
-        return Material(
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.orange.shade800,
-            child: SafeArea(
-              bottom: false,
-              child: Row(
-                children: [
-                  const Icon(Icons.wifi_off, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n?.noNetworkConnection ?? 'No network connection',
-                      style: const TextStyle(color: Colors.white, fontSize: 13),
+    // Treat loading/error as "online" so the banner stays collapsed; only an
+    // explicit offline reading shows it.
+    final isOffline = connectivityAsync.maybeWhen(
+      data: (isConnected) => !isConnected,
+      orElse: () => false,
+    );
+
+    final l10n = AppLocalizations.of(context);
+
+    // AnimatedSize collapses/expands the row height; the AnimatedSwitcher
+    // slides + fades the banner in/out so it appears to drop down from the top
+    // and retract smoothly instead of hard-swapping.
+    return AnimatedSize(
+      duration: MotionTokens.base,
+      curve: MotionTokens.standard,
+      alignment: Alignment.topCenter,
+      child: AnimatedSwitcher(
+        duration: MotionTokens.base,
+        switchInCurve: MotionTokens.standard,
+        switchOutCurve: MotionTokens.exit,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SizeTransition(
+            sizeFactor: animation,
+            axisAlignment: -1,
+            child: child,
+          ),
+        ),
+        child: isOffline
+            ? Material(
+                key: const ValueKey('offline-banner'),
+                child: Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: Colors.orange.shade800,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.wifi_off,
+                            color: Colors.white, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            l10n?.noNetworkConnection ??
+                                'No network connection',
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 13),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
+              )
+            : const SizedBox(
+                key: ValueKey('offline-banner-hidden'),
+                width: double.infinity,
               ),
-            ),
-          ),
-        );
-      },
+      ),
     );
   }
 }

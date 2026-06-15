@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../../core/themes/motion.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../domain/services/cast_types.dart';
 import '../../providers/cast_provider.dart';
@@ -187,112 +188,112 @@ class PlayerScreen extends ConsumerWidget {
                 final bufferedDuration = ref.watch(playerControllerProvider.select((s) => s.bufferedDuration));
                 final bufferSize = ref.watch(playerControllerProvider.select((s) => s.bufferSize));
 
-                return Stack(
-                  children: [
-                    // Video with aspect ratio control
-                    Center(
-                      child: _buildVideoWithAspectRatio(
-                        playerController.videoController,
-                        aspectRatioMode,
+                // Status overlay (prebuffering / reconnecting / buffering),
+                // built as a single keyed child so AnimatedSwitcher can cross-fade
+                // between states. These are sibling overlays ABOVE the Video — the
+                // Video widget itself is never wrapped or rebuilt.
+                final Widget statusOverlay;
+                if (isPrebuffering) {
+                  statusOverlay = Center(
+                    key: const ValueKey('prebuffer'),
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            color: Colors.white,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            l10n.prebuffering,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${bufferedDuration.inSeconds}s / ${bufferSize.durationSeconds}s',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: 150,
+                            child: LinearProgressIndicator(
+                              value: bufferSize.durationSeconds > 0
+                                  ? (bufferedDuration.inMilliseconds /
+                                          (bufferSize.durationSeconds * 1000))
+                                      .clamp(0.0, 1.0)
+                                  : 0.0,
+                              backgroundColor: Colors.white24,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-
-                    // Prebuffering indicator with progress
-                    if (isPrebuffering)
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CircularProgressIndicator(
-                                color: Colors.white,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.prebuffering,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${bufferedDuration.inSeconds}s / ${bufferSize.durationSeconds}s',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                width: 150,
-                                child: LinearProgressIndicator(
-                                  value: bufferSize.durationSeconds > 0
-                                      ? (bufferedDuration.inMilliseconds /
-                                              (bufferSize.durationSeconds * 1000))
-                                          .clamp(0.0, 1.0)
-                                      : 0.0,
-                                  backgroundColor: Colors.white24,
-                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    // Reconnecting indicator (auto-retry in progress)
-                    else if (isReconnecting)
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CircularProgressIndicator(
-                                color: Colors.orange,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.reconnecting,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                l10n.retryAttempt(retryAttempt, maxRetries),
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    // Regular buffering indicator (during playback)
-                    else if (isBuffering)
-                      const Center(
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                        ),
+                  );
+                } else if (isReconnecting) {
+                  statusOverlay = Center(
+                    key: const ValueKey('reconnect'),
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(
+                            color: Colors.orange,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            l10n.reconnecting,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            l10n.retryAttempt(retryAttempt, maxRetries),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                } else if (isBuffering) {
+                  statusOverlay = const Center(
+                    key: ValueKey('buffer'),
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                    ),
+                  );
+                } else {
+                  statusOverlay = const SizedBox.shrink(key: ValueKey('none'));
+                }
 
-                    // Error message (only shown when not reconnecting)
-                    if (error != null && !isReconnecting)
-                      Center(
+                // Error overlay (only shown when not reconnecting), keyed for the
+                // same cross-fade treatment.
+                final Widget errorOverlay = (error != null && !isReconnecting)
+                    ? Center(
+                        key: const ValueKey('error'),
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           margin: const EdgeInsets.all(16),
@@ -335,7 +336,30 @@ class PlayerScreen extends ConsumerWidget {
                             ],
                           ),
                         ),
+                      )
+                    : const SizedBox.shrink(key: ValueKey('noerror'));
+
+                return Stack(
+                  children: [
+                    // Video with aspect ratio control
+                    Center(
+                      child: _buildVideoWithAspectRatio(
+                        playerController.videoController,
+                        aspectRatioMode,
                       ),
+                    ),
+
+                    // Buffering / reconnecting / prebuffering — cross-faded
+                    AnimatedSwitcher(
+                      duration: MotionTokens.base,
+                      child: statusOverlay,
+                    ),
+
+                    // Error message — cross-faded
+                    AnimatedSwitcher(
+                      duration: MotionTokens.base,
+                      child: errorOverlay,
+                    ),
 
                     // Controls overlay
                     const Positioned(

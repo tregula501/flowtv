@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/themes/motion.dart';
 import '../../l10n/app_localizations.dart';
 import '../providers/channel_provider.dart';
 import '../providers/playlist_provider.dart';
 import 'add_playlist_dialog.dart';
+import 'common/entrance.dart';
 
 class CategorySidebar extends ConsumerWidget {
   const CategorySidebar({super.key});
@@ -65,7 +67,7 @@ class CategorySidebar extends ConsumerWidget {
                   onTap: () {
                     ref.read(selectedGroupProvider.notifier).select(null);
                   },
-                ),
+                ).animatedEntrance(context, index: 0),
 
                 // Favorites
                 if (favoriteChannels.isNotEmpty)
@@ -79,12 +81,13 @@ class CategorySidebar extends ConsumerWidget {
                       ref.read(selectedGroupProvider.notifier).select(
                           favoritesFilterKey,);
                     },
-                  ),
+                  ).animatedEntrance(context, index: 1),
 
                 const Divider(height: 16),
 
                 // Group categories
-                ...groups.map((group) {
+                ...groups.asMap().entries.map((entry) {
+                  final group = entry.value;
                   return _CategoryTile(
                     icon: _getGroupIcon(group),
                     label: group,
@@ -92,7 +95,7 @@ class CategorySidebar extends ConsumerWidget {
                     onTap: () {
                       ref.read(selectedGroupProvider.notifier).select(group);
                     },
-                  );
+                  ).animatedEntrance(context, index: entry.key + 2);
                 }),
               ],
             ),
@@ -164,7 +167,7 @@ class _CategoryTile extends StatelessWidget {
     final theme = Theme.of(context);
     final selectedColor = theme.colorScheme.primary;
 
-    return ListTile(
+    final tile = ListTile(
       leading: Icon(
         icon,
         color: isSelected ? selectedColor : iconColor ?? theme.iconTheme.color,
@@ -198,6 +201,30 @@ class _CategoryTile extends StatelessWidget {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       onTap: onTap,
+    );
+
+    // Overlay a left accent bar that smoothly grows/recolors on selection.
+    // The bar is a sibling (positioned over the tile) so it never affects the
+    // tile's layout or its onTap wiring.
+    return Stack(
+      children: [
+        tile,
+        Positioned.fill(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AnimatedContainer(
+              duration: MotionTokens.fast,
+              curve: MotionTokens.toggle,
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 3,
+              decoration: BoxDecoration(
+                color: isSelected ? selectedColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

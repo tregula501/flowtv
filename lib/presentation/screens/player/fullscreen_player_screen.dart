@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../../core/themes/motion.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
@@ -53,6 +54,142 @@ class _FullscreenPlayerScreenState
       );
     }
 
+    // Status overlay (prebuffering / reconnecting / buffering) as a single keyed
+    // child for AnimatedSwitcher cross-fade. Sibling overlays only — the
+    // Positioned.fill Video below is never wrapped or rebuilt.
+    final Widget statusOverlay;
+    if (isPrebuffering) {
+      statusOverlay = Center(
+        key: const ValueKey('prebuffer'),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: Colors.white),
+              const SizedBox(height: 16),
+              Text(
+                l10n.prebuffering,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${bufferedDuration.inSeconds}s / ${bufferSize.durationSeconds}s',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 150,
+                child: LinearProgressIndicator(
+                  value: bufferSize.durationSeconds > 0
+                      ? (bufferedDuration.inMilliseconds /
+                              (bufferSize.durationSeconds * 1000))
+                          .clamp(0.0, 1.0)
+                      : 0.0,
+                  backgroundColor: Colors.white24,
+                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (isReconnecting) {
+      statusOverlay = Center(
+        key: const ValueKey('reconnect'),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: Colors.orange),
+              const SizedBox(height: 16),
+              Text(
+                l10n.reconnecting,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.retryAttempt(retryAttempt, maxRetries),
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (isBuffering) {
+      statusOverlay = const Center(
+        key: ValueKey('buffer'),
+        child: CircularProgressIndicator(color: Colors.white),
+      );
+    } else {
+      statusOverlay = const SizedBox.shrink(key: ValueKey('none'));
+    }
+
+    final Widget errorOverlay = (error != null && !isReconnecting)
+        ? Center(
+            key: const ValueKey('error'),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Colors.white,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.playbackError,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(color: Colors.white),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    error,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      playerController.playChannel(currentChannel);
+                    },
+                    child: Text(l10n.retry),
+                  ),
+                ],
+              ),
+            ),
+          )
+        : const SizedBox.shrink(key: ValueKey('noerror'));
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -93,139 +230,23 @@ class _FullscreenPlayerScreenState
                 ),
               ),
 
-              // Prebuffering indicator with progress
-              if (isPrebuffering)
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const CircularProgressIndicator(color: Colors.white),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.prebuffering,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${bufferedDuration.inSeconds}s / ${bufferSize.durationSeconds}s',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: 150,
-                          child: LinearProgressIndicator(
-                            value: bufferSize.durationSeconds > 0
-                                ? (bufferedDuration.inMilliseconds /
-                                        (bufferSize.durationSeconds * 1000))
-                                    .clamp(0.0, 1.0)
-                                : 0.0,
-                            backgroundColor: Colors.white24,
-                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              // Reconnecting indicator (auto-retry in progress)
-              else if (isReconnecting)
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const CircularProgressIndicator(color: Colors.orange),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.reconnecting,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n.retryAttempt(retryAttempt, maxRetries),
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              // Regular buffering indicator
-              else if (isBuffering)
-                const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                ),
+              // Buffering / reconnecting / prebuffering — cross-faded
+              AnimatedSwitcher(
+                duration: MotionTokens.base,
+                child: statusOverlay,
+              ),
 
-              // Error message (only when not reconnecting)
-              if (error != null && !isReconnecting)
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: Colors.white,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n.playbackError,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(color: Colors.white),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          error,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: () {
-                            playerController.playChannel(currentChannel);
-                          },
-                          child: Text(l10n.retry),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              // Error message — cross-faded
+              AnimatedSwitcher(
+                duration: MotionTokens.base,
+                child: errorOverlay,
+              ),
 
               // Top bar with channel info (animated). Offset by the system
               // top inset (status bar / cutout) so the overlay sits flush
               // below it on edge-to-edge devices.
               AnimatedPositioned(
-                duration: const Duration(milliseconds: 200),
+                duration: MotionTokens.base,
                 top: _showControls ? mediaPadding.top : -80,
                 left: mediaPadding.left,
                 right: mediaPadding.right,
@@ -299,7 +320,7 @@ class _FullscreenPlayerScreenState
               // visible on edge-to-edge devices (Android 15+, foldables like
               // ZFold6).
               AnimatedPositioned(
-                duration: const Duration(milliseconds: 200),
+                duration: MotionTokens.base,
                 bottom: _showControls ? mediaPadding.bottom : -80,
                 left: mediaPadding.left,
                 right: mediaPadding.right,

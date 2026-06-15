@@ -7,6 +7,9 @@ import '../../../data/datasources/local/drift/app_database.dart' show Recording,
 import '../../../l10n/app_localizations.dart';
 import '../../providers/recording_provider.dart';
 import '../../../core/extensions/datetime_extensions.dart';
+import '../../../core/themes/motion.dart';
+import '../../widgets/common/entrance.dart';
+import '../../widgets/common/skeleton.dart';
 
 class RecordingsScreen extends ConsumerWidget {
   const RecordingsScreen({super.key});
@@ -71,7 +74,10 @@ class RecordingsScreen extends ConsumerWidget {
           ),
         ),
         body: recordingsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Padding(
+            padding: EdgeInsets.all(16),
+            child: SkeletonList(itemCount: 5, leadingSize: 64),
+          ),
           error: (_, _) => Center(child: Text(l10n.failedToLoadRecordings)),
           data: (recordings) {
             final active = recordings
@@ -127,14 +133,14 @@ class _RecordingsList extends ConsumerWidget {
               Icons.video_library_outlined,
               size: 64,
               color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-            ),
+            ).animatedReveal(context),
             const SizedBox(height: 16),
             Text(
               emptyMessage,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
-            ),
+            ).animatedReveal(context, delay: MotionTokens.fast),
           ],
         ),
       );
@@ -145,7 +151,8 @@ class _RecordingsList extends ConsumerWidget {
       itemCount: recordings.length,
       itemBuilder: (context, index) {
         final recording = recordings[index];
-        return _RecordingTile(recording: recording);
+        return _RecordingTile(recording: recording)
+            .animatedEntrance(context, index: index);
       },
     );
   }
@@ -172,17 +179,27 @@ class _RecordingTile extends ConsumerWidget {
           child: Row(
             children: [
               // Status icon
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _getStatusColor(recording.status).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  _getStatusIcon(recording.status),
-                  color: _getStatusColor(recording.status),
-                ),
+              Builder(
+                builder: (context) {
+                  final statusIcon = Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(recording.status)
+                          .withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      _getStatusIcon(recording.status),
+                      color: _getStatusColor(recording.status),
+                    ),
+                  );
+                  // Pulse like a record light only while actively recording.
+                  if (recording.status == RecordingStatus.recording) {
+                    return statusIcon.livePulse(context);
+                  }
+                  return statusIcon;
+                },
               ),
 
               const SizedBox(width: 16),

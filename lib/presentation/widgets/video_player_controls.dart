@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/themes/motion.dart';
 import '../../l10n/app_localizations.dart';
 import '../providers/player_provider.dart';
 import '../providers/channel_provider.dart';
@@ -15,14 +16,29 @@ class VideoPlayerControls extends ConsumerStatefulWidget {
   ConsumerState<VideoPlayerControls> createState() => _VideoPlayerControlsState();
 }
 
-class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
+class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls>
+    with SingleTickerProviderStateMixin {
   bool _isVisible = true;
   bool _isHovering = false;
   Timer? _hideTimer;
 
+  // Drives the play <-> pause icon morph. 1.0 = pause icon, 0.0 = play icon.
+  late final AnimationController _playPauseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _playPauseController = AnimationController(
+      vsync: this,
+      duration: MotionTokens.base,
+      value: ref.read(playerControllerProvider).isPlaying ? 1.0 : 0.0,
+    );
+  }
+
   @override
   void dispose() {
     _hideTimer?.cancel();
+    _playPauseController.dispose();
     super.dispose();
   }
 
@@ -45,11 +61,22 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
 
   @override
   Widget build(BuildContext context) {
-    final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
     final isMuted = ref.watch(playerControllerProvider.select((s) => s.isMuted));
     final volume = ref.watch(playerControllerProvider.select((s) => s.volume));
     final isFullscreen = ref.watch(playerControllerProvider.select((s) => s.isFullscreen));
     final playerController = ref.read(playerControllerProvider.notifier);
+
+    // Morph the play/pause icon when playback state changes. Presentation only —
+    // it never triggers playback; the button's onPressed still drives playPause.
+    ref.listen(playerControllerProvider.select((s) => s.isPlaying), (_, playing) {
+      if (context.reduceMotion) {
+        _playPauseController.value = playing ? 1.0 : 0.0;
+      } else if (playing) {
+        _playPauseController.forward();
+      } else {
+        _playPauseController.reverse();
+      }
+    });
 
     return MouseRegion(
       onEnter: (_) {
@@ -76,7 +103,7 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
         child: IgnorePointer(
           ignoring: !_isVisible,
           child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
+            duration: MotionTokens.base,
             opacity: _isVisible ? 1.0 : 0.0,
             child: Container(
             decoration: BoxDecoration(
@@ -92,10 +119,11 @@ class _VideoPlayerControlsState extends ConsumerState<VideoPlayerControls> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Play/Pause button
+                // Play/Pause button (morphing icon)
                 IconButton(
-                  icon: Icon(
-                    isPlaying ? Icons.pause : Icons.play_arrow,
+                  icon: AnimatedIcon(
+                    icon: AnimatedIcons.play_pause,
+                    progress: _playPauseController,
                     color: Colors.white,
                     size: 32,
                   ),

@@ -12,6 +12,10 @@ import '../../providers/player_provider.dart';
 import '../../providers/cast_provider.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../../widgets/cast_device_sheet.dart';
+import '../../widgets/common/app_error_view.dart';
+import '../../widgets/common/entrance.dart';
+import '../../widgets/common/skeleton.dart';
+import '../../../core/themes/motion.dart';
 import '../settings/settings_screen.dart';
 import '../epg_guide/epg_guide_screen.dart';
 import '../../../l10n/app_localizations.dart';
@@ -90,9 +94,10 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
         // horizontal cutouts on foldables (e.g. ZFold6 inner display).
         bottom: false,
         child: playlistsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => Center(
-            child: Text(l10n.failedToLoadPlaylists),
+          loading: () => const SkeletonList(itemCount: 8),
+          error: (_, _) => AppErrorView(
+            message: l10n.failedToLoadPlaylists,
+            onRetry: () => ref.invalidate(playlistsProvider),
           ),
           data: (playlists) => _buildBody(playlists.isEmpty),
         ),
@@ -125,13 +130,17 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
 
   Widget _buildBody(bool noPlaylists) {
     final l10n = AppLocalizations.of(context)!;
+    // NOTE: this method is only reached when currentChannel == null (the
+    // fullscreen player short-circuits earlier in build()), so no media_kit
+    // Video is ever mounted here — wrapping in an AnimatedSwitcher is safe.
+    final Widget body;
     switch (_currentIndex) {
       case 0:
-        return noPlaylists
+        body = noPlaylists
             ? _buildEmptyState(context)
             : const _MobileChannelList(showFavoritesOnly: false);
       case 1:
-        return noPlaylists
+        body = noPlaylists
             ? _buildNoPlaylistTab(
                 context,
                 icon: Icons.star_border,
@@ -139,7 +148,7 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
               )
             : const _MobileChannelList(showFavoritesOnly: true);
       case 2:
-        return noPlaylists
+        body = noPlaylists
             ? _buildNoPlaylistTab(
                 context,
                 icon: Icons.schedule,
@@ -147,12 +156,19 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
               )
             : const EpgGuideScreen();
       case 3:
-        return const SettingsScreen();
+        body = const SettingsScreen();
       default:
-        return noPlaylists
+        body = noPlaylists
             ? _buildEmptyState(context)
             : const _MobileChannelList(showFavoritesOnly: false);
     }
+
+    return AnimatedSwitcher(
+      duration: MotionTokens.base,
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: KeyedSubtree(key: ValueKey(_currentIndex), child: body),
+    );
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -167,25 +183,25 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
               Icons.live_tv,
               size: 80,
               color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.5),
-            ),
+            ).animatedReveal(context),
             const SizedBox(height: 24),
             Text(
               l10n.welcomeTitle,
               style: Theme.of(context).textTheme.headlineMedium,
               textAlign: TextAlign.center,
-            ),
+            ).animatedReveal(context, delay: MotionTokens.fast),
             const SizedBox(height: 8),
             Text(
               l10n.welcomeSubtitleDetailed,
               style: Theme.of(context).textTheme.bodyLarge,
               textAlign: TextAlign.center,
-            ),
+            ).animatedReveal(context, delay: MotionTokens.base),
             const SizedBox(height: 32),
             ElevatedButton.icon(
               onPressed: () => _showAddPlaylistDialog(context),
               icon: const Icon(Icons.add),
               label: Text(l10n.addPlaylist),
-            ),
+            ).animatedReveal(context, delay: MotionTokens.emphasized),
           ],
         ),
       ),
@@ -289,26 +305,25 @@ class _MobileChannelList extends ConsumerWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                  child: FilterChip(
-                    label: Text(l10n.all),
-                    selected: selectedGroup == null,
-                    onSelected: (_) {
-                      ref.read(selectedGroupProvider.notifier).select(null);
-                    },
-                  ),
+                _buildFilterChip(
+                  context,
+                  ref,
+                  label: l10n.all,
+                  selected: selectedGroup == null,
+                  index: 0,
+                  onSelected: () =>
+                      ref.read(selectedGroupProvider.notifier).select(null),
                 ),
-                ...groups.map((group) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                  child: FilterChip(
-                    label: Text(group),
-                    selected: selectedGroup == group,
-                    onSelected: (_) {
-                      ref.read(selectedGroupProvider.notifier).select(group);
-                    },
-                  ),
-                ),),
+                ...groups.asMap().entries.map((entry) => _buildFilterChip(
+                      context,
+                      ref,
+                      label: entry.value,
+                      selected: selectedGroup == entry.value,
+                      index: entry.key + 1,
+                      onSelected: () => ref
+                          .read(selectedGroupProvider.notifier)
+                          .select(entry.value),
+                    )),
               ],
             ),
           ),
@@ -319,6 +334,38 @@ class _MobileChannelList extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// A single category filter chip. Selection still routes through
+  /// [selectedGroupProvider] via [onSelected]; the AnimatedContainer only
+  /// cross-fades the selection background colour (MotionTokens.fast).
+  Widget _buildFilterChip(
+    BuildContext context,
+    WidgetRef ref, {
+    required String label,
+    required bool selected,
+    required int index,
+    required VoidCallback onSelected,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: AnimatedContainer(
+        duration: MotionTokens.fast,
+        curve: MotionTokens.toggle,
+        decoration: BoxDecoration(
+          color: selected ? scheme.secondaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: FilterChip(
+          label: Text(label),
+          selected: selected,
+          backgroundColor: Colors.transparent,
+          selectedColor: Colors.transparent,
+          onSelected: (_) => onSelected(),
+        ),
+      ),
+    ).animatedEntrance(context, index: index);
   }
 
   Widget _buildChannelListView(BuildContext context, WidgetRef ref, List<Channel> channels) {
@@ -384,7 +431,7 @@ class _MobileChannelList extends ConsumerWidget {
           onFavoriteToggle: () {
             ref.read(channelManagerProvider).toggleFavorite(channel.id);
           },
-        );
+        ).animatedEntrance(context, index: channelIndex);
       },
     );
   }
@@ -505,7 +552,8 @@ class _MobileChannelTile extends ConsumerWidget {
           width: 48,
           height: 48,
           fit: BoxFit.contain,
-          placeholder: (_, _) => _buildPlaceholder(),
+          fadeInDuration: const Duration(milliseconds: 350),
+          placeholder: (_, _) => const ShimmerLogoPlaceholder(borderRadius: 4),
           errorWidget: (_, _, _) => _buildPlaceholder(),
         ),
       );
@@ -729,7 +777,7 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                 child: IgnorePointer(
                   child: AnimatedOpacity(
                     opacity: _switchOverlayOpacity,
-                    duration: const Duration(milliseconds: 400),
+                    duration: MotionTokens.slow,
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 32),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
