@@ -47,7 +47,7 @@ dependencies:
   flutter_svg: ^2.0.10+1
 
   # Desktop-specific
-  window_manager: ^0.5.1
+  window_manager: ^0.5.2
 
   # Chromecast support (Android/iOS)
   flutter_chrome_cast: ^1.2.8
