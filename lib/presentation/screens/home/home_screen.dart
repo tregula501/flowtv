@@ -105,8 +105,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final playlistsAsync = ref.watch(playlistsProvider);
-    final activePlaylist = ref.watch(activePlaylistProvider);
     final currentChannel = ref.watch(currentChannelProvider);
+
+    // App-bar title shows the selected category — the playlist name is
+    // already displayed in the sidebar header, so repeating it here just
+    // duplicated it and crowded out the search bar.
+    final selectedGroup = ref.watch(selectedGroupProvider);
+    final String gridTitle;
+    if (selectedGroup == null) {
+      gridTitle = l10n.allChannels;
+    } else if (selectedGroup == favoritesFilterKey) {
+      gridTitle = l10n.favorites;
+    } else {
+      gridTitle = selectedGroup;
+    }
     // Only watch the display-mode fields to avoid rebuilds on every player tick
     final isFullscreen = ref.watch(playerControllerProvider.select((s) => s.isFullscreen));
     final isPiPMode = ref.watch(playerControllerProvider.select((s) => s.isPiPMode));
@@ -175,7 +187,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Column(
                       children: [
                         // App bar
-                        _buildAppBar(context, activePlaylist?.name ?? l10n.appTitle),
+                        _buildAppBar(context, gridTitle),
 
                         // Recently watched + channel grid
                         const Expanded(
@@ -252,39 +264,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       child: Row(
         children: [
-          // Title
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge,
+          // Title (category name — ellipsize rather than crowd the search bar)
+          Flexible(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
 
-          const Spacer(),
+          const SizedBox(width: 16),
 
-          // Search bar - flexible width
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 300),
-              child: TextField(
-              controller: _searchController,
-              focusNode: _focusNode,
-              decoration: InputDecoration(
-                hintText: l10n.searchChannelsCtrlF,
-                prefixIcon: const Icon(Icons.search, size: 20),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 20),
-                        onPressed: () {
-                          _searchController.clear();
-                          ref.read(channelSearchQueryProvider.notifier).clear();
-                        },
-                      )
-                    : null,
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          // Search bar — takes the remaining space (capped), right-aligned so
+          // the action icons stay flush with the row's edge
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _focusNode,
+                  decoration: InputDecoration(
+                    hintText: l10n.searchChannelsCtrlF,
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 20),
+                            onPressed: () {
+                              _searchController.clear();
+                              ref.read(channelSearchQueryProvider.notifier).clear();
+                            },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                  onChanged: (value) {
+                    ref.read(channelSearchQueryProvider.notifier).setQuery(value);
+                  },
+                ),
               ),
-              onChanged: (value) {
-                ref.read(channelSearchQueryProvider.notifier).setQuery(value);
-              },
-            ),
             ),
           ),
 
