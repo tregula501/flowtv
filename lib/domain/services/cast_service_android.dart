@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 
 import '../../core/utils/logger.dart';
+import 'cast_foreground_service.dart';
 import 'cast_types.dart';
 import 'hls_proxy_service.dart';
 
@@ -135,6 +136,8 @@ class CastService implements ICastService {
             'sessionId=${session?.sessionID}',
           );
 
+          final wasConnected = _sessionState.isConnected;
+
           _sessionState = _sessionState.copyWith(
             isConnected: isConnected,
             connectedDevice: device != null
@@ -148,6 +151,16 @@ class CastService implements ICastService {
             clearDevice: device == null,
           );
           _sessionController.add(_sessionState);
+
+          // Foreground service (partial wakelock + Wi-Fi lock) keeps the
+          // HLS proxy pipeline alive when the screen turns off mid-cast.
+          if (isConnected && !wasConnected) {
+            unawaited(CastForegroundService.start(
+              deviceName: device?.friendlyName ?? 'Chromecast',
+            ),);
+          } else if (!isConnected && wasConnected) {
+            unawaited(CastForegroundService.stop());
+          }
         },
         onError: (e) {
           AppLogger.error('Cast session error: $e');
@@ -323,6 +336,7 @@ class CastService implements ICastService {
       _lastMedia = null;
       _retryCount = 0;
       _hasEverPlayed = false;
+      await CastForegroundService.stop();
       await HlsProxyService.instance.stop();
       await GoogleCastSessionManager.instance.endSessionAndStopCasting();
       _sessionState = const CastSessionState();
@@ -466,6 +480,12 @@ class CastService implements ICastService {
       _lastMedia = media;
       _retryCount = 0;
 
+      // Refresh the foreground-service notification with the channel title
+      unawaited(CastForegroundService.start(
+        deviceName: _sessionState.connectedDevice?.name ?? 'Chromecast',
+        title: media.title,
+      ),);
+
       AppLogger.info('Cast: Media load request sent successfully');
       return true;
     } catch (e, stackTrace) {
@@ -542,6 +562,7 @@ class CastService implements ICastService {
     _lastMedia = null;
     _retryCount = 0;
     _hasEverPlayed = false;
+    CastForegroundService.stop();
     HlsProxyService.instance.stop();
     _discoveryDebounce?.cancel();
     _deviceSubscription?.cancel();
