@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/themes/app_theme.dart';
@@ -195,7 +196,7 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
     }
     // On mobile, use shortestSide so phones always stay on the mobile UI
     // (even in landscape) while tablets/foldables get the desktop layout.
-    return Builder(
+    final home = Builder(
       builder: (context) {
         final shortestSide = MediaQuery.of(context).size.shortestSide;
         if (shortestSide >= 600) {
@@ -204,6 +205,38 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
         return const MobileHomeScreen();
       },
     );
+
+    if (!Platform.isAndroid) return home;
+
+    // Android: exiting while a video texture is alive crashes in the engine —
+    // ImageReaderSurfaceProducer delivers leftover frames after FlutterJNI
+    // detaches (flutter/flutter#188300). Intercept back-at-root, release the
+    // native player (and its texture) first, then finish the activity.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _exitAfterPlayerShutdown();
+      },
+      child: home,
+    );
+  }
+
+  bool _exiting = false;
+
+  Future<void> _exitAfterPlayerShutdown() async {
+    if (_exiting) return;
+    _exiting = true;
+    try {
+      await ref
+          .read(playerControllerProvider.notifier)
+          .shutdownForExit()
+          .timeout(const Duration(seconds: 2));
+    } catch (e) {
+      // Never block exit on cleanup.
+      AppLogger.warning('Player shutdown on exit failed: $e');
+    }
+    await SystemNavigator.pop();
   }
 }
 

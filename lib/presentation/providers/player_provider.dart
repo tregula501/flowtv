@@ -548,6 +548,36 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     }
   }
 
+  /// Fully release the native player before the Android activity finishes.
+  ///
+  /// Exiting with a live video texture crashes the app: the engine's
+  /// ImageReaderSurfaceProducer delivers leftover frames after FlutterJNI
+  /// detaches (flutter/flutter#188300). Awaiting the player's disposal tears
+  /// the texture down first so no callback can fire into the dead engine.
+  Future<void> shutdownForExit() async {
+    _isDisposed = true;
+    _prebuffer.dispose();
+    _retry.dispose();
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
+    _currentChannel = null;
+
+    final player = _player;
+    _player = null;
+    _videoController = null;
+    if (player != null) {
+      await player.dispose();
+    }
+
+    try {
+      WakelockPlus.disable();
+    } catch (_) {
+      // App is exiting — nothing to do.
+    }
+  }
+
   /// Refresh/reload the current channel (useful for frozen streams)
   Future<void> refreshChannel(Channel channel) async {
     try {
