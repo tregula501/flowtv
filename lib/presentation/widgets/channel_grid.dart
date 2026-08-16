@@ -7,6 +7,7 @@ import '../providers/channel_provider.dart';
 import '../providers/player_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../core/themes/motion.dart';
+import 'channel_letter_avatar.dart';
 import 'common/entrance.dart';
 import 'common/skeleton.dart';
 
@@ -263,18 +264,10 @@ class _ChannelTileState extends State<ChannelTile> {
   }
 
   Widget _buildPlaceholder(ThemeData theme) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.tv,
-          size: 32,
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-        ),
-      ),
+    return ChannelLetterAvatar(
+      name: widget.channel.name,
+      borderRadius: BorderRadius.circular(8),
+      fontSize: 20,
     );
   }
 }

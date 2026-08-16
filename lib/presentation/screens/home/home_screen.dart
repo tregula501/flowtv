@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,7 @@ import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../widgets/category_sidebar.dart';
 import '../../widgets/channel_grid.dart';
+import '../../widgets/channel_letter_avatar.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../player/player_screen.dart';
 import '../player/fullscreen_player_screen.dart';
@@ -286,7 +289,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   controller: _searchController,
                   focusNode: _focusNode,
                   decoration: InputDecoration(
-                    hintText: l10n.searchChannelsCtrlF,
+                    // Ctrl+F is meaningless on touch devices — this layout
+                    // also runs on Android tablets.
+                    hintText: (Platform.isAndroid || Platform.isIOS)
+                        ? l10n.searchChannels
+                        : l10n.searchChannelsCtrlF,
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: _searchController.text.isNotEmpty
                         ? IconButton(
@@ -477,6 +484,9 @@ class _ChannelContent extends ConsumerWidget {
     final recentlyWatched = ref.watch(recentlyWatchedChannelsProvider);
     final channels = ref.watch(searchedChannelsProvider);
     final currentChannel = ref.watch(currentChannelProvider);
+    // Hide Recently Watched while a search is active — it pushes the
+    // actual results below the fold, especially at phone widths.
+    final isSearching = ref.watch(channelSearchQueryProvider).isNotEmpty;
 
     if (channels.isEmpty) {
       return Center(
@@ -503,7 +513,7 @@ class _ChannelContent extends ConsumerWidget {
     return CustomScrollView(
       slivers: [
         // Recently watched horizontal row
-        if (recentlyWatched.isNotEmpty) ...[
+        if (recentlyWatched.isNotEmpty && !isSearching) ...[
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -625,16 +635,16 @@ class _RecentChannelChip extends StatelessWidget {
                             fit: BoxFit.contain,
                             fadeInDuration: const Duration(milliseconds: 350),
                             placeholder: (_, _) => const ShimmerLogoPlaceholder(),
-                            errorWidget: (_, _, _) => Icon(
-                              Icons.tv,
-                              size: 24,
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                            errorWidget: (_, _, _) => ChannelLetterAvatar(
+                              name: channel.name,
+                              borderRadius: BorderRadius.circular(6),
+                              fontSize: 13,
                             ),
                           )
-                        : Icon(
-                            Icons.tv,
-                            size: 24,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                        : ChannelLetterAvatar(
+                            name: channel.name,
+                            borderRadius: BorderRadius.circular(6),
+                            fontSize: 13,
                           ),
                   ),
                 ),

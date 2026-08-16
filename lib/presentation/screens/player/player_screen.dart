@@ -176,6 +176,16 @@ class PlayerScreen extends ConsumerWidget {
                       await ref
                           .read(castControllerProvider.notifier)
                           .disconnect();
+                      // Resume local playback where the cast left off. Brief
+                      // delay lets the IPTV server release the proxy's
+                      // connection slot before we reopen the stream locally.
+                      final channel = ref.read(currentChannelProvider);
+                      if (channel != null) {
+                        await Future.delayed(const Duration(seconds: 2));
+                        await ref
+                            .read(playerControllerProvider.notifier)
+                            .playChannel(channel);
+                      }
                     },
                   );
                 }

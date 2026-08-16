@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../../core/utils/logger.dart';
 import '../../../data/datasources/local/drift/app_database.dart' show Channel;
 import '../../providers/playlist_provider.dart';
 import '../../providers/channel_provider.dart';
@@ -14,6 +15,7 @@ import '../../../domain/services/cast_types.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../../widgets/cast_device_sheet.dart';
 import '../../widgets/cast_overlay.dart';
+import '../../widgets/channel_letter_avatar.dart';
 import '../../widgets/common/app_error_view.dart';
 import '../../widgets/common/entrance.dart';
 import '../../widgets/common/skeleton.dart';
@@ -373,7 +375,10 @@ class _MobileChannelList extends ConsumerWidget {
   Widget _buildChannelListView(BuildContext context, WidgetRef ref, List<Channel> channels) {
     final l10n = AppLocalizations.of(context)!;
     final recentlyWatched = ref.watch(recentlyWatchedChannelsProvider);
-    final showRecent = !showFavoritesOnly && recentlyWatched.isNotEmpty;
+    // Hidden while searching — on a phone it pushes results below the fold.
+    final isSearching = ref.watch(channelSearchQueryProvider).isNotEmpty;
+    final showRecent =
+        !showFavoritesOnly && recentlyWatched.isNotEmpty && !isSearching;
 
     return ListView.builder(
       itemCount: channels.length + (showRecent ? 1 : 0),
@@ -408,7 +413,11 @@ class _MobileChannelList extends ConsumerWidget {
                                 backgroundImage: CachedNetworkImageProvider(channel.logoUrl!),
                                 backgroundColor: Colors.grey.shade800,
                               )
-                            : const CircleAvatar(child: Icon(Icons.tv, size: 16)),
+                            : ChannelLetterAvatar(
+                                name: channel.name,
+                                size: 24,
+                                fontSize: 9,
+                              ),
                         label: Text(
                           channel.name,
                           maxLines: 1,
@@ -564,14 +573,11 @@ class _MobileChannelTile extends ConsumerWidget {
   }
 
   Widget _buildPlaceholder() {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade800,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: const Icon(Icons.tv, color: Colors.grey),
+    return ChannelLetterAvatar(
+      name: channel.name,
+      size: 48,
+      borderRadius: BorderRadius.circular(4),
+      fontSize: 15,
     );
   }
 }
@@ -600,10 +606,43 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
   /// Timer that auto-dismisses the overlay after 2 seconds
   Timer? _switchOverlayTimer;
 
+  /// Whether the top bar / bottom controls are shown. They fade out after
+  /// [_controlsHideDelay] of inactivity; tapping the video toggles them.
+  bool _controlsVisible = true;
+  Timer? _controlsHideTimer;
+  static const _controlsHideDelay = Duration(seconds: 3);
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleControlsHide();
+  }
+
   @override
   void dispose() {
     _switchOverlayTimer?.cancel();
+    _controlsHideTimer?.cancel();
     super.dispose();
+  }
+
+  void _scheduleControlsHide() {
+    _controlsHideTimer?.cancel();
+    _controlsHideTimer = Timer(_controlsHideDelay, () {
+      if (mounted) setState(() => _controlsVisible = false);
+    });
+  }
+
+  /// Tap on the video: toggle control visibility.
+  void _toggleControls() {
+    AppLogger.debug('Player controls: toggle -> ${!_controlsVisible}');
+    setState(() => _controlsVisible = !_controlsVisible);
+    if (_controlsVisible) _scheduleControlsHide();
+  }
+
+  /// Any control interaction: keep controls up and restart the hide timer.
+  void _bumpControls() {
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
+    _scheduleControlsHide();
   }
 
   // ------------------------------------------------------------------
@@ -668,15 +707,27 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
     // render edge-to-edge (Android 15+, foldables like ZFold6).
     final mediaPadding = MediaQuery.of(context).padding;
 
+    // While casting, the overlay is the whole UI — never auto-hide the top
+    // bar (it holds the back and cast buttons).
+    final isCasting = ref.watch(castControllerProvider.select(
+        (s) => s.isConnected && s.playbackState != CastPlaybackState.idle,),);
+    final controlsShown = _controlsVisible || isCasting;
+    final controlsFade =
+        context.reduceMotion ? Duration.zero : MotionTokens.base;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
             // Video player — swipe up/down to switch channels,
-            // tap to toggle play/pause (unchanged behaviour).
+            // tap to show/hide the control overlays.
             Positioned.fill(
               child: GestureDetector(
-                onTap: () => playerNotifier.playPause(),
+                // Opaque: with the default deferToChild behavior the detector
+                // never fires during live playback — the Texture inside Video
+                // doesn't hit-test positively, so taps/swipes fall through.
+                behavior: HitTestBehavior.opaque,
+                onTap: _toggleControls,
                 onVerticalDragEnd: (details) {
                   if (details.primaryVelocity == null) return;
                   if (details.primaryVelocity! < -300) {
@@ -707,15 +758,69 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                 final retryAttempt = ref.watch(playerControllerProvider.select((s) => s.retryAttempt));
                 final maxRetries = ref.watch(playerControllerProvider.select((s) => s.maxRetries));
 
+                // Single keyed child so AnimatedSwitcher cross-fades between
+                // buffering / error / idle instead of hard-cutting.
+                final Widget status;
+                if (isPrebuffering || isReconnecting || isBuffering) {
+                  status = Center(
+                    key: const ValueKey('buffering'),
+                    child: CircularProgressIndicator(
+                      color: isReconnecting ? Colors.orange : Colors.white,
+                    ),
+                  );
+                } else if (error != null) {
+                  status = Center(
+                    key: const ValueKey('error'),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.orange, size: 48),
+                          const SizedBox(height: 16),
+                          Text(
+                            l10n.playbackError,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            error,
+                            style: const TextStyle(color: Colors.white70),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => ref.read(playerControllerProvider.notifier).playChannel(channel),
+                            child: Text(l10n.retry),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                } else {
+                  status = const SizedBox.shrink(key: ValueKey('idle'));
+                }
+
                 return Stack(
                   children: [
-                    // Prebuffering / reconnecting / buffering indicator
-                    if (isPrebuffering || isReconnecting || isBuffering)
-                      Center(
-                        child: CircularProgressIndicator(
-                          color: isReconnecting ? Colors.orange : Colors.white,
-                        ),
+                    // Only the error card is interactive (retry button); the
+                    // spinner/idle states must not block video taps below.
+                    IgnorePointer(
+                      ignoring: error == null || isReconnecting,
+                      child: AnimatedSwitcher(
+                        duration: context.reduceMotion
+                            ? Duration.zero
+                            : MotionTokens.fast,
+                        child: status,
                       ),
+                    ),
                     if (isReconnecting)
                       Positioned(
                         bottom: 80,
@@ -725,43 +830,6 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                           child: Text(
                             l10n.retryAttempt(retryAttempt, maxRetries),
                             style: const TextStyle(color: Colors.white70, fontSize: 12),
-                          ),
-                        ),
-                      ),
-
-                    // Error message (hidden during auto-reconnect)
-                    if (error != null && !isReconnecting)
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          margin: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: Colors.black87,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.error_outline, color: Colors.orange, size: 48),
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.playbackError,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                error,
-                                style: const TextStyle(color: Colors.white70),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: () => ref.read(playerControllerProvider.notifier).playChannel(channel),
-                                child: Text(l10n.retry),
-                              ),
-                            ],
                           ),
                         ),
                       ),
@@ -815,18 +883,40 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                       castControllerProvider.select((s) => s.playbackState),);
                   final isCasting = isConnected &&
                       playbackState != CastPlaybackState.idle;
-                  if (!isCasting) return const SizedBox.shrink();
 
                   final deviceName = ref.watch(castControllerProvider
                       .select((s) => s.connectedDevice?.name),);
-                  return CastOverlay(
+                  final overlay = !isCasting
+                      ? const SizedBox.shrink(key: ValueKey('no-cast'))
+                      : CastOverlay(
+                    key: const ValueKey('cast'),
                     deviceName: deviceName ?? '',
                     playbackState: playbackState,
                     onStop: () async {
                       await ref
                           .read(castControllerProvider.notifier)
                           .disconnect();
+                      // Resume local playback where the cast left off. Brief
+                      // delay lets the IPTV server release the proxy's
+                      // connection slot before we reopen the stream locally.
+                      await Future.delayed(const Duration(seconds: 2));
+                      await ref
+                          .read(playerControllerProvider.notifier)
+                          .playChannel(channel);
                     },
+                  );
+
+                  // IgnorePointer when not casting — this layer sits above
+                  // the video's tap/swipe GestureDetector and must never
+                  // swallow its events while invisible.
+                  return IgnorePointer(
+                    ignoring: !isCasting,
+                    child: AnimatedSwitcher(
+                      duration: context.reduceMotion
+                          ? Duration.zero
+                          : MotionTokens.fast,
+                      child: overlay,
+                    ),
                   );
                 },
               ),
@@ -835,11 +925,17 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
             // Top bar with back button, channel name, and cast button.
             // Offset by the system top inset (status bar / cutout) so the
             // overlay sits flush below it on edge-to-edge devices.
+            // Fades out with the rest of the controls after inactivity.
             Positioned(
               top: mediaPadding.top,
               left: mediaPadding.left,
               right: mediaPadding.right,
-              child: Container(
+              child: IgnorePointer(
+                ignoring: !controlsShown,
+                child: AnimatedOpacity(
+                opacity: controlsShown ? 1.0 : 0.0,
+                duration: controlsFade,
+                child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -883,17 +979,25 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                     ),
                   ],
                 ),
+                ),
+                ),
               ),
             ),
 
             // Bottom controls. Lift by the system bottom inset (nav bar /
             // gesture area) so play/pause/volume/refresh remain visible on
             // edge-to-edge devices (Android 15+, foldables like ZFold6).
+            // Fades out with the rest of the controls after inactivity.
             Positioned(
               bottom: mediaPadding.bottom,
               left: mediaPadding.left,
               right: mediaPadding.right,
-              child: Container(
+              child: IgnorePointer(
+                ignoring: !controlsShown,
+                child: AnimatedOpacity(
+                opacity: controlsShown ? 1.0 : 0.0,
+                duration: controlsFade,
+                child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -924,7 +1028,10 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                             color: Colors.white,
                             size: 32,
                           ),
-                          onPressed: () => ref.read(playerControllerProvider.notifier).playPause(),
+                          onPressed: () {
+                            _bumpControls();
+                            ref.read(playerControllerProvider.notifier).playPause();
+                          },
                         ),
                         const SizedBox(width: 24),
                         // Volume
@@ -933,17 +1040,25 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                             isMuted ? Icons.volume_off : Icons.volume_up,
                             color: Colors.white,
                           ),
-                          onPressed: () => ref.read(playerControllerProvider.notifier).toggleMute(),
+                          onPressed: () {
+                            _bumpControls();
+                            ref.read(playerControllerProvider.notifier).toggleMute();
+                          },
                         ),
                         const SizedBox(width: 24),
                         // Refresh
                         IconButton(
                           icon: const Icon(Icons.refresh, color: Colors.white),
-                          onPressed: () => ref.read(playerControllerProvider.notifier).refreshChannel(channel),
+                          onPressed: () {
+                            _bumpControls();
+                            ref.read(playerControllerProvider.notifier).refreshChannel(channel);
+                          },
                         ),
                       ],
                     );
                   },
+                ),
+                ),
                 ),
               ),
             ),

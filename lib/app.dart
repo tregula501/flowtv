@@ -8,6 +8,7 @@ import 'core/themes/app_theme.dart';
 import 'core/themes/motion.dart';
 import 'core/utils/logger.dart';
 import 'l10n/app_localizations.dart';
+import 'presentation/providers/channel_provider.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/providers/epg_provider.dart';
 import 'presentation/providers/player_provider.dart';
@@ -216,6 +217,15 @@ class _FlowTVAppState extends ConsumerState<FlowTVApp>
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
+        // The fullscreen mobile player is a conditional build, not a route —
+        // system back should close it (like its back arrow) rather than
+        // exit the app.
+        final currentChannel = ref.read(currentChannelProvider);
+        if (currentChannel != null) {
+          ref.read(playerControllerProvider.notifier).stop();
+          ref.read(currentChannelProvider.notifier).select(null);
+          return;
+        }
         _exitAfterPlayerShutdown();
       },
       child: home,
