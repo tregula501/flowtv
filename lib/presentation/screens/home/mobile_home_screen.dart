@@ -10,8 +10,10 @@ import '../../providers/playlist_provider.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../providers/cast_provider.dart';
+import '../../../domain/services/cast_types.dart';
 import '../../widgets/add_playlist_dialog.dart';
 import '../../widgets/cast_device_sheet.dart';
+import '../../widgets/cast_overlay.dart';
 import '../../widgets/common/app_error_view.dart';
 import '../../widgets/common/entrance.dart';
 import '../../widgets/common/skeleton.dart';
@@ -801,6 +803,35 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                 ),
               ),
 
+            // Cast overlay — replaces the (stopped) local video while a cast
+            // session is active. Opaque, so it also blocks the tap/swipe
+            // gestures on the video underneath from restarting local playback.
+            Positioned.fill(
+              child: Consumer(
+                builder: (context, ref, _) {
+                  final isConnected = ref.watch(
+                      castControllerProvider.select((s) => s.isConnected),);
+                  final playbackState = ref.watch(
+                      castControllerProvider.select((s) => s.playbackState),);
+                  final isCasting = isConnected &&
+                      playbackState != CastPlaybackState.idle;
+                  if (!isCasting) return const SizedBox.shrink();
+
+                  final deviceName = ref.watch(castControllerProvider
+                      .select((s) => s.connectedDevice?.name),);
+                  return CastOverlay(
+                    deviceName: deviceName ?? '',
+                    playbackState: playbackState,
+                    onStop: () async {
+                      await ref
+                          .read(castControllerProvider.notifier)
+                          .disconnect();
+                    },
+                  );
+                },
+              ),
+            ),
+
             // Top bar with back button, channel name, and cast button.
             // Offset by the system top inset (status bar / cutout) so the
             // overlay sits flush below it on edge-to-edge devices.
@@ -873,6 +904,14 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                 ),
                 child: Consumer(
                   builder: (context, ref, _) {
+                    // Local-player controls are meaningless while casting —
+                    // play/pause here would reopen the stream locally and
+                    // steal the IPTV connection slot from the cast proxy.
+                    final isCasting = ref.watch(castControllerProvider.select(
+                        (s) => s.isConnected &&
+                            s.playbackState != CastPlaybackState.idle,),);
+                    if (isCasting) return const SizedBox.shrink();
+
                     final isPlaying = ref.watch(playerControllerProvider.select((s) => s.isPlaying));
                     final isMuted = ref.watch(playerControllerProvider.select((s) => s.isMuted));
                     return Row(
