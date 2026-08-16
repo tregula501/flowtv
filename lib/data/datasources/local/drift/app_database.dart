@@ -141,6 +141,10 @@ class AppSettingsTable extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Attaches to an already-open database from a worker isolate
+  /// (used by `computeWithDatabase` — no migrations run through this path).
+  AppDatabase.fromConnection(DatabaseConnection super.connection);
+
   // Bump this when you change the schema. Add a migration step below.
   @override
   int get schemaVersion => 6;
