@@ -225,12 +225,20 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   // Track if disposed
   bool _isDisposed = false;
 
+  // Watchdog for streams that connect but never deliver data. Some IPTV
+  // servers accept the connection and send nothing, so mpv's network-timeout
+  // never fires and no error event ever arrives — without this, the player
+  // spins on "buffering" forever.
+  Timer? _openStallTimer;
+  static const _openStallTimeout = Duration(seconds: 20);
+
   @override
   PlayerState build() {
     // Clean up from any prior build() call (Notifier.build() re-runs on invalidation)
     _isDisposed = false;
     _prebuffer.dispose();
     _retry.dispose();
+    _openStallTimer?.cancel();
     for (final sub in _subscriptions) {
       sub.cancel();
     }
@@ -242,11 +250,15 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     _loadBufferSizeFromDb();
     _initPlayer();
 
+    // Reconnect reopens can stall silently just like the initial open.
+    _retry.onOpenAttempt = _armOpenStallWatchdog;
+
     // Register disposal callback
     ref.onDispose(() {
       _isDisposed = true;
       _prebuffer.dispose();
       _retry.dispose();
+      _openStallTimer?.cancel();
       for (final sub in _subscriptions) {
         sub.cancel();
       }
@@ -529,6 +541,8 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
       // with play=false on live MPEG-TS streams causes the server to
       // drop the stalled connection.
       if (_player == null) return;
+      // Armed BEFORE open: on a silent server this await never returns.
+      _armOpenStallWatchdog();
       await _player!.open(Media(channel.streamUrl), play: true);
 
       AppLogger.info('Media opened successfully, play=true');
@@ -548,6 +562,39 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
     }
   }
 
+  /// Arm (or re-arm) the open-stall watchdog. If the stream hasn't reached
+  /// healthy playback when it fires — and no error/retry flow has taken over
+  /// by producing an error state — the stream is declared dead: the stalled
+  /// connection is aborted (freeing the provider's connection slot) and the
+  /// error card with its Retry button is shown. A healthy stream makes the
+  /// timer a no-op, so there is no need to cancel it on success.
+  void _armOpenStallWatchdog() {
+    _openStallTimer?.cancel();
+    _openStallTimer = Timer(_openStallTimeout, () {
+      if (_isDisposed || _currentChannel == null) return;
+      if (state.error != null) return; // error card already showing
+      if (state.isPlaying && !state.isBuffering) return; // stream is healthy
+      AppLogger.warning(
+          'Stream stalled: no playback ${_openStallTimeout.inSeconds}s after '
+          'open and no error from mpv — giving up');
+      // A server that answers but sends nothing is not a transient failure;
+      // don't burn retry attempts on it. Manual Retry stays available.
+      _retry.resetRetryState();
+      // stop() aborts the hung open and closes the connection.
+      _player?.stop().catchError((Object e) {
+        AppLogger.warning('Stall watchdog: player stop failed: $e');
+      });
+      state = state.copyWith(
+        isBuffering: false,
+        isPrebuffering: false,
+        isReconnecting: false,
+        retryAttempt: 0,
+        error:
+            'The channel is not sending any data — it may be offline right now.',
+      );
+    });
+  }
+
   /// Fully release the native player before the Android activity finishes.
   ///
   /// Exiting with a live video texture crashes the app: the engine's
@@ -556,6 +603,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   /// the texture down first so no callback can fire into the dead engine.
   Future<void> shutdownForExit() async {
     _isDisposed = true;
+    _openStallTimer?.cancel();
     _prebuffer.dispose();
     _retry.dispose();
     for (final sub in _subscriptions) {
@@ -630,6 +678,7 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
 
   /// Stop playback and release the stream connection.
   Future<void> stop() async {
+    _openStallTimer?.cancel();
     _prebuffer.cancelPrebuffering();
     state = state.copyWith(isPrebuffering: false, bufferedDuration: Duration.zero);
     _retry.cancelRetry(_updateState);

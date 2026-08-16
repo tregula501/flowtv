@@ -754,7 +754,15 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
     // bar (it holds the back and cast buttons).
     final isCasting = ref.watch(castControllerProvider.select(
         (s) => s.isConnected && s.playbackState != CastPlaybackState.idle,),);
-    final controlsShown = _controlsVisible || isCasting;
+    // While the stream isn't delivering (spinner or error showing), keep the
+    // controls pinned so the back button is always visible — a user staring
+    // at a stalled stream shouldn't need to know that tapping reveals it.
+    final streamNotUp = ref.watch(playerControllerProvider.select((s) =>
+        s.isBuffering ||
+        s.isPrebuffering ||
+        s.isReconnecting ||
+        s.error != null,),);
+    final controlsShown = _controlsVisible || isCasting || streamNotUp;
     final controlsFade =
         context.reduceMotion ? Duration.zero : MotionTokens.base;
 

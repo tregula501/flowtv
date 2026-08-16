@@ -15,6 +15,11 @@ class RetryController {
   Timer? _retryTimer;
   bool autoRetryEnabled = true;
 
+  /// Invoked right before each reconnect re-open so the owner can arm its
+  /// open-stall watchdog — a reopened stream can hang exactly like the
+  /// initial open (server accepts the connection but never sends data).
+  void Function()? onOpenAttempt;
+
   /// Handle a stream error, possibly scheduling a retry.
   ///
   /// [updateState] is a callback that applies a transformation to the current
@@ -80,6 +85,7 @@ class RetryController {
       await Future.delayed(const Duration(milliseconds: 500));
 
       // Re-open the stream without resetting retry state yet
+      onOpenAttempt?.call();
       await player?.open(Media(channel.streamUrl), play: true);
 
       // Wait a moment to see if playback starts successfully
