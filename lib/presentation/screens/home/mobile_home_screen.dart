@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -616,12 +617,20 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
   void initState() {
     super.initState();
     _scheduleControlsHide();
+    // Fullscreen video: hide status/nav bars. Sticky so a swipe from the edge
+    // peeks them temporarily and they re-hide on their own.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   @override
   void dispose() {
     _switchOverlayTimer?.cancel();
     _controlsHideTimer?.cancel();
+    // Restore normal system bars for the rest of the app.
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
     super.dispose();
   }
 
