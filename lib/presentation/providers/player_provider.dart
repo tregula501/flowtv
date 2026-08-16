@@ -229,8 +229,10 @@ class PlayerControllerNotifier extends Notifier<PlayerState> {
   // servers accept the connection and send nothing, so mpv's network-timeout
   // never fires and no error event ever arrives — without this, the player
   // spins on "buffering" forever.
+  // 5s: healthy streams on the user's provider start in 2-4s. If false
+  // positives show up on slow channels, raise this before rethinking.
   Timer? _openStallTimer;
-  static const _openStallTimeout = Duration(seconds: 20);
+  static const _openStallTimeout = Duration(seconds: 5);
 
   @override
   PlayerState build() {
