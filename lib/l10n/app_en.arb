@@ -78,6 +78,8 @@
   "refreshEpg": "Refresh EPG",
   "goToNow": "Go to Now",
   "notLoaded": "Not loaded",
+  "epgNotLoaded": "TV Guide hasn't loaded yet",
+  "epgNotLoadedHint": "Refresh to download program data from your provider's EPG feed.",
   "failedToLoadChannels": "Failed to load channels.",
   "failedToLoadGuide": "Failed to load TV guide data.",
   "watchNow": "Watch Now",

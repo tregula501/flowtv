@@ -143,7 +143,12 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
           else
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: () => ref.read(epgManagerProvider).fetchEpg(),
+              onPressed: () async {
+                await ref.read(epgManagerProvider).fetchEpg();
+                // The grid provider caches per time-range and doesn't watch
+                // the EPG store — invalidate so the open guide repopulates.
+                ref.invalidate(epgGridDataProvider);
+              },
               tooltip: l10n.refreshEpg,
             ),
           IconButton(
@@ -173,7 +178,16 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
     return epgDataAsync.when(
       loading: () => _buildEpgSkeleton(),
       error: (_, _) => Center(child: Text(l10n.failedToLoadGuide)),
-      data: (epgData) => Column(
+      data: (epgData) {
+        // No programs anywhere in the window = EPG was never fetched (or the
+        // provider returned nothing). An empty grid looks broken — say so and
+        // offer the fix.
+        final hasPrograms =
+            epgData.values.any((programs) => programs.isNotEmpty);
+        if (!hasPrograms) {
+          return _buildEmptyEpgState(context);
+        }
+        return Column(
         children: [
           // Time header
           _buildTimeHeader(),
@@ -200,6 +214,63 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
             ),
           ),
         ],
+        );
+      },
+    );
+  }
+
+  /// Shown when the guide window contains zero programs — i.e. EPG data has
+  /// never been fetched (or the provider returned nothing).
+  Widget _buildEmptyEpgState(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final isLoading = ref.watch(epgLoadingProvider);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.calendar_month_outlined,
+              size: 64,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              l10n.epgNotLoaded,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.epgNotLoadedHint,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      await ref.read(epgManagerProvider).fetchEpg();
+                      ref.invalidate(epgGridDataProvider);
+                    },
+              icon: isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(l10n.refreshEpg),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -556,7 +627,13 @@ class _EpgGuideScreenState extends ConsumerState<EpgGuideScreen> {
   void _scrollToNow() {
     final now = DateTime.now();
     final offset = now.difference(_startTime).inMinutes * (_timeSlotWidth / 60);
-    final targetOffset = (offset - 100).clamp(0.0, double.infinity);
+    // Snap to a half-hour slot boundary so the leftmost time label lands
+    // fully visible instead of clipped mid-text ("18:30" showing as ":30").
+    const halfSlot = _timeSlotWidth / 2;
+    final targetOffset =
+        ((offset - 100).clamp(0.0, double.infinity) / halfSlot)
+                .floorToDouble() *
+            halfSlot;
 
     // Scroll both time header and program grid
     if (_timeHeaderController.hasClients) {

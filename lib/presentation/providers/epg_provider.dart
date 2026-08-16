@@ -259,7 +259,28 @@ class EpgManager {
     final intervalHours = _ref.read(epgRefreshIntervalProvider);
 
     if (lastUpdate == null) {
-      // Never refreshed, do it now
+      // The in-memory timestamp resets on every app start, but the EPG store
+      // survives. If the DB already covers the next hour, skip the startup
+      // fetch — re-downloading and re-storing the whole feed on every launch
+      // blocks the UI for minutes on large playlists. The periodic timer and
+      // manual refresh still handle real staleness.
+      try {
+        final now = DateTime.now();
+        final existing = await _ref
+            .read(epgRepositoryProvider)
+            .getProgramsForTimeRange(now, now.add(const Duration(hours: 1)));
+        final hasUsableGuide =
+            existing.values.any((programs) => programs.isNotEmpty);
+        if (hasUsableGuide) {
+          AppLogger.info(
+              'EPG auto-refresh: usable guide data in DB — skipping startup fetch');
+          _ref.read(epgLastUpdateProvider.notifier).setLastUpdate(now);
+          return;
+        }
+      } catch (e) {
+        AppLogger.warning('EPG freshness check failed: $e');
+      }
+
       AppLogger.info('EPG auto-refresh: first fetch');
       try {
         await fetchEpg();
