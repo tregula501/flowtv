@@ -7,7 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../core/utils/logger.dart';
-import '../../../data/datasources/local/drift/app_database.dart' show Channel;
+import '../../../data/datasources/local/drift/app_database.dart'
+    show Channel, Playlist;
 import '../../providers/playlist_provider.dart';
 import '../../providers/channel_provider.dart';
 import '../../providers/player_provider.dart';
@@ -51,18 +52,42 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     final currentChannel = ref.watch(currentChannelProvider);
 
     // Show fullscreen player when a channel is selected (not just playing —
-    // isPlaying is false during buffering, which would flicker the screen)
+    // isPlaying is false during buffering, which would flicker the screen).
+    // The switcher fade-throughs between home and player; the constant player
+    // key keeps channel switches from re-running the entrance transition.
     if (currentChannel != null) {
-      return _MobilePlayerScreen(
+      return _wrapPlayerTransition(_MobilePlayerScreen(
+        key: const ValueKey('mobile-player'),
         channel: currentChannel,
         onBack: () {
           ref.read(playerControllerProvider.notifier).stop();
           ref.read(currentChannelProvider.notifier).select(null);
         },
-      );
+      ));
     }
 
+    return _wrapPlayerTransition(_buildHomeScaffold(l10n, playlistsAsync));
+  }
+
+  /// Cross-fades home <-> fullscreen player with a fade-through so opening a
+  /// channel feels like a surface arriving instead of a hard cut.
+  Widget _wrapPlayerTransition(Widget child) {
+    return AnimatedSwitcher(
+      duration:
+          context.reduceMotion ? Duration.zero : MotionTokens.emphasized,
+      switchInCurve: MotionTokens.fadeThroughIn,
+      switchOutCurve: MotionTokens.fadeThroughOut,
+      transitionBuilder: MotionTokens.fadeThrough,
+      child: child,
+    );
+  }
+
+  Widget _buildHomeScaffold(
+    AppLocalizations l10n,
+    AsyncValue<List<Playlist>> playlistsAsync,
+  ) {
     return Scaffold(
+      key: const ValueKey('mobile-home'),
       appBar: AppBar(
         title: _isSearching
             ? TextField(
@@ -169,9 +194,10 @@ class _MobileHomeScreenState extends ConsumerState<MobileHomeScreen> {
     }
 
     return AnimatedSwitcher(
-      duration: MotionTokens.base,
-      transitionBuilder: (child, animation) =>
-          FadeTransition(opacity: animation, child: child),
+      duration: context.reduceMotion ? Duration.zero : MotionTokens.base,
+      switchInCurve: MotionTokens.fadeThroughIn,
+      switchOutCurve: MotionTokens.fadeThroughOut,
+      transitionBuilder: MotionTokens.fadeThrough,
       child: KeyedSubtree(key: ValueKey(_currentIndex), child: body),
     );
   }
@@ -589,6 +615,7 @@ class _MobilePlayerScreen extends ConsumerStatefulWidget {
   final VoidCallback onBack;
 
   const _MobilePlayerScreen({
+    super.key,
     required this.channel,
     required this.onBack,
   });
@@ -612,6 +639,13 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
   bool _controlsVisible = true;
   Timer? _controlsHideTimer;
   static const _controlsHideDelay = Duration(seconds: 3);
+
+  /// Live vertical drag offset for swipe-to-switch feedback: the video
+  /// follows the finger (damped) and springs back on release.
+  double _dragDy = 0;
+  bool _dragging = false;
+  static const double _dragMax = 240;
+  static const double _dragSwitchDistance = 120;
 
   @override
   void initState() {
@@ -737,22 +771,48 @@ class _MobilePlayerScreenState extends ConsumerState<_MobilePlayerScreen> {
                 // doesn't hit-test positively, so taps/swipes fall through.
                 behavior: HitTestBehavior.opaque,
                 onTap: _toggleControls,
+                onVerticalDragStart: (_) =>
+                    setState(() => _dragging = true),
+                onVerticalDragUpdate: (details) => setState(() =>
+                    _dragDy = (_dragDy + details.delta.dy)
+                        .clamp(-_dragMax, _dragMax)),
+                onVerticalDragCancel: () =>
+                    setState(() { _dragging = false; _dragDy = 0; }),
                 onVerticalDragEnd: (details) {
-                  if (details.primaryVelocity == null) return;
-                  if (details.primaryVelocity! < -300) {
-                    // Swipe up -> next channel
+                  final velocity = details.primaryVelocity ?? 0;
+                  final distance = _dragDy;
+                  setState(() { _dragging = false; _dragDy = 0; });
+                  // A flick (velocity) or a deliberate long drag (distance)
+                  // both switch; finger up = next channel.
+                  if (velocity < -300 || distance < -_dragSwitchDistance) {
                     _switchChannel(1);
-                  } else if (details.primaryVelocity! > 300) {
-                    // Swipe down -> previous channel
+                  } else if (velocity > 300 ||
+                      distance > _dragSwitchDistance) {
                     _switchChannel(-1);
                   }
                 },
-                child: Video(
-                  controller: playerNotifier.videoController,
-                  controls: NoVideoControls,
-                  fit: BoxFit.contain,
-                  fill: Colors.black,
-                  filterQuality: FilterQuality.low,
+                // Follows the finger with a damped offset + subtle dim while
+                // dragging (duration zero), then springs back on release.
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(end: _dragDy),
+                  duration: _dragging || context.reduceMotion
+                      ? Duration.zero
+                      : MotionTokens.base,
+                  curve: MotionTokens.standard,
+                  builder: (context, dy, child) => Transform.translate(
+                    offset: Offset(0, dy * 0.35),
+                    child: Opacity(
+                      opacity: 1.0 - (dy.abs() / _dragMax) * 0.3,
+                      child: child,
+                    ),
+                  ),
+                  child: Video(
+                    controller: playerNotifier.videoController,
+                    controls: NoVideoControls,
+                    fit: BoxFit.contain,
+                    fill: Colors.black,
+                    filterQuality: FilterQuality.low,
+                  ),
                 ),
               ),
             ),

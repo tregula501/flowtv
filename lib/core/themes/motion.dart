@@ -43,6 +43,29 @@ class MotionTokens {
   /// viewport staggers and long lists never accumulate visible lag.
   static Duration stagger(int index, {int stepMs = 25, int capMs = 300}) =>
       Duration(milliseconds: (index * stepMs).clamp(0, capMs));
+
+  /// Incoming curve for [fadeThrough] switchers: content appears during the
+  /// last two thirds of the transition.
+  static const Curve fadeThroughIn =
+      Interval(0.35, 1.0, curve: Curves.easeOutCubic);
+
+  /// Outgoing curve for [fadeThrough] switchers: old content clears during the
+  /// first third, before the new content lands.
+  static const Curve fadeThroughOut =
+      Interval(0.65, 1.0, curve: Curves.easeInCubic);
+
+  /// Material fade-through transition for AnimatedSwitcher: fade paired with a
+  /// gentle scale-up so surfaces feel like they arrive rather than cross-blend.
+  /// Pair with [fadeThroughIn]/[fadeThroughOut] as switchIn/switchOutCurve.
+  static Widget fadeThrough(Widget child, Animation<double> animation) {
+    return FadeTransition(
+      opacity: animation,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.96, end: 1.0).animate(animation),
+        child: child,
+      ),
+    );
+  }
 }
 
 /// Reduced-motion helper. Respects the platform accessibility setting
